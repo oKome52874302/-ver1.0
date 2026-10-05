@@ -173,6 +173,15 @@ body.in-onb #appHeader, body.in-onb nav.tabs{display:none}
 .odot.done{background:var(--accent)} .odot.cur{background:var(--pop)}
 .ostep{display:flex;flex-direction:column;gap:14px}
 .ostep-h{display:flex;flex-direction:column;gap:6px}
+.cycbox{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.cycrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end;background:var(--bg);border-radius:12px;padding:10px}
+.cycrow .cyck{grid-column:1 / -1;font-size:.74rem;font-weight:900;color:var(--accent)}
+.cycrow select{width:100%}
+.cycfoot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px}
+.cycfoot .ghost{color:var(--accent);font-weight:900}
+.goalform{display:flex;flex-direction:column;gap:10px}
+.goalbtns{display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap}
+.goalbtns .primary{min-width:8em;font-weight:900}
 .ohero{display:flex;flex-direction:column;gap:14px;text-align:center;align-items:center;padding-top:12px}
 .logo{font-family:var(--font-pop);font-size:3rem;line-height:1;color:var(--accent);transform:rotate(-3deg);text-shadow:4px 4px 0 var(--tint)}
 .logo.small{font-size:2.2rem}
@@ -651,13 +660,22 @@ function bizAdjust(y, m, d, mode){
 const SHIFT_OPTS = [["prev", "前営業日にずらす"], ["next", "翌営業日にずらす"], ["none", "ずらさない"]];
 const movedNote = p => p && p.moved ? `（${p.from.m}/${p.from.d}が${p.reason}のため${p.y * 10000 + p.m * 100 + p.d < p.from.y * 10000 + p.from.m * 100 + p.from.d ? "前倒し" : "後ろ倒し"}）` : "";
 
+/* A job is paid on one or two cycles: [{cutoff (0 = month end), payOffset (months after the cutoff), payDay (0 = last day)}] */
+function cyclesOf(job){
+  const cs = Array.isArray(job.cycles) && job.cycles.length ? job.cycles : [{cutoff: job.cutoff, payOffset: job.payOffset, payDay: job.payDay}];
+  return cs.map(c => ({cutoff: num(c.cutoff), payOffset: num(c.payOffset), payDay: num(c.payDay)}));
+}
 function payday(ev, job){
-  let y = ev.y, m = ev.m; const c = num(job.cutoff);
-  if (c > 0 && ev.d > c) m++;
-  m += num(job.payOffset);
+  let y = ev.y, m = ev.m;
+  const lastOf = (yy, mm) => new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+  const cs = cyclesOf(job).map(c => Object.assign(c, {cut: c.cutoff > 0 ? c.cutoff : 31})).sort((a, b) => a.cut - b.cut);
+  // the first cutoff on or after the work day closes its pay period; past every cutoff -> next month's first one
+  let c = cs.find(c => ev.d <= Math.min(c.cut, lastOf(y, m)));
+  if (!c){ c = cs[0]; m++; }
+  m += c.payOffset;
   while (m > 12){ m -= 12; y++; }
-  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-  const d = num(job.payDay) > 0 ? Math.min(num(job.payDay), last) : last;
+  const last = lastOf(y, m);
+  const d = c.payDay > 0 ? Math.min(c.payDay, last) : last;
   const a = bizAdjust(y, m, d, job.holidayShift || "prev");
   return {y: a.y, m: a.m, d: a.d, key: `${a.y}-${pad(a.m)}`, moved: a.moved, reason: a.reason, from: a.from};
 }
@@ -883,8 +901,8 @@ function budgetIncome(y, m, shifts){
 const todayKey = `${now.y}-${pad(now.m)}`, todayYmd = `${now.y}-${pad(now.m)}-${pad(now.d)}`;
 const keyAdd = (k, n) => { const [y, m] = addMonths(Number(k.slice(0, 4)), Number(k.slice(5, 7)), n); return `${y}-${pad(m)}`; };
 const monthsBetween = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
-function savingPlan(){
-  const st = S.settings, goal = num(st.goalAmount), gm = String(st.goalMonth || "");
+function savingPlan(src){
+  const st = src || S.settings, goal = num(st.goalAmount), gm = String(st.goalMonth || "");
   if (!goal || !/^\d{4}-\d{2}$/.test(gm)) return null;
   const bal = num(st.balance), need = Math.max(0, goal - bal);
   const left = Math.max(1, monthsBetween(todayKey, gm) + 1);   // this month through the goal month
@@ -1301,12 +1319,17 @@ function viewHome(){
 function savingHtml(x){
   const st = S.settings, p = savingPlan();
   const bd = st.balanceDate ? `${Number(st.balanceDate.slice(5, 7))}/${Number(st.balanceDate.slice(8))}時点` : "未入力";
-  const inputs = `<div class="dayform">
-      <label class="f">今の口座残高（${bd}）<input type="text" inputmode="decimal" id="hBal" data-set="balance" value="${esc(st.balance ?? "")}" placeholder="円"></label>
-      <label class="f">貯金目標額<input type="text" inputmode="decimal" id="hGoal" data-set="goalAmount" value="${esc(st.goalAmount ?? "")}" placeholder="例：300000"></label>
-      <label class="f">いつまでに<input type="month" id="hGoalM" data-set="goalMonth" value="${esc(st.goalMonth || "")}"></label>
-      <label class="f">まだ入力のない月の収入見込み（月）<input type="text" inputmode="decimal" id="hAssume" data-set="assumeIncome" value="${esc(st.assumeIncome ?? "")}" placeholder="例：60000"></label>
-    </div>`;
+  const gd = goalDraft(), dirty = goalDirty();
+  const inputs = `<div class="goalform"><div class="dayform">
+      <label class="f">今の口座残高（${bd}）<input type="text" inputmode="decimal" id="hGb" data-gd="balance" value="${esc(gd.balance)}" placeholder="例：50000"></label>
+      <label class="f">貯金目標額<input type="text" inputmode="decimal" id="hGg" data-gd="goalAmount" value="${esc(gd.goalAmount)}" placeholder="例：200000"></label>
+      <label class="f">いつまでに<input type="month" id="hGm" data-gd="goalMonth" value="${esc(gd.goalMonth)}"></label>
+      <label class="f">まだ入力のない月の収入見込み（月）<input type="text" inputmode="decimal" id="hGa" data-gd="assumeIncome" value="${esc(gd.assumeIncome)}" placeholder="例：60000"></label>
+    </div>
+    <div class="opreview" data-goalpreview>${esc(goalPreviewText())}</div>
+    <div class="goalbtns"><span class="small" style="color:var(--pop);font-weight:900" data-goaldirty ${dirty ? "" : "hidden"}>まだ保存されていません</span>
+      <button type="button" class="ghost" data-act="resetGoal" ${dirty ? "" : "disabled"}>元に戻す</button>
+      <button type="button" class="primary" data-act="saveGoal" ${dirty ? "" : "disabled"}>保存する</button></div></div>`;
   if (!p) return `<section class="block savebox">
     <div class="small muted">今の口座残高と、いつまでにいくら貯めたいかを入れると、毎月貯めるべき額と自由に使えるお金を計算します。</div>${inputs}</section>`;
   const k = `${S.y}-${pad(S.m)}`, inPlan = k >= todayKey && k <= p.gm;
@@ -1324,7 +1347,7 @@ function savingHtml(x){
       ${proj.map(r => `<tr><td>${r.y !== now.y ? r.y + "/" : ""}${r.m}月${r.k === todayKey ? "（今日以降）" : ""}</td><td>+${yen(r.inflow)}${r.assumed ? "*" : ""}</td><td>−${yen(r.outEv + r.fixed)}</td><td class="${r.bal < 0 ? "neg" : ""}">${yen(r.bal)}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="small muted">今後の振込（確定額かシフトの見込み）から、行事と固定費を引いて計算しています。今月分は今日より後の振込・行事だけを数え、今月の固定費は支払い済みとしています。まだ予算を入れていない行事は0円として扱います。${num(st.assumeIncome) ? `* はシフトも確定額もまだない月で、収入見込み ${yen(st.assumeIncome)} を使っています。` : "先の月はシフトを入れるまで収入0円になるので、下の「収入見込み」を入れると現実に近くなります。"}</div>
-    <details><summary>残高・目標を変える</summary>${inputs}</details>
+    <details ${dirty ? "open" : ""}><summary>残高・目標を変える</summary>${inputs}</details>
   </section>`;
 }
 function tipsHtml(x, rj){
@@ -1532,10 +1555,8 @@ function viewSettings(){
         <label class="f">振込日が土日祝のとき<select id="jh-${i}" data-job="${i}" data-field="holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(j.holidayShift || "prev") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         <label class="f">この給料を使う月<select id="jl2-${i}" data-job="${i}" data-field="useLag"><option value="1" ${lagOf(j) === 1 ? "selected" : ""}>振り込まれた翌月</option><option value="0" ${lagOf(j) === 0 ? "selected" : ""}>振り込まれた月</option></select></label>
         <label class="f">交通費（1回・円／シフトごとに変更可）<input type="text" inputmode="decimal" min="0" step="10" id="jc-${i}" data-job="${i}" data-field="transport" value="${esc(j.transport || "")}" placeholder="0"></label>
-        <label class="f">締め日（0＝月末）<input type="text" inputmode="decimal" min="0" max="31" id="jx-${i}" data-job="${i}" data-field="cutoff" value="${esc(j.cutoff)}"></label>
-        <label class="f">支給月<select id="jo-${i}" data-job="${i}" data-field="payOffset"><option value="0" ${num(j.payOffset) === 0 ? "selected" : ""}>締めた月</option><option value="1" ${num(j.payOffset) === 1 ? "selected" : ""}>翌月</option><option value="2" ${num(j.payOffset) === 2 ? "selected" : ""}>翌々月</option></select></label>
-        <label class="f">支給日（0＝末日）<input type="text" inputmode="decimal" min="0" max="31" id="jd-${i}" data-job="${i}" data-field="payDay" value="${esc(j.payDay)}"></label>
       </div>
+      <div class="f">給料日${cycleEditor(j, i, "set")}</div>
       <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
       ${j.payType === "hourly" ? `<label class="inline"><input type="checkbox" id="jg-${i}" data-job="${i}" data-field="night" ${j.night ? "checked" : ""}> 22時〜5時は25%増し（在宅など対象外ならオフ）</label>` : ""}
     </div>`; }).join("");
@@ -1673,7 +1694,7 @@ document.addEventListener("click", e => {
     S.confirmDel = null; S.settings.recurring = (S.settings.recurring || []).filter(r => r.id !== id); putSettings("毎月の行事を削除しました");
   }
   else if (act === "fab"){ document.getElementById("sheet").hidden = false; const o = document.querySelector("#sheet .opt"); if (o) o.focus(); }
-  else if (act === "openSaving"){ S.openMore = "saving"; render(); const el = document.getElementById("hBal"); if (el){ el.scrollIntoView({block: "center"}); el.focus(); } }
+  else if (act === "openSaving"){ S.openMore = "saving"; render(); const el = document.getElementById("hGb"); if (el){ el.scrollIntoView({block: "center"}); el.focus(); } }
   else if (act === "closeSheet"){ document.getElementById("sheet").hidden = true; }
   else if (act === "quickShift" || act === "quickEvent"){
     document.getElementById("sheet").hidden = true;
@@ -1841,19 +1862,92 @@ const FIX_PRESETS = [["スマホ代", 3000], ["サブスク", 1000], ["定期・
 const newJob = () => ({id: "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: "", payType: "hourly", wage: "", fixedPay: "", night: true, weekendExtra: 0, transport: "", cutoff: 0, payOffset: 1, payDay: 25, holidayShift: "prev", useLag: 1, calColor: "6"});
 const fixTotal = () => (S.settings.fixedItems || []).reduce((a, f) => a + num(f.amount), 0);
 function persist(){ S.settings.fixedCost = fixTotal(); saveLocal(); }
+function goalDraft(){ const st = S.settings; return S.goalDraft || (S.goalDraft = {balance: st.balance ?? "", goalAmount: st.goalAmount ?? "", goalMonth: st.goalMonth || "", assumeIncome: st.assumeIncome ?? ""}); }
+function goalDirty(){ const d = S.goalDraft, st = S.settings; return !!d && ["balance", "goalAmount", "goalMonth", "assumeIncome"].some(k => String(d[k] ?? "") !== String(st[k] ?? "")); }
+function commitGoal(msg){
+  const d = S.goalDraft, st = S.settings; if (!d) return;
+  if (String(d.balance ?? "") !== String(st.balance ?? "")) st.balanceDate = todayYmd;
+  ["balance", "goalAmount", "assumeIncome"].forEach(k => { st[k] = d[k] === "" ? "" : num(d[k]); });
+  st.goalMonth = d.goalMonth || "";
+  S.goalDraft = null;
+  if (msg === false) persist(); else putSettings(msg || "貯金の目標を保存しました");
+}
+function goalPreviewText(){
+  const d = goalDraft(), p = savingPlan(Object.assign({}, S.settings, {balance: num(d.balance), goalAmount: num(d.goalAmount), goalMonth: d.goalMonth}));
+  if (!p) return "目標額と期限を入れると、毎月いくら貯めればいいか計算します";
+  if (!p.need) return "もう目標額に届いています！";
+  return `あと ${yen(p.need)}。${Number(p.gm.slice(0, 4))}年${Number(p.gm.slice(5))}月まで${p.left}か月なので、毎月 ${yen(p.perMonth)} 貯めればOK`;
+}
+function syncGoalUI(){
+  document.querySelectorAll("[data-goalpreview]").forEach(el => { el.textContent = goalPreviewText(); });
+  const dirty = goalDirty();
+  document.querySelectorAll("[data-act=saveGoal],[data-act=resetGoal]").forEach(b => { b.disabled = !dirty; });
+  document.querySelectorAll("[data-goaldirty]").forEach(el => { el.hidden = !dirty; });
+}
+document.addEventListener("input", e => {
+  const t = e.target; if (!t.dataset || !t.dataset.gd) return;
+  if (t.getAttribute("inputmode") === "decimal" && badNum(t.value)){ toast("数字で入力してください", "warn"); return; }
+  goalDraft()[t.dataset.gd] = t.value; syncGoalUI();
+}, true);
+document.addEventListener("change", e => { const t = e.target; if (t.dataset && t.dataset.gd){ goalDraft()[t.dataset.gd] = t.value; syncGoalUI(); } }, true);
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act=saveGoal],[data-act=resetGoal]"); if (!b) return;
+  e.stopPropagation();
+  if (b.dataset.act === "saveGoal") commitGoal(); else { S.goalDraft = null; render(); toast("変更を取り消しました"); }
+}, true);
 function onbGoalPreview(){
   const p = savingPlan();
   if (!p) return "目標額と期限を入れると、毎月いくら貯めればいいか計算します";
   if (!p.need) return "もう目標額に届いています！";
   return `あと ${yen(p.need)}。${Number(p.gm.slice(0, 4))}年${Number(p.gm.slice(5))}月まで${p.left}か月なので、毎月 ${yen(p.perMonth)} 貯めればOK`;
 }
+const CUT_OPTS = [[0, "月末"]].concat(Array.from({length: 28}, (_, k) => [k + 1, (k + 1) + "日"]));
+const PDAY_OPTS = Array.from({length: 28}, (_, k) => [k + 1, (k + 1) + "日"]).concat([[0, "末日"]]);
+function cycleEditor(j, i, ctx){
+  const cs = cyclesOf(j);
+  const sel = (k, f, opts, v) => `<select id="cy-${ctx}-${i}-${k}-${f}" data-cyc="${i}" data-k="${k}" data-f="${f}" data-ctx="${ctx}">${opts.map(([ov, n]) => `<option value="${ov}" ${v === ov ? "selected" : ""}>${n}</option>`).join("")}</select>`;
+  const rows = cs.map((c, k) => `<div class="cycrow">
+      ${cs.length > 1 ? `<span class="cyck">${k + 1}回目</span>` : ""}
+      <label class="f">締め日${sel(k, "cutoff", CUT_OPTS, c.cutoff)}</label>
+      <label class="f">給料が出る月${sel(k, "payOffset", [[0, "締めた月"], [1, "翌月"], [2, "翌々月"]], c.payOffset)}</label>
+      <label class="f">給料日${sel(k, "payDay", PDAY_OPTS, c.payDay)}</label>
+    </div>`).join("");
+  const ex = [10, 25].map(d => { const pd = payday({y: now.y, m: now.m, d}, j); return `${now.m}/${d}の勤務 → ${pd.m}/${pd.d}振込`; }).join("、");
+  return `<div class="cycbox">${rows}
+    <div class="cycfoot"><span class="small muted">例：${ex}</span>
+    ${cs.length > 1 ? `<button type="button" class="ghost" data-cycdel="${i}" data-ctx="${ctx}">1回だけにする</button>` : `<button type="button" class="ghost" data-cycadd="${i}" data-ctx="${ctx}">＋ 締め日をもう1つ（月2回払い）</button>`}</div></div>`;
+}
+function setCycles(j, cs){
+  if (cs.length > 1) j.cycles = cs; else delete j.cycles;
+  Object.assign(j, {cutoff: cs[0].cutoff, payOffset: cs[0].payOffset, payDay: cs[0].payDay});
+}
+function afterCycleEdit(ctx, j, msg){ if (ctx === "onb"){ persist(); render(); } else putSettings(msg || `「${esc(j.name)}」の給料日を保存しました`); }
+document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || t.dataset.cyc === undefined) return;
+  const j = S.settings.jobs[Number(t.dataset.cyc)]; if (!j) return;
+  const cs = cyclesOf(j); cs[Number(t.dataset.k)][t.dataset.f] = num(t.value);
+  setCycles(j, cs); afterCycleEdit(t.dataset.ctx, j);
+}, true);
+document.addEventListener("click", e => {
+  const a = e.target.closest("[data-cycadd],[data-cycdel]"); if (!a) return;
+  const i = Number(a.dataset.cycadd ?? a.dataset.cycdel), j = S.settings.jobs[i]; if (!j) return;
+  const cs = cyclesOf(j);
+  if (a.dataset.cycadd !== undefined){
+    // a sensible second cycle: the half the first one does not cover
+    const second = cs[0].cutoff === 15 ? {cutoff: 0, payOffset: 1, payDay: 15} : {cutoff: 15, payOffset: 0, payDay: 0};
+    setCycles(j, [cs[0], second]);
+  } else setCycles(j, [cs[0]]);
+  if (a.dataset.ctx === "onb") S.onbCustom[i] = true;
+  afterCycleEdit(a.dataset.ctx, j, a.dataset.cycadd !== undefined ? "締め日を2つにしました" : "締め日を1つにしました");
+});
 const PAY_PRESETS = [
   {l: "月末締め・翌月25日", c: 0, o: 1, d: 25},
   {l: "15日締め・当月25日", c: 15, o: 0, d: 25},
   {l: "20日締め・翌月10日", c: 20, o: 1, d: 10},
-  {l: "月末締め・翌月末日", c: 0, o: 1, d: 0}
+  {l: "月末締め・翌月末日", c: 0, o: 1, d: 0},
+  {l: "月2回（15日・月末締め）", cycles: [{cutoff: 15, payOffset: 0, payDay: 0}, {cutoff: 0, payOffset: 1, payDay: 15}]}
 ];
-const presetOf = j => PAY_PRESETS.findIndex(p => p.c === num(j.cutoff) && p.o === num(j.payOffset) && p.d === num(j.payDay));
+const presetOf = j => { const cs = cyclesOf(j); return PAY_PRESETS.findIndex(p => p.cycles ? JSON.stringify(p.cycles) === JSON.stringify(cs) : cs.length === 1 && p.c === cs[0].cutoff && p.o === cs[0].payOffset && p.d === cs[0].payDay); };
 function viewOnboarding(){
   const st = S.settings, step = S.onbStep || 0;
   S.onbCustom = S.onbCustom || {};
@@ -1891,23 +1985,19 @@ function viewOnboarding(){
           <div class="opay">${PAY_PRESETS.map((p, k) => `<button type="button" data-onb="paypreset" data-i="${i}" data-p="${k}" aria-pressed="${!custom && pi === k}">${p.l}</button>`).join("")}
             <button type="button" data-onb="paycustom" data-i="${i}" aria-pressed="${custom}">ほかの日にち</button></div>
         </div>
-        ${custom ? `<div class="grid2">
-          <label class="f">締め日<select id="oj-x-${i}" data-o="jobs.${i}.cutoff">${[[0, "月末"], [5, "5日"], [10, "10日"], [15, "15日"], [20, "20日"], [25, "25日"]].map(([v, n]) => `<option value="${v}" ${num(j.cutoff) === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-          <label class="f">給料が出る月<select id="oj-o-${i}" data-o="jobs.${i}.payOffset"><option value="0" ${num(j.payOffset) === 0 ? "selected" : ""}>締めた月</option><option value="1" ${num(j.payOffset) === 1 ? "selected" : ""}>翌月</option><option value="2" ${num(j.payOffset) === 2 ? "selected" : ""}>翌々月</option></select></label>
-          <label class="f">給料日<select id="oj-d-${i}" data-o="jobs.${i}.payDay">${[1, 5, 10, 15, 20, 25, 0].map(v => `<option value="${v}" ${num(j.payDay) === v ? "selected" : ""}>${v ? v + "日" : "末日"}</option>`).join("")}</select></label>
-        </div>` : ""}
+        ${custom ? cycleEditor(j, i, "onb") : ""}
       </div>`; }).join("")}
       <button type="button" class="ghost" style="align-self:flex-start;color:var(--accent);font-weight:900" data-onb="addjob">＋ バイト先をもう1つ追加</button>
       ${cta("つぎへ", true)}`;
   }
   if (step === 2) body = `<div class="ostep-h"><h2 class="oh">貯金の目標は？</h2><p class="osub">今の残高と目標から、毎月貯める額と「自由に使えるお金」を出します。</p></div>
       <div class="ocard"><div class="grid2">
-        <label class="f">今の口座残高<input type="text" inputmode="decimal" id="og-b" data-o="balance" value="${esc(st.balance ?? "")}" placeholder="例：50000"></label>
-        <label class="f">貯金目標額<input type="text" inputmode="decimal" id="og-g" data-o="goalAmount" value="${esc(st.goalAmount ?? "")}" placeholder="例：200000"></label>
-        <label class="f" style="grid-column:1 / -1">いつまでに<input type="month" id="og-m" data-o="goalMonth" value="${esc(st.goalMonth || "")}"></label>
+        <label class="f">今の口座残高<input type="text" inputmode="decimal" id="og-b" data-gd="balance" value="${esc(goalDraft().balance)}" placeholder="例：50000"></label>
+        <label class="f">貯金目標額<input type="text" inputmode="decimal" id="og-g" data-gd="goalAmount" value="${esc(goalDraft().goalAmount)}" placeholder="例：200000"></label>
+        <label class="f" style="grid-column:1 / -1">いつまでに<input type="month" id="og-m" data-gd="goalMonth" value="${esc(goalDraft().goalMonth)}"></label>
       </div></div>
-      <div class="opreview" id="onbGoal">${esc(onbGoalPreview())}</div>
-      ${cta("つぎへ", true)}`;
+      <div class="opreview" data-goalpreview>${esc(goalPreviewText())}</div>
+      ${cta("保存してつぎへ", true)}`;
   if (step === 3){
     const items = st.fixedItems || (st.fixedItems = []);
     const card = (st.recurring || []).find(r => r.id === "card");
@@ -1970,6 +2060,7 @@ document.addEventListener("click", e => {
   const a = b.dataset.onb, st = S.settings;
   if (a === "next"){
     if (S.onbStep === 1) st.jobs = st.jobs.filter(j => String(j.name).trim());
+    if (S.onbStep === 2){ if (b.classList.contains("skip")) S.goalDraft = null; else if (goalDirty()) commitGoal(false); }
     if (S.onbStep === 3) st.fixedItems = (st.fixedItems || []).filter(f => String(f.name).trim() || num(f.amount));
     if (S.onbStep >= ONB_STEPS.length - 1){ st.onboarded = true; S.tab = "home"; persist(); render(); toast("ようこそ、シフポケへ！"); window.scrollTo(0, 0); return; }
     S.onbStep = (S.onbStep || 0) + 1;
@@ -1977,7 +2068,7 @@ document.addEventListener("click", e => {
   else if (a === "back") S.onbStep = Math.max(0, (S.onbStep || 0) - 1);
   else if (a === "addjob") st.jobs.push(newJob());
   else if (a === "ptype") st.jobs[Number(b.dataset.i)].payType = b.dataset.v;
-  else if (a === "paypreset"){ const j = st.jobs[Number(b.dataset.i)], pp = PAY_PRESETS[Number(b.dataset.p)]; j.cutoff = pp.c; j.payOffset = pp.o; j.payDay = pp.d; S.onbCustom[b.dataset.i] = false; }
+  else if (a === "paypreset"){ const j = st.jobs[Number(b.dataset.i)], pp = PAY_PRESETS[Number(b.dataset.p)]; setCycles(j, pp.cycles ? pp.cycles.map(c => Object.assign({}, c)) : [{cutoff: pp.c, payOffset: pp.o, payDay: pp.d}]); S.onbCustom[b.dataset.i] = false; }
   else if (a === "paycustom") S.onbCustom[b.dataset.i] = true;
   else if (a === "deljob") st.jobs.splice(Number(b.dataset.i), 1);
   else if (a === "preset"){
