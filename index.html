@@ -421,6 +421,8 @@ details.more section.block{padding:0;background:none}
 .ocard{border:none;border-radius:20px;padding:16px;gap:14px}
 .ocard-h b{font-size:.9rem}
 .seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:var(--bg);padding:4px;border-radius:14px}
+.seg.seg3{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:6px}
+.seg.seg3 + .cycbox{margin-top:8px}
 .seg button{border:none;min-height:40px;border-radius:10px;background:transparent;color:var(--muted);font-weight:700}
 .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:900;box-shadow:0 1px 3px rgba(0,0,0,.1)}
 .opay{display:flex;flex-wrap:wrap;gap:6px}
@@ -698,8 +700,21 @@ function cyclesOf(job){
   const cs = Array.isArray(job.cycles) && job.cycles.length ? job.cycles : [{cutoff: job.cutoff, payOffset: job.payOffset, payDay: job.payDay}];
   return cs.map(c => ({cutoff: num(c.cutoff), payOffset: num(c.payOffset), payDay: num(c.payDay)}));
 }
+const freqOf = j => j.payFreq === "daily" || j.payFreq === "weekly" ? j.payFreq : "monthly";
+const FREQ_OPTS = [["monthly", "月払い"], ["weekly", "週払い"], ["daily", "日払い"]];
+const WDAYS = ["日", "月", "火", "水", "木", "金", "土"];
 function payday(ev, job){
   let y = ev.y, m = ev.m;
+  const freq = freqOf(job);
+  if (freq !== "monthly"){
+    // daily: the same day (or the next day); weekly: work Mon–Sun is paid on the chosen weekday of the following week
+    let t = Date.UTC(ev.y, ev.m - 1, ev.d);
+    if (freq === "daily") t += num(job.dailyLag) * 864e5;
+    else { const dow = new Date(t).getUTCDay(), wd = hasVal(job.payWeekday) ? num(job.payWeekday) : 5; t += ((7 - dow) % 7 + (wd === 0 ? 7 : wd)) * 864e5; }
+    const x = new Date(t), a = freq === "daily" && !num(job.dailyLag) ? {y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate(), moved: false}
+      : bizAdjust(x.getUTCFullYear(), x.getUTCMonth() + 1, x.getUTCDate(), job.holidayShift || "prev");
+    return {y: a.y, m: a.m, d: a.d, key: `${a.y}-${pad(a.m)}`, moved: a.moved, reason: a.reason, from: a.from};
+  }
   const lastOf = (yy, mm) => new Date(Date.UTC(yy, mm, 0)).getUTCDate();
   const cs = cyclesOf(job).map(c => Object.assign(c, {cut: c.cutoff > 0 ? c.cutoff : 31})).sort((a, b) => a.cut - b.cut);
   // the first cutoff on or after the work day closes its pay period; past every cutoff -> next month's first one
@@ -897,11 +912,16 @@ function monthIncome(y, m, shifts){
   const payIn = (shifts || allShifts()).filter(s => s.pd.key === key);
   const rows = S.settings.jobs.map(j => {
     const xs = payIn.filter(s => s.job.id === j.id);
-    const est = xs.reduce((a, s) => a + s.pay, 0), tr = xs.reduce((a, s) => a + s.transport, 0);
+    const freq = freqOf(j), ymdOf = p => `${p.y}-${pad(p.m)}-${pad(p.d)}`;
+    // daily / weekly pay: a fee is taken from each payout (e.g. 即払いサービスの手数料)
+    const pds = [...new Set(xs.map(s => ymdOf(s.pd)))].sort(), fee = freq === "monthly" ? 0 : num(j.payFee) * pds.length;
+    const est = Math.max(0, xs.reduce((a, s) => a + s.pay, 0) - fee), tr = xs.reduce((a, s) => a + s.transport, 0);
     const confirmed = hasVal(conf[j.id]);
     const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
-    const pd = xs[0] ? xs[0].pd : (() => { const a = bizAdjust(y, m, num(j.payDay) > 0 ? Math.min(num(j.payDay), last) : last, j.holidayShift || "prev"); return Object.assign(a, {key: `${a.y}-${pad(a.m)}`}); })();
-    return {job: j, n: xs.length, hours: xs.reduce((a, s) => a + s.paid, 0), est, tr, confirmed, conf: confirmed ? num(conf[j.id]) : null, used: confirmed ? num(conf[j.id]) : est, pd};
+    // several payouts a month: show the next one still to come, else the last one
+    const nextPd = pds.length ? (xs.find(s => ymdOf(s.pd) === (pds.find(k => k >= todayYmd) || pds[pds.length - 1])) || xs[0]).pd : null;
+    const pd = freq !== "monthly" ? (nextPd || {y, m, d: last, key, moved: false}) : xs[0] ? xs[0].pd : (() => { const a = bizAdjust(y, m, num(j.payDay) > 0 ? Math.min(num(j.payDay), last) : last, j.holidayShift || "prev"); return Object.assign(a, {key: `${a.y}-${pad(a.m)}`}); })();
+    return {job: j, freq, payouts: pds.length, fee, n: xs.length, hours: xs.reduce((a, s) => a + s.paid, 0), est, tr, confirmed, conf: confirmed ? num(conf[j.id]) : null, used: confirmed ? num(conf[j.id]) : est, pd};
   });
   const others = Array.isArray(doc.others) ? doc.others : [];
   const othersTotal = others.reduce((a, o) => a + num(o.amount), 0);
@@ -1307,10 +1327,10 @@ function viewHome(){
   if (!S.settings.jobs.length) warn.push(`バイト先がまだありません。<button data-goto="settings">バイト先を登録</button>`);
   const jobRows = mi.rows.map(r => `
     <div class="row">
-      <div class="date">${r.pd.m}/${r.pd.d}<br><span class="small">振込</span></div>
+      <div class="date">${r.freq === "monthly" ? `${r.pd.m}/${r.pd.d}<br><span class="small">振込</span>` : `${r.freq === "daily" ? "日払い" : "週払い"}<br><span class="small">${r.payouts ? `${r.payouts}回` : "—"}</span>`}</div>
       <div class="main"><div class="title"><span class="jdot" style="--jc:${jColor(r.job.id)}"></span>${esc(r.job.name)}</div>${r.pd.moved ? `<div class="sub">振込日 ${r.pd.m}/${r.pd.d}${movedNote(r.pd)}</div>` : ""}
         <div class="sub"><span class="chip">${r.lag ? `${r.srcM}月振込分` : "今月振込分"}</span> ${r.confirmed ? `<span class="chip good">確定</span>` : r.est ? `<span class="chip">見込み</span>` : `<span class="chip warn">未入力</span>`}
-          ${r.n ? `シフト${r.n}回・実働 ${hrs(r.hours)}h → 見込み ${yen(r.est)}${r.tr ? `（交通費 ${yen(r.tr)} 含む）` : ""}` : "シフト入力なし"}
+          ${r.n ? `シフト${r.n}回・実働 ${hrs(r.hours)}h → 見込み ${yen(r.est)}${r.tr ? `（交通費 ${yen(r.tr)} 含む）` : ""}${r.fee ? `・手数料 −${yen(r.fee)}` : ""}` : "シフト入力なし"}
           ${r.confirmed && r.n && r.conf !== r.est ? `・差 ${r.conf - r.est > 0 ? "+" : "−"}${yen(Math.abs(r.conf - r.est))}` : ""}</div></div>
       <div class="amt">${yen(r.used)}</div>
       <div class="edit"><label class="inline">確定額 <input type="text" inputmode="decimal" id="ij-${esc(r.job.id)}-${r.srcKey}" data-inc-job="${esc(r.job.id)}" data-inc-key="${r.srcKey}" value="${r.confirmed ? esc(r.conf) : ""}" placeholder="${r.est ? esc(r.est) : "円"}"></label>
@@ -1615,10 +1635,11 @@ function viewSettings(){
              <label class="f">土日の時給加算（円）<input type="text" inputmode="decimal" min="0" step="10" id="je-${i}" data-job="${i}" data-field="weekendExtra" value="${esc(j.weekendExtra || "")}" placeholder="0"></label>`
           : `<label class="f">1回の金額（円）<input type="text" inputmode="decimal" min="0" step="100" id="jf-${i}" data-job="${i}" data-field="fixedPay" value="${esc(j.fixedPay || "")}" placeholder="未設定"></label>`}
         <label class="f">振込日が土日祝のとき<select id="jh-${i}" data-job="${i}" data-field="holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(j.holidayShift || "prev") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-        <label class="f">この給料を使う月<select id="jl2-${i}" data-job="${i}" data-field="useLag"><option value="1" ${lagOf(j) === 1 ? "selected" : ""}>振り込まれた翌月</option><option value="0" ${lagOf(j) === 0 ? "selected" : ""}>振り込まれた月</option></select></label>
+        ${freqOf(j) !== "monthly" ? "" : `<label class="f">この給料を使う月<select id="jl2-${i}" data-job="${i}" data-field="useLag"><option value="1" ${lagOf(j) === 1 ? "selected" : ""}>振り込まれた翌月</option><option value="0" ${lagOf(j) === 0 ? "selected" : ""}>振り込まれた月</option></select></label>`}
         <label class="f">交通費（1回・円／シフトごとに変更可）<input type="text" inputmode="decimal" min="0" step="10" id="jc-${i}" data-job="${i}" data-field="transport" value="${esc(j.transport || "")}" placeholder="0"></label>
       </div>
-      <div class="f">給料日${cycleEditor(j, i, "set")}</div>
+      <div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>
+      ${freqOf(j) === "monthly" ? `<div class="f">給料日${cycleEditor(j, i, "set")}</div>` : ""}
       <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
       ${j.payType === "hourly" ? `<label class="inline"><input type="checkbox" id="jg-${i}" data-job="${i}" data-field="night" ${j.night ? "checked" : ""}> 22時〜5時は25%増し（在宅など対象外ならオフ）</label>` : ""}
     </div>`; }).join("");
@@ -1979,6 +2000,36 @@ function cycleEditor(j, i, ctx){
     <div class="cycfoot"><span class="small muted">例：${ex}</span>
     ${cs.length > 1 ? `<button type="button" class="ghost" data-cycdel="${i}" data-ctx="${ctx}">1回だけにする</button>` : `<button type="button" class="ghost" data-cycadd="${i}" data-ctx="${ctx}">＋ 締め日をもう1つ（月2回払い）</button>`}</div></div>`;
 }
+/* 月払い / 週払い / 日払い. Monthly jobs use the cutoff editor (or presets); the others pick a weekday or same/next day, plus a fee per payout. */
+function freqEditor(j, i, ctx){
+  const f = freqOf(j), id = k => `fq-${ctx}-${i}-${k}`;
+  const seg = `<div class="seg seg3" role="group" aria-label="給料の受け取り方">${FREQ_OPTS.map(([v, n]) => `<button type="button" data-freq="${i}" data-v="${v}" data-ctx="${ctx}" aria-pressed="${f === v}">${n}</button>`).join("")}</div>`;
+  if (f === "monthly") return seg;
+  const when = f === "weekly"
+    ? `<label class="f">受け取る曜日（翌週）<select id="${id("wd")}" data-freqf="${i}" data-f="payWeekday" data-ctx="${ctx}">${[1, 2, 3, 4, 5, 6, 0].map(v => `<option value="${v}" ${(hasVal(j.payWeekday) ? num(j.payWeekday) : 5) === v ? "selected" : ""}>${WDAYS[v]}曜日</option>`).join("")}</select></label>`
+    : `<label class="f">受け取る日<select id="${id("dl")}" data-freqf="${i}" data-f="dailyLag" data-ctx="${ctx}"><option value="0" ${!num(j.dailyLag) ? "selected" : ""}>働いた当日</option><option value="1" ${num(j.dailyLag) === 1 ? "selected" : ""}>翌日</option></select></label>`;
+  const ex = f === "weekly" ? (() => { const pd = payday({y: now.y, m: now.m, d: now.d}, j); return `今日の勤務 → ${pd.m}/${pd.d}（${WDAYS[new Date(Date.UTC(pd.y, pd.m - 1, pd.d)).getUTCDay()]}）に受け取り${movedNote(pd)}`; })()
+    : num(j.dailyLag) ? "翌日の振込が土日祝のときは「振込日が土日祝のとき」の設定でずらします" : "手渡し・即日振込として、働いた日の収入にします";
+  return `${seg}<div class="cycbox"><div class="grid2">${when}
+      <label class="f">手数料（1回の受け取りごと・円）<input type="text" inputmode="decimal" id="${id("fee")}" data-freqf="${i}" data-f="payFee" data-ctx="${ctx}" value="${esc(j.payFee || "")}" placeholder="0"></label></div>
+    <div class="cycfoot"><span class="small muted">${ex}。日払い・週払いの分は、受け取った月にそのまま使えるお金として数えます。</span></div></div>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-freq]"); if (!b) return;
+  e.stopPropagation();
+  const j = S.settings.jobs[Number(b.dataset.freq)]; if (!j || freqOf(j) === b.dataset.v) return;
+  j.payFreq = b.dataset.v;
+  j.useLag = b.dataset.v === "monthly" ? 1 : 0;   // paid as you go: usable in the month it arrives
+  if (b.dataset.ctx === "onb"){ persist(); render(); } else putSettings(`「${esc(j.name)}」を${FREQ_OPTS.find(o => o[0] === b.dataset.v)[1]}にしました`);
+}, true);
+document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || t.dataset.freqf === undefined) return;
+  e.stopPropagation();
+  const j = S.settings.jobs[Number(t.dataset.freqf)]; if (!j) return;
+  if (t.dataset.f === "payFee" && badNum(t.value)){ toast("数字で入力してください", "warn"); return; }
+  j[t.dataset.f] = t.dataset.f === "payFee" && t.value === "" ? "" : num(t.value);
+  if (t.dataset.ctx === "onb"){ persist(); render(); } else putSettings(`「${esc(j.name)}」を保存しました`);
+}, true);
 function setCycles(j, cs){
   if (cs.length > 1) j.cycles = cs; else delete j.cycles;
   Object.assign(j, {cutoff: cs[0].cutoff, payOffset: cs[0].payOffset, payDay: cs[0].payDay});
@@ -2043,11 +2094,12 @@ function viewOnboarding(){
             : `<label class="f">1回の金額<input type="text" inputmode="decimal" id="oj-f-${i}" data-o="jobs.${i}.fixedPay" value="${esc(j.fixedPay)}" placeholder="例：8000"></label>`}
           <label class="f">交通費（1回）<input type="text" inputmode="decimal" id="oj-c-${i}" data-o="jobs.${i}.transport" value="${esc(j.transport)}" placeholder="なし"></label>
         </div>
-        <div class="f">給料日
+        <div class="f">給料の受け取り方${freqEditor(j, i, "onb")}</div>
+        ${freqOf(j) !== "monthly" ? "" : `<div class="f">給料日
           <div class="opay">${PAY_PRESETS.map((p, k) => `<button type="button" data-onb="paypreset" data-i="${i}" data-p="${k}" aria-pressed="${!custom && pi === k}">${p.l}</button>`).join("")}
             <button type="button" data-onb="paycustom" data-i="${i}" aria-pressed="${custom}">ほかの日にち</button></div>
         </div>
-        ${custom ? cycleEditor(j, i, "onb") : ""}
+        ${custom ? cycleEditor(j, i, "onb") : ""}`}
       </div>`; }).join("")}
       <button type="button" class="ghost" style="align-self:flex-start;color:var(--accent);font-weight:900" data-onb="addjob">＋ バイト先をもう1つ追加</button>
       ${cta("つぎへ", true)}`;
