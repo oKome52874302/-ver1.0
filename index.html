@@ -1367,11 +1367,14 @@ function loadingBlock(){ return `<section class="block"><div class="empty">Googl
 
 function nextPayday(shifts){
   // earliest pay still to arrive (today or later), looking up to 3 months ahead
+  // a payday with no amount yet (shifts for that period not entered) still counts for a job paid the month before,
+  // so a regular job's payday is not skipped; one-off jobs (e.g. exam proctoring) only show when they have an amount
   let best = null;
   for (let i = 0; i < 4; i++){
-    const [y, m] = addMonths(now.y, now.m, i);
+    const [y, m] = addMonths(now.y, now.m, i), [py, pm] = addMonths(y, m, -1), prev = monthIncome(py, pm, shifts).rows;
     for (const r of monthIncome(y, m, shifts).rows){
-      if (!r.used) continue;
+      const regular = r.freq === "monthly" && prev.some(q => q.job.id === r.job.id && q.used);
+      if (!r.used && !regular) continue;
       const ymd = `${r.pd.y}-${pad(r.pd.m)}-${pad(r.pd.d)}`;
       if (ymd < todayYmd) continue;
       if (!best || ymd < best.ymd) best = {ymd, rows: [r]};
@@ -1422,7 +1425,7 @@ function viewHome(){
 
   // next payday + savings
   const np = nextPayday(shifts);
-  const npHtml = np ? `<div class="mini"><span class="mk">次の給料日</span><span class="mv">${Number(np.ymd.slice(5, 7))}/${Number(np.ymd.slice(8))}<small>（${DOW[new Date(np.ymd + "T00:00:00Z").getUTCDay()]}）</small></span><span class="ms">${np.rows.map(r => `${esc(r.job.name)} ${yen(r.used)}`).join("・")}</span></div>`
+  const npHtml = np ? `<div class="mini"><span class="mk">次の給料日</span><span class="mv">${Number(np.ymd.slice(5, 7))}/${Number(np.ymd.slice(8))}<small>（${DOW[new Date(np.ymd + "T00:00:00Z").getUTCDay()]}）</small></span><span class="ms">${np.rows.map(r => `${esc(r.job.name)} ${r.used ? yen(r.used) : `<span class="warn">金額未入力</span>`}`).join("・")}</span>${np.rows.some(r => !r.used) ? `<span class="ms">対象期間のシフトか、内訳の「確定額」を入れると金額が出ます</span>` : ""}</div>`
     : `<button type="button" class="mini" data-act="quickShift"><span class="mk">次の給料日</span><span class="mv">—</span><span class="ms">シフトを入れると表示されます</span></button>`;
   const p = savingPlan();
   const svHtml = p ? `<div class="mini"><span class="mk">貯金 ${Number(p.gm.slice(5))}月までに${yen(p.goal)}</span><span class="mv">${Math.min(100, Math.floor(p.bal / p.goal * 100))}%</span><div class="meter"><span style="width:${Math.min(100, p.bal / p.goal * 100).toFixed(1)}%"></span></div></div>`
