@@ -20,7 +20,7 @@ img{max-width:100%}
 [hidden]{display:none!important}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Dela+Gothic+One&family=Monomaniac+One&family=Russo+One&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 /* Layout: one column — onboarding wizard first, then a pocket-sized money app: month switcher, summary tiles, ledger lists. */
 :root{
@@ -31,6 +31,9 @@ img{max-width:100%}
   --med0:#D3DAD8; --med0-d:#B9C2C0; --med1:#D58A52; --med1-d:#A8673A; --med2:#AEBCC7; --med2-d:#7D8A94; --med3:#F2C641; --med3-d:#C99A12;
   --rib0:#C3CCCA; --rib1:#D2553F; --rib2:#3F6FB0; --rib3:#8A4FC0; --medline:rgba(255,255,255,.75); --medtext:#FFFFFF; --spark:#FFF6C9;
   --font-pop:"Dela Gothic One","Zen Kaku Gothic New",sans-serif;
+  --font-ach:"Monomaniac One","Dela Gothic One","Zen Kaku Gothic New",sans-serif;
+  --font-en:"Russo One","Monomaniac One",sans-serif;
+  --med4:url(#legendFill); --rib4:#1D2A24;
   --j0:#C2571F; --j1:#2C5A86; --j2:#6B4FA0; --j3:#2D7A4D; --j4:#9A3E6A;
   --font-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
   --font-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
@@ -165,6 +168,36 @@ details summary{cursor:pointer;color:var(--accent);font-size:.88rem}
 .proj th{font-family:var(--font-body);font-weight:500;color:var(--muted);font-size:.76rem;border-top:none}
 .proj td.neg{color:var(--bad)}
 #toast.trophy .mark{background:var(--gold)}
+/* achievements typography: sharper game-title faces */
+.rankcard .rankname{font-family:var(--font-ach);font-size:1.9rem;letter-spacing:.04em}
+.emblem{font-family:var(--font-en)}
+.emblem .lv{font-size:.72rem;letter-spacing:.08em}
+.gotcount{font-family:var(--font-en)}
+.rk-k{font-family:var(--font-en);letter-spacing:.14em;font-size:.68rem}
+.badge .bt{font-family:var(--font-ach);font-weight:400;font-size:1.02rem;letter-spacing:.02em}
+.badge .btier{font-family:var(--font-en);font-size:.62rem;letter-spacing:.16em}
+.badge .bdate{font-family:var(--font-en);letter-spacing:.04em}
+.bcat-h h3{font-family:var(--font-ach);font-weight:400;font-size:1.15rem;letter-spacing:.04em}
+.cel-en{font-family:var(--font-en);font-size:.72rem;letter-spacing:.22em;color:var(--muted)}
+.cel-kicker{font-family:var(--font-ach);font-size:2rem;letter-spacing:.06em;text-shadow:3px 3px 0 var(--tint)}
+.cel-title{font-family:var(--font-ach);font-size:1.6rem;letter-spacing:.03em}
+.cel-tier{font-family:var(--font-en);font-size:.72rem;letter-spacing:.18em}
+.cel-actions .primary{font-family:var(--font-ach);font-size:1.15rem;letter-spacing:.06em}
+/* legend tier */
+.badge.on.t4{background:#1D2A24;color:#F4F1FF;border-color:#1D2A24;box-shadow:3px 3px 0 #B69CFF}
+.badge.on.t4 .bd,.badge.on.t4 .bdate{color:#CFC6EA}
+.badge.on.t4 .btier{background:linear-gradient(90deg,#7DE2D1,#B69CFF,#FF9EC7,#FFD66B);-webkit-background-clip:text;background-clip:text;color:transparent}
+.badge.t4:not(.on){border-style:dashed}
+.legendcat{background:linear-gradient(135deg,color-mix(in srgb,#B69CFF 14%,transparent),transparent 60%);border-radius:16px;padding:10px}
+.legendcat .bcat-h h3{background:linear-gradient(90deg,#3FB9A6,#8C6CF0,#E5639E,#D9A21B);-webkit-background-clip:text;background-clip:text;color:transparent}
+.badge .meter.mini{display:block;padding:0;height:6px;border-radius:99px;background:var(--tint);gap:0;min-width:0}
+.badge.t4 .meter.mini{background:color-mix(in srgb,#B69CFF 20%,var(--surface))}
+.cel-tier.t4{background:linear-gradient(90deg,#3FB9A6,#8C6CF0,#E5639E,#D9A21B)}
+.cel-card.t4{background:#1D2A24;color:#F4F1FF;box-shadow:6px 6px 0 #B69CFF}
+.cel-card.t4 .cel-kicker{color:#FFD66B;text-shadow:3px 3px 0 #8C6CF0}
+.cel-card.t4 .cel-desc,.cel-card.t4 .cel-en{color:#CFC6EA}
+.cel-card.t4 .cel-rays{opacity:.55;background:repeating-conic-gradient(#7DE2D1 0 8deg,transparent 8deg 16deg,#FF9EC7 16deg 24deg,transparent 24deg 32deg)}
+@media (prefers-reduced-motion:no-preference){.medalsvg.legend.on{animation:legendglow 2.4s ease-in-out infinite}@keyframes legendglow{0%,100%{filter:drop-shadow(0 0 0 rgba(182,156,255,0))}50%{filter:drop-shadow(0 0 8px rgba(182,156,255,.9))}}}
 .brand{font-family:var(--font-pop);font-weight:400;font-size:1.45rem;color:var(--accent);letter-spacing:.02em}
 body.in-onb #appHeader, body.in-onb nav.tabs{display:none}
 .onb{max-width:560px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:18px;padding-block:8px 24px}
@@ -963,6 +996,16 @@ function stats(){
       if (done.length >= 3 && done.every(e => num(e.doc.actual) <= num(e.doc.budget))) perfect++;
     }
   }
+  const overCount = settled.filter(d => num(d.actual) > num(d.budget)).length;
+  // longest run of consecutive months with at least one shift worked
+  const wm = [...new Set(done.map(x => x.ev.ymd.slice(0, 7)))].sort();
+  let workStreak = 0, ws = 0, prevK = "";
+  for (const k of wm){ ws = prevK && keyAdd(prevK, 1) === k ? ws + 1 : 1; workStreak = Math.max(workStreak, ws); prevK = k; }
+  // a finished year whose income landed in the last 2% under the "wall"
+  let wallFinish = 0;
+  const yrs = [...new Set(Object.keys(monthly).map(k => Number(k.slice(0, 4))))].filter(y => y < now.y);
+  for (const y of yrs){ const yp = summary(y, 12).yearPay, w = num(S.settings.wall); if (w && yp >= w * 0.98 && yp <= w) wallFinish = 1; }
+  const others = ACH.filter(a => a.tier < 4);
   const plan = savingPlan(); let onTrack = 0;
   if (plan && plan.need > 0){ const pr = projection(), end = pr.find(r => r.k === plan.gm) || pr[pr.length - 1]; if (end && end.bal >= plan.goal) onTrack = 1; }
   return {
@@ -973,7 +1016,8 @@ function stats(){
     night: done.filter(s => s.night > 0).length, longest: done.reduce((a, s) => Math.max(a, s.paid), 0),
     doubleDays: Object.values(byDay).filter(x => x.size >= 2).length,
     maxJobs: Math.max(0, ...Object.values(jobsByMonth).map(x => x.size)),
-    evDone, saved, exact, black, bestStreak: best, perfect, onTrack, recMonths: Object.values(S.income).filter(d => d.jobs && Object.keys(d.jobs).length).length,
+    evDone, saved, exact, black, bestStreak: best, perfect, onTrack, overCount, workStreak, wallFinish,
+    othersDone: others.filter(a => S.ach[a.id]).length, othersTotal: others.length, recMonths: Object.values(S.income).filter(d => d.jobs && Object.keys(d.jobs).length).length,
     balance: num(S.settings.balance), goal: num(S.settings.goalAmount)
   };
 }
@@ -1007,6 +1051,17 @@ const ACH = [
   {cat:"save", id:"black3",  g:"3", tier:2, t:"黒字3連続",        d:"3か月連続で黒字",                     v:s => s.bestStreak, goal:3, fmt:"か月"},
   {cat:"save", id:"black6",  g:"6", tier:3, t:"黒字マスター",     d:"6か月連続で黒字",                     v:s => s.bestStreak, goal:6, fmt:"か月"},
   {cat:"bank", id:"ontrack", g:"道", tier:2, t:"このペースならいける", d:"今の予定のままで貯金目標に届く見込み", v:s => s.onTrack, goal:1, fmt:""},
+  {cat:"legend", id:"lg_total",  g:"神", tier:4, t:"稼ぎの神",         d:"これまでの収入が300万円",                 v:s => s.total,      goal:3000000, fmt:"yen"},
+  {cat:"legend", id:"lg_shift",  g:"鉄", tier:4, t:"鉄人",             d:"シフトを365回こなす",                     v:s => s.count,      goal:365, fmt:"回"},
+  {cat:"legend", id:"lg_hours",  g:"千", tier:4, t:"千時間の猛者",     d:"実働の合計が1000時間",                    v:s => s.hours,      goal:1000, fmt:"h"},
+  {cat:"legend", id:"lg_night",  g:"帝", tier:4, t:"夜の帝王",         d:"深夜帯の勤務を100回",                     v:s => s.night,      goal:100, fmt:"回"},
+  {cat:"legend", id:"lg_attend", g:"皆", tier:4, t:"皆勤賞",           d:"12か月連続で毎月シフトに入る",            v:s => s.workStreak, goal:12, fmt:"か月"},
+  {cat:"legend", id:"lg_black",  g:"王", tier:4, t:"黒字の王",         d:"12か月連続で黒字",                        v:s => s.bestStreak, goal:12, fmt:"か月"},
+  {cat:"legend", id:"lg_save",   g:"鬼", tier:4, t:"節約の鬼",         d:"予算より浮かせたお金の合計が20万円",      v:s => s.saved,      goal:200000, fmt:"yen"},
+  {cat:"legend", id:"lg_exact",  g:"寸", tier:4, t:"ぴったり職人",     d:"予算ぴったりの精算を30回",                v:s => s.exact,      goal:30, fmt:"回"},
+  {cat:"legend", id:"lg_clean",  g:"無", tier:4, t:"完全無欠",         d:"予算超過ゼロのまま50件を精算",            v:s => s.overCount ? 0 : s.evDone, goal:50, fmt:"件"},
+  {cat:"legend", id:"lg_wall",   g:"壁", tier:4, t:"壁ギリギリの美学", d:"1年の収入を年収の壁の98〜100%で着地させる", v:s => s.wallFinish, goal:1, fmt:"", secret:"ある年の終わり方がカギ"},
+  {cat:"legend", id:"lg_all",    g:"極", tier:4, t:"シフポケを極めし者", d:"ほかのメダルをすべて集める",            v:s => s.othersDone, goal:s => s.othersTotal, fmt:"個", secret:"すべてを集めし者だけが知る"},
   {cat:"rec", id:"rec",    g:"記", tier:1, t:"記録マニア",        d:"3か月分の振込額を記録する",       v:s => s.recMonths,   goal:3, fmt:"か月"},
   {cat:"bank", id:"bal10",  g:"貯", tier:2, t:"残高10万円",        d:"口座残高が10万円",                v:s => s.balance,     goal:100000, fmt:"yen"},
   {cat:"bank", id:"bal30",  g:"貯", tier:3, t:"残高30万円",        d:"口座残高が30万円",                v:s => s.balance,     goal:300000, fmt:"yen"},
@@ -1017,18 +1072,22 @@ const achGoal = (a, s) => typeof a.goal === "function" ? a.goal(s) : a.goal;
 const fmtV = (v, f) => f === "yen" ? yen(v) : `${hrs(v)}${f}`;
 S.ach = {}; S.ready = {settings:false, shifts:false, income:false, events:false, ach:false};
 let achWriting = false;
-const TIER = {1: "ブロンズ", 2: "シルバー", 3: "ゴールド"};
+const TIER = {1: "ブロンズ", 2: "シルバー", 3: "ゴールド", 4: "レジェンド"};
+const TIER_EN = {1: "BRONZE", 2: "SILVER", 3: "GOLD", 4: "LEGEND"};
+let medalSeq = 0;
 function medal(a, on, size){
-  const t = on ? a.tier : 0;
-  return `<svg class="medalsvg${on ? " on" : ""}" viewBox="0 0 64 80" width="${size}" height="${size * 1.25}" aria-hidden="true">
+  const t = on ? a.tier : 0, gid = "lg" + (++medalSeq);
+  const fill = t === 4 ? `url(#${gid})` : `var(--med${t})`, fillD = t === 4 ? "#1D2A24" : `var(--med${t}-d)`;
+  return `<svg class="medalsvg${on ? " on" : ""}${t === 4 ? " legend" : ""}" viewBox="0 0 64 80" width="${size}" height="${size * 1.25}" aria-hidden="true">
+    ${t === 4 ? `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7DE2D1"/><stop offset=".35" stop-color="#B69CFF"/><stop offset=".65" stop-color="#FF9EC7"/><stop offset="1" stop-color="#FFD66B"/></linearGradient></defs>` : ""}
     <path d="M18 42 L9 76 L19 70 L25 78 L31 46Z" fill="var(--rib${t})"/>
     <path d="M46 42 L55 76 L45 70 L39 78 L33 46Z" fill="var(--rib${t})" opacity=".85"/>
-    <circle cx="32" cy="31" r="27" fill="var(--med${t}-d)"/>
-    <circle cx="32" cy="29" r="26" fill="var(--med${t})"/>
+    <circle cx="32" cy="31" r="27" fill="${fillD}"/>
+    <circle cx="32" cy="29" r="26" fill="${fill}"/>
     <circle cx="32" cy="29" r="20" fill="none" stroke="var(--medline)" stroke-width="2" stroke-dasharray="2.5 3.5"/>
     ${on ? `<path d="M15 21 A19 19 0 0 1 27 11" fill="none" stroke="var(--medline)" stroke-width="3.5" stroke-linecap="round"/>
     <path d="M52 6 l1.6 4 4 1.6 -4 1.6 -1.6 4 -1.6 -4 -4 -1.6 4 -1.6z" fill="var(--spark)" class="spark"/>` : ""}
-    <text x="32" y="${a.g.length > 1 ? 36 : 37}" text-anchor="middle" font-family="'Dela Gothic One','Zen Kaku Gothic New',sans-serif" font-size="${a.g.length > 1 ? 18 : 22}" fill="var(--medtext)">${on ? esc(a.g) : "?"}</text>
+    <text x="32" y="${a.g.length > 1 ? 36 : 37}" text-anchor="middle" font-family="'Monomaniac One','Dela Gothic One',sans-serif" font-size="${a.g.length > 1 ? 19 : 22}" fill="${t === 4 ? "#1D2A24" : "var(--medtext)"}">${on ? esc(a.g) : "?"}</text>
   </svg>`;
 }
 /* ---------- unlock celebration ---------- */
@@ -1045,15 +1104,17 @@ function showNextCelebration(){
   const idx = celebrateTotal - celebrateQ.length;
   box.querySelector(".cel-card").innerHTML = `
     <div class="cel-rays" aria-hidden="true"></div>
-    <div class="cel-kicker">実績解除！</div>
+    <div class="cel-en">${a.tier === 4 ? "LEGENDARY ACHIEVEMENT" : "ACHIEVEMENT UNLOCKED"}</div>
+    <div class="cel-kicker">${a.tier === 4 ? "伝説解除" : "実績解除"}</div>
     <div class="cel-medal">${medal(a, true, 112)}</div>
-    <div class="cel-tier t${a.tier}">${TIER[a.tier]}</div>
+    <div class="cel-tier t${a.tier}">${TIER_EN[a.tier]}</div>
     <div class="cel-title">${esc(a.t)}</div>
     <div class="cel-desc">${esc(a.d)}</div>
     <div class="cel-actions"><button class="primary cel-ok" data-cel="next">${celebrateQ.length ? `つぎへ（${idx}/${celebrateTotal}）` : "やったね！"}</button>
       ${celebrateQ.length ? `<button class="ghost" data-cel="skip">まとめて閉じる</button>` : ""}</div>`;
   box.hidden = false;
-  box.querySelector(".cel-card").classList.remove("pop"); void box.offsetWidth; box.querySelector(".cel-card").classList.add("pop");
+  const cc = box.querySelector(".cel-card"); cc.classList.toggle("t4", a.tier === 4);
+  cc.classList.remove("pop"); void box.offsetWidth; cc.classList.add("pop");
   box.querySelector(".cel-ok").focus();
   confetti(a.tier);
 }
@@ -1067,6 +1128,7 @@ document.addEventListener("toggle", e => { const d = e.target; if (d.dataset && 
 document.addEventListener("keydown", e => { if (e.key === "Escape") document.getElementById("sheet").hidden = true; });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !document.getElementById("celebrate").hidden){ celebrateQ.length = 0; showNextCelebration(); } });
 function confetti(tier){
+  tier = tier === 4 ? 6 : tier;
   const cv = document.getElementById("confetti");
   if (!cv || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const ctx = cv.getContext("2d"), W = cv.width = innerWidth, H = cv.height = innerHeight;
@@ -1106,17 +1168,17 @@ function viewAch(){
     const pct = isFinite(g) && g > 0 ? Math.min(100, v / g * 100) : 0;
     return `<${on ? `button type="button" data-replay="${a.id}" aria-label="${esc(a.t)}の演出をもう一度見る"` : "div"} class="badge ${on ? "on" : ""} t${a.tier}">
       ${medal(a, on, 54)}
-      <div class="btier">${TIER[a.tier]}</div>
-      <div class="bt">${esc(a.t)}</div><div class="bd">${esc(a.d)}</div>
+      <div class="btier">${TIER_EN[a.tier]}</div>
+      <div class="bt">${!on && a.secret ? "？？？" : esc(a.t)}</div><div class="bd">${!on && a.secret ? `ヒント：${esc(a.secret)}` : esc(a.d)}</div>
       ${on ? `<div class="bdate">${Number(S.ach[a.id].slice(5, 7))}/${Number(S.ach[a.id].slice(8))} GET!</div>`
-           : isFinite(g) ? `<div class="meter mini"><span style="width:${pct.toFixed(1)}%"></span></div><div class="bdate">${fmtV(Math.min(v, g), a.fmt)} / ${fmtV(g, a.fmt)}</div>` : `<div class="bdate">貯金目標を決めると挑戦できます</div>`}
+           : a.secret && a.id !== "lg_all" ? `<div class="bdate">？？？</div>` : isFinite(g) ? `<div class="meter mini"><span style="width:${pct.toFixed(1)}%"></span></div><div class="bdate">${fmtV(Math.min(v, g), a.fmt)} / ${fmtV(g, a.fmt)}</div>` : `<div class="bdate">貯金目標を決めると挑戦できます</div>`}
     </${on ? "button" : "div"}>`;
   };
-  const CATS = [["earn", "稼ぐ"], ["work", "働く"], ["save", "節約"], ["bank", "貯金"], ["rec", "記録"]];
+  const CATS = [["earn", "稼ぐ"], ["work", "働く"], ["save", "節約"], ["bank", "貯金"], ["rec", "記録"], ["legend", "伝説 — LEGEND"]];
   const badges = CATS.map(([c, name]) => {
     const list = ACH.filter(a => a.cat === c).sort((a, b) => (S.ach[b.id] ? 1 : 0) - (S.ach[a.id] ? 1 : 0) || a.tier - b.tier);
     if (!list.length) return "";
-    return `<div class="bcat"><div class="bcat-h"><h3>${name}</h3><span>${list.filter(a => S.ach[a.id]).length} / ${list.length}</span></div><div class="badges">${list.map(badge).join("")}</div></div>`;
+    return `<div class="bcat ${c === "legend" ? "legendcat" : ""}"><div class="bcat-h"><h3>${name}</h3><span>${list.filter(a => S.ach[a.id]).length} / ${list.length}</span></div><div class="badges">${list.map(badge).join("")}</div></div>`;
   }).join("");
   return `
   <section class="rankcard">
