@@ -138,9 +138,14 @@ details summary{cursor:pointer;color:var(--accent);font-size:.88rem}
 #toast.warn .mark{background:var(--warn)} #toast.bad .mark{background:var(--bad)}
 #toast.saving .mark{background:var(--muted)}
 @media (prefers-reduced-motion:no-preference){#toast{transition:opacity .2s ease,transform .2s ease}}
-.tiles.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.tiles.four{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media (max-width:560px){.tiles.four{grid-template-columns:1fr 1fr}.tiles.four .tile:last-child{grid-column:auto}}
 .rankname{font-size:1.5rem;font-weight:900;letter-spacing:.04em}
+.bcat{display:flex;flex-direction:column;gap:10px}
+.bcat+.bcat{margin-top:8px}
+.bcat-h{display:flex;justify-content:space-between;align-items:baseline}
+.bcat-h h3{margin:0;font-size:.95rem;font-weight:900}
+.bcat-h span{font-size:.78rem;font-weight:700;color:var(--muted);font-family:var(--font-num)}
 .badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .badge{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;min-width:0;background:var(--bg)}
 .badge .medal{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:1.15rem;color:var(--surface);background:var(--locked);box-shadow:inset 0 -3px 0 rgba(0,0,0,.15)}
@@ -924,7 +929,24 @@ function stats(){
   const vals = Object.values(monthly);
   const byDay = {}, jobsByMonth = {};
   for (const s of done){ (byDay[s.ev.ymd] = byDay[s.ev.ymd] || new Set()).add(s.job.id); (jobsByMonth[s.ev.ymd.slice(0, 7)] = jobsByMonth[s.ev.ymd.slice(0, 7)] || new Set()).add(s.job.id); }
-  const evDone = Object.values(S.events).filter(d => hasVal(d.actual) && hasVal(d.budget) && num(d.actual) <= num(d.budget)).length;
+  const settled = Object.values(S.events).filter(d => hasVal(d.actual) && hasVal(d.budget) && d.included !== false);
+  const evDone = settled.filter(d => num(d.actual) <= num(d.budget)).length;
+  const saved = settled.reduce((a, d) => a + Math.max(0, num(d.budget) - num(d.actual)), 0);
+  const exact = settled.filter(d => num(d.actual) <= num(d.budget) && num(d.budget) - num(d.actual) <= Math.max(100, num(d.budget) * 0.03)).length;
+  // finished months (before this one) that ended with money left over; longest streak in a row
+  const mkeys = new Set([...Object.keys(S.income), ...all.map(x => x.pd.key), ...Object.values(S.events).map(d => String(d.ymd || "").slice(0, 7))].filter(k => /^\d{4}-\d{2}$/.test(k) && k < todayKey));
+  let black = 0, streak = 0, best = 0, perfect = 0;
+  if (mkeys.size){
+    const first = [...mkeys].sort()[0];
+    for (let k = first; k < todayKey; k = keyAdd(k, 1)){
+      const y = Number(k.slice(0, 4)), m = Number(k.slice(5, 7)), x = summary(y, m);
+      if (x.income > 0 && x.left >= 0){ black++; streak++; best = Math.max(best, streak); } else streak = 0;
+      const done = x.evs.filter(e => hasVal(e.doc.actual) && hasVal(e.doc.budget));
+      if (done.length >= 3 && done.every(e => num(e.doc.actual) <= num(e.doc.budget))) perfect++;
+    }
+  }
+  const plan = savingPlan(); let onTrack = 0;
+  if (plan && plan.need > 0){ const pr = projection(), end = pr.find(r => r.k === plan.gm) || pr[pr.length - 1]; if (end && end.bal >= plan.goal) onTrack = 1; }
   return {
     monthly, thisMonth: monthly[todayKey] || 0, bestMonth: vals.length ? Math.max(...vals) : 0,
     year: Object.entries(monthly).filter(([k]) => k.startsWith(String(now.y))).reduce((a, [, v]) => a + v, 0),
@@ -933,35 +955,44 @@ function stats(){
     night: done.filter(s => s.night > 0).length, longest: done.reduce((a, s) => Math.max(a, s.paid), 0),
     doubleDays: Object.values(byDay).filter(x => x.size >= 2).length,
     maxJobs: Math.max(0, ...Object.values(jobsByMonth).map(x => x.size)),
-    evDone, recMonths: Object.values(S.income).filter(d => d.jobs && Object.keys(d.jobs).length).length,
+    evDone, saved, exact, black, bestStreak: best, perfect, onTrack, recMonths: Object.values(S.income).filter(d => d.jobs && Object.keys(d.jobs).length).length,
     balance: num(S.settings.balance), goal: num(S.settings.goalAmount)
   };
 }
 const ACH = [
-  {id:"first",  g:"初", tier:1, t:"はじめての給料",   d:"振り込まれた給料を記録する",       v:s => s.total,       goal:1, fmt:"yen"},
-  {id:"m3",     g:"3",  tier:1, t:"月3万円プレイヤー", d:"1か月に3万円かせぐ",               v:s => s.bestMonth,   goal:30000, fmt:"yen"},
-  {id:"m5",     g:"5",  tier:2, t:"月5万円の壁",      d:"1か月に5万円かせぐ",               v:s => s.bestMonth,   goal:50000, fmt:"yen"},
-  {id:"m10",    g:"10", tier:3, t:"月10万円の大台",   d:"1か月に10万円かせぐ",              v:s => s.bestMonth,   goal:100000, fmt:"yen"},
-  {id:"m15",    g:"15", tier:3, t:"社会人並み",        d:"1か月に15万円かせぐ",              v:s => s.bestMonth,   goal:150000, fmt:"yen"},
-  {id:"y10",    g:"年", tier:1, t:"年間10万円",        d:"今年の収入が10万円",              v:s => s.year,        goal:100000, fmt:"yen"},
-  {id:"y30",    g:"年", tier:2, t:"年間30万円",        d:"今年の収入が30万円",              v:s => s.year,        goal:300000, fmt:"yen"},
-  {id:"y50",    g:"年", tier:2, t:"年間50万円",        d:"今年の収入が50万円",              v:s => s.year,        goal:500000, fmt:"yen"},
-  {id:"y100",   g:"年", tier:3, t:"ミリオン達成",      d:"今年の収入が100万円",             v:s => s.year,        goal:1000000, fmt:"yen"},
-  {id:"c10",    g:"回", tier:1, t:"シフト10回",        d:"アプリでシフトを10回こなす",       v:s => s.count,       goal:10, fmt:"回"},
-  {id:"c50",    g:"回", tier:2, t:"シフト50回",        d:"アプリでシフトを50回こなす",       v:s => s.count,       goal:50, fmt:"回"},
-  {id:"c100",   g:"百", tier:3, t:"百戦錬磨",          d:"アプリでシフトを100回こなす",      v:s => s.count,       goal:100, fmt:"回"},
-  {id:"h50",    g:"時", tier:1, t:"50時間労働",        d:"実働の合計が50時間",              v:s => s.hours,       goal:50, fmt:"h"},
-  {id:"h100",   g:"時", tier:2, t:"100時間労働",       d:"実働の合計が100時間",             v:s => s.hours,       goal:100, fmt:"h"},
-  {id:"h300",   g:"時", tier:3, t:"300時間の猛者",     d:"実働の合計が300時間",             v:s => s.hours,       goal:300, fmt:"h"},
-  {id:"long",   g:"長", tier:1, t:"ロングラン",        d:"1回で実働8時間以上",              v:s => s.longest,     goal:8, fmt:"h"},
-  {id:"night",  g:"夜", tier:1, t:"夜の住人",          d:"22時以降の深夜帯に働く",          v:s => s.night,       goal:1, fmt:"回"},
-  {id:"double", g:"双", tier:2, t:"ダブルヘッダー",    d:"1日に2つのバイトをこなす",        v:s => s.doubleDays,  goal:1, fmt:"日"},
-  {id:"multi",  g:"掛", tier:2, t:"掛け持ちの達人",    d:"1か月に3つの勤務先で働く",        v:s => s.maxJobs,     goal:3, fmt:"か所"},
-  {id:"budget", g:"算", tier:2, t:"やりくり上手",      d:"予算内で精算した行事が5件",       v:s => s.evDone,      goal:5, fmt:"件"},
-  {id:"rec",    g:"記", tier:1, t:"記録マニア",        d:"3か月分の振込額を記録する",       v:s => s.recMonths,   goal:3, fmt:"か月"},
-  {id:"bal10",  g:"貯", tier:2, t:"残高10万円",        d:"口座残高が10万円",                v:s => s.balance,     goal:100000, fmt:"yen"},
-  {id:"bal30",  g:"貯", tier:3, t:"残高30万円",        d:"口座残高が30万円",                v:s => s.balance,     goal:300000, fmt:"yen"},
-  {id:"goal",   g:"達", tier:3, t:"目標達成",          d:"口座残高が貯金目標に届く",        v:s => s.goal ? s.balance : 0, goal:s => s.goal || Infinity, fmt:"yen"}
+  {cat:"earn", id:"first",  g:"初", tier:1, t:"はじめての給料",   d:"振り込まれた給料を記録する",       v:s => s.total,       goal:1, fmt:"yen"},
+  {cat:"earn", id:"m3",     g:"3",  tier:1, t:"月3万円プレイヤー", d:"1か月に3万円かせぐ",               v:s => s.bestMonth,   goal:30000, fmt:"yen"},
+  {cat:"earn", id:"m5",     g:"5",  tier:2, t:"月5万円の壁",      d:"1か月に5万円かせぐ",               v:s => s.bestMonth,   goal:50000, fmt:"yen"},
+  {cat:"earn", id:"m10",    g:"10", tier:3, t:"月10万円の大台",   d:"1か月に10万円かせぐ",              v:s => s.bestMonth,   goal:100000, fmt:"yen"},
+  {cat:"earn", id:"m15",    g:"15", tier:3, t:"社会人並み",        d:"1か月に15万円かせぐ",              v:s => s.bestMonth,   goal:150000, fmt:"yen"},
+  {cat:"earn", id:"y10",    g:"年", tier:1, t:"年間10万円",        d:"今年の収入が10万円",              v:s => s.year,        goal:100000, fmt:"yen"},
+  {cat:"earn", id:"y30",    g:"年", tier:2, t:"年間30万円",        d:"今年の収入が30万円",              v:s => s.year,        goal:300000, fmt:"yen"},
+  {cat:"earn", id:"y50",    g:"年", tier:2, t:"年間50万円",        d:"今年の収入が50万円",              v:s => s.year,        goal:500000, fmt:"yen"},
+  {cat:"earn", id:"y100",   g:"年", tier:3, t:"ミリオン達成",      d:"今年の収入が100万円",             v:s => s.year,        goal:1000000, fmt:"yen"},
+  {cat:"work", id:"c10",    g:"回", tier:1, t:"シフト10回",        d:"アプリでシフトを10回こなす",       v:s => s.count,       goal:10, fmt:"回"},
+  {cat:"work", id:"c50",    g:"回", tier:2, t:"シフト50回",        d:"アプリでシフトを50回こなす",       v:s => s.count,       goal:50, fmt:"回"},
+  {cat:"work", id:"c100",   g:"百", tier:3, t:"百戦錬磨",          d:"アプリでシフトを100回こなす",      v:s => s.count,       goal:100, fmt:"回"},
+  {cat:"work", id:"h50",    g:"時", tier:1, t:"50時間労働",        d:"実働の合計が50時間",              v:s => s.hours,       goal:50, fmt:"h"},
+  {cat:"work", id:"h100",   g:"時", tier:2, t:"100時間労働",       d:"実働の合計が100時間",             v:s => s.hours,       goal:100, fmt:"h"},
+  {cat:"work", id:"h300",   g:"時", tier:3, t:"300時間の猛者",     d:"実働の合計が300時間",             v:s => s.hours,       goal:300, fmt:"h"},
+  {cat:"work", id:"long",   g:"長", tier:1, t:"ロングラン",        d:"1回で実働8時間以上",              v:s => s.longest,     goal:8, fmt:"h"},
+  {cat:"work", id:"night",  g:"夜", tier:1, t:"夜の住人",          d:"22時以降の深夜帯に働く",          v:s => s.night,       goal:1, fmt:"回"},
+  {cat:"work", id:"double", g:"双", tier:2, t:"ダブルヘッダー",    d:"1日に2つのバイトをこなす",        v:s => s.doubleDays,  goal:1, fmt:"日"},
+  {cat:"work", id:"multi",  g:"掛", tier:2, t:"掛け持ちの達人",    d:"1か月に3つの勤務先で働く",        v:s => s.maxJobs,     goal:3, fmt:"か所"},
+  {cat:"save", id:"budget", g:"算", tier:2, t:"やりくり上手",      d:"予算内で精算した行事が5件",       v:s => s.evDone,      goal:5, fmt:"件"},
+  {cat:"save", id:"save1k",  g:"浮", tier:1, t:"浮かせ上手",       d:"予算より安く済ませて合計1,000円浮かせる", v:s => s.saved, goal:1000, fmt:"yen"},
+  {cat:"save", id:"save10k", g:"浮", tier:2, t:"1万円浮いた",      d:"浮かせたお金の合計が1万円",          v:s => s.saved,      goal:10000, fmt:"yen"},
+  {cat:"save", id:"save50k", g:"匠", tier:3, t:"節約マスター",     d:"浮かせたお金の合計が5万円",          v:s => s.saved,      goal:50000, fmt:"yen"},
+  {cat:"save", id:"exact",   g:"的", tier:1, t:"予算ぴったり",     d:"予算の3%以内の差で精算する",          v:s => s.exact,      goal:1, fmt:"件"},
+  {cat:"save", id:"perfect", g:"完", tier:2, t:"完璧な月",         d:"1か月の精算（3件以上）がすべて予算内", v:s => s.perfect,    goal:1, fmt:"か月"},
+  {cat:"save", id:"black1",  g:"黒", tier:1, t:"黒字デビュー",     d:"自由に使えるお金を残して月を終える",  v:s => s.black,      goal:1, fmt:"か月"},
+  {cat:"save", id:"black3",  g:"3", tier:2, t:"黒字3連続",        d:"3か月連続で黒字",                     v:s => s.bestStreak, goal:3, fmt:"か月"},
+  {cat:"save", id:"black6",  g:"6", tier:3, t:"黒字マスター",     d:"6か月連続で黒字",                     v:s => s.bestStreak, goal:6, fmt:"か月"},
+  {cat:"bank", id:"ontrack", g:"道", tier:2, t:"このペースならいける", d:"今の予定のままで貯金目標に届く見込み", v:s => s.onTrack, goal:1, fmt:""},
+  {cat:"rec", id:"rec",    g:"記", tier:1, t:"記録マニア",        d:"3か月分の振込額を記録する",       v:s => s.recMonths,   goal:3, fmt:"か月"},
+  {cat:"bank", id:"bal10",  g:"貯", tier:2, t:"残高10万円",        d:"口座残高が10万円",                v:s => s.balance,     goal:100000, fmt:"yen"},
+  {cat:"bank", id:"bal30",  g:"貯", tier:3, t:"残高30万円",        d:"口座残高が30万円",                v:s => s.balance,     goal:300000, fmt:"yen"},
+  {cat:"bank", id:"goal",   g:"達", tier:3, t:"目標達成",          d:"口座残高が貯金目標に届く",        v:s => s.goal ? s.balance : 0, goal:s => s.goal || Infinity, fmt:"yen"}
 ];
 const RANKS = [[0, "見習い"], [50000, "一人前"], [200000, "ベテラン"], [500000, "店長候補"], [1000000, "稼ぎ頭"], [1500000, "伝説のバイト"]];
 const achGoal = (a, s) => typeof a.goal === "function" ? a.goal(s) : a.goal;
@@ -1052,7 +1083,7 @@ function viewAch(){
   const ri = RANKS.reduce((a, r, i) => s.total >= r[0] ? i : a, 0), next = RANKS[ri + 1];
   const got = ACH.filter(a => S.ach[a.id]).length;
   const rpct = next ? Math.min(100, (s.total - RANKS[ri][0]) / (next[0] - RANKS[ri][0]) * 100) : 100;
-  const badges = ACH.slice().sort((a, b) => (S.ach[b.id] ? 1 : 0) - (S.ach[a.id] ? 1 : 0) || a.tier - b.tier).map(a => {
+  const badge = a => {
     const on = !!S.ach[a.id], v = a.v(s), g = achGoal(a, s);
     const pct = isFinite(g) && g > 0 ? Math.min(100, v / g * 100) : 0;
     return `<${on ? `button type="button" data-replay="${a.id}" aria-label="${esc(a.t)}の演出をもう一度見る"` : "div"} class="badge ${on ? "on" : ""} t${a.tier}">
@@ -1062,6 +1093,12 @@ function viewAch(){
       ${on ? `<div class="bdate">${Number(S.ach[a.id].slice(5, 7))}/${Number(S.ach[a.id].slice(8))} GET!</div>`
            : isFinite(g) ? `<div class="meter mini"><span style="width:${pct.toFixed(1)}%"></span></div><div class="bdate">${fmtV(Math.min(v, g), a.fmt)} / ${fmtV(g, a.fmt)}</div>` : `<div class="bdate">貯金目標を決めると挑戦できます</div>`}
     </${on ? "button" : "div"}>`;
+  };
+  const CATS = [["earn", "稼ぐ"], ["work", "働く"], ["save", "節約"], ["bank", "貯金"], ["rec", "記録"]];
+  const badges = CATS.map(([c, name]) => {
+    const list = ACH.filter(a => a.cat === c).sort((a, b) => (S.ach[b.id] ? 1 : 0) - (S.ach[a.id] ? 1 : 0) || a.tier - b.tier);
+    if (!list.length) return "";
+    return `<div class="bcat"><div class="bcat-h"><h3>${name}</h3><span>${list.filter(a => S.ach[a.id]).length} / ${list.length}</span></div><div class="badges">${list.map(badge).join("")}</div></div>`;
   }).join("");
   return `
   <section class="rankcard">
@@ -1079,10 +1116,12 @@ function viewAch(){
     <div class="tile"><div class="k">${now.y}年かせいだ</div><div class="v">${yen(s.year)}</div></div>
     <div class="tile"><div class="k">実働の合計</div><div class="v">${hrs(s.hours)}h</div></div>
     <div class="tile"><div class="k">こなしたシフト</div><div class="v">${s.count}回</div></div>
+    <div class="tile"><div class="k">予算より浮かせた</div><div class="v">${yen(s.saved)}</div></div>
+    <div class="tile"><div class="k">黒字の月</div><div class="v">${s.black}か月</div></div>
   </div>
   <section class="block">
     <div class="blockhead"><h2>メダルコレクション</h2><span class="small muted">GETしたメダルを押すと演出をもう一度見られます</span></div>
-    <div class="badges">${badges}</div>
+    ${badges}
     <div class="small muted">振り込まれた額（確定額、または振込日を過ぎた見込み）と、今日までに入力したシフトで判定します。</div>
   </section>`;
 }
