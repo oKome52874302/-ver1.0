@@ -1,0 +1,1968 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>シフポケ</title>
+<meta name="description" content="シフトを入れるだけでバイト代を自動計算。今月いくら使えて、いくら貯まるかがひと目でわかる学生向けアプリ。">
+<meta name="theme-color" content="#F2F5EF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#101613" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="シフポケ">
+<style>
+/* base reset */
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;font:14px/1.5 system-ui,sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: one column — onboarding wizard first, then a pocket-sized money app: month switcher, summary tiles, ledger lists. */
+:root{
+  --bg:#F2F5EF; --surface:#FFFFFF; --ink:#1D2A24; --muted:#5B6A62; --line:#D6DFD7;
+  --accent:#12795F; --tint:#DCEFE6; --pop:#F26B4F; --good:#2D7A4D; --warn:#A86A12; --bad:#AE3636;
+  --good-bg:#E3F1E8; --warn-bg:#F7ECD9; --bad-bg:#F6E1E1;
+  --bronze:#A8673A; --silver:#7D8A94; --gold:#B8901C; --locked:#C9D1CF;
+  --med0:#D3DAD8; --med0-d:#B9C2C0; --med1:#D58A52; --med1-d:#A8673A; --med2:#AEBCC7; --med2-d:#7D8A94; --med3:#F2C641; --med3-d:#C99A12;
+  --rib0:#C3CCCA; --rib1:#D2553F; --rib2:#3F6FB0; --rib3:#8A4FC0; --medline:rgba(255,255,255,.75); --medtext:#FFFFFF; --spark:#FFF6C9;
+  --font-pop:"Dela Gothic One","Zen Kaku Gothic New",sans-serif;
+  --j0:#C2571F; --j1:#2C5A86; --j2:#6B4FA0; --j3:#2D7A4D; --j4:#9A3E6A;
+  --font-body:"Zen Kaku Gothic New","Hiragino Sans","Noto Sans JP",system-ui,sans-serif;
+  --font-num:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#101613; --surface:#18211C; --ink:#E5EEE8; --muted:#94A39A; --line:#2A3730;
+  --accent:#5CCBA6; --tint:#183128; --pop:#FF8A70; --good:#6CC08D; --warn:#E2B25C; --bad:#E57D7D;
+  --good-bg:#1B2E23; --warn-bg:#33291A; --bad-bg:#341E1F; --j0:#EE9A62; --j1:#86ADD8; --j2:#B49AE0; --j3:#6CC08D; --j4:#E08BB4; --bronze:#D49163; --silver:#AEBAC2; --gold:#E6C04F; --locked:#36403F; --med0:#3B4645; --med0-d:#2C3534; --rib0:#323C3B; --medline:rgba(255,255,255,.55); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101613; --surface:#18211C; --ink:#E5EEE8; --muted:#94A39A; --line:#2A3730;
+  --accent:#5CCBA6; --tint:#183128; --pop:#FF8A70; --good:#6CC08D; --warn:#E2B25C; --bad:#E57D7D;
+  --good-bg:#1B2E23; --warn-bg:#33291A; --bad-bg:#341E1F; --j0:#EE9A62; --j1:#86ADD8; --j2:#B49AE0; --j3:#6CC08D; --j4:#E08BB4; --bronze:#D49163; --silver:#AEBAC2; --gold:#E6C04F; --locked:#36403F; --med0:#3B4645; --med0-d:#2C3534; --rib0:#323C3B; --medline:rgba(255,255,255,.55); color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.6}
+.wrap{max-width:880px;margin:0 auto;padding-inline:16px;padding-block:20px 64px;display:flex;flex-direction:column;gap:18px}
+h1{font-size:1.25rem;font-weight:900;margin:0;letter-spacing:.02em}
+h2{font-size:1rem;font-weight:700;margin:0;text-wrap:balance}
+.num{font-family:var(--font-num);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:.82rem}
+header.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.monthnav{display:flex;align-items:center;gap:6px}
+.monthnav .label{font-family:var(--font-num);font-weight:600;font-size:1.05rem;min-width:7.5em;text-align:center}
+button,.btn{font:inherit;font-size:.88rem;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:700}
+button.ghost{background:transparent;border-color:transparent;color:var(--muted)}
+button.icon{padding:6px 10px}
+button:disabled{opacity:.5;cursor:default}
+nav.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+nav.tabs button{border:none;border-bottom:2px solid transparent;border-radius:0;background:none;padding:8px 14px;color:var(--muted);font-weight:500;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:700}
+.notice{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 14px;font-size:.88rem;display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.notice.warn{background:var(--warn-bg);border-color:transparent}
+.notice.bad{background:var(--bad-bg);border-color:transparent}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.tile .k{font-size:.78rem;color:var(--muted);letter-spacing:.04em}
+.tile .v{font-family:var(--font-num);font-size:1.45rem;font-weight:600;line-height:1.3;word-break:break-all}
+.tile .s{font-size:.78rem;color:var(--muted)}
+.tile.neg .v{color:var(--bad)}
+.tile.pos .v{color:var(--good)}
+@media (max-width:560px){.tiles{grid-template-columns:1fr 1fr}.tiles .tile:last-child{grid-column:1 / -1}}
+section.block{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.blockhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.alloc{display:flex;height:22px;border-radius:6px;overflow:hidden;background:var(--tint)}
+.alloc span{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.c-fixed{background:var(--muted)} .c-save{background:var(--good)} .c-event{background:var(--accent)} .c-over{background:var(--bad)}
+.rows{display:flex;flex-direction:column}
+.row{display:grid;grid-template-columns:4.6em minmax(0,1fr) auto;gap:4px 12px;padding:9px 0;border-top:1px dashed var(--line);align-items:center}
+.row:first-child{border-top:none}
+.row .date{font-family:var(--font-num);font-size:.85rem;color:var(--muted);line-height:1.3}
+.row .main{min-width:0}
+.row .title{font-weight:700;overflow-wrap:anywhere}
+.row .sub{font-size:.8rem;color:var(--muted)}
+.row .amt{font-family:var(--font-num);text-align:right;font-weight:600;white-space:nowrap}
+.row.off .title,.row.off .amt{text-decoration:line-through;color:var(--muted)}
+.row .edit{grid-column:2 / -1;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+@media (max-width:480px){.row{grid-template-columns:3.8em minmax(0,1fr)}.row .amt{grid-column:2;text-align:left}.row .edit{grid-column:1 / -1}}
+.chip{display:inline-block;font-size:.72rem;font-weight:700;padding:1px 8px;border-radius:99px;background:var(--tint);color:var(--accent);white-space:nowrap}
+.chip.good{background:var(--good-bg);color:var(--good)} .chip.warn{background:var(--warn-bg);color:var(--warn)} .chip.bad{background:var(--bad-bg);color:var(--bad)}
+label.f{display:flex;flex-direction:column;gap:2px;font-size:.76rem;color:var(--muted)}
+label.inline{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;color:var(--muted)}
+input,select,textarea{font:inherit;font-size:.9rem;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:5px 8px;min-width:0}
+input[inputmode=decimal]{font-family:var(--font-num);width:7.5em}
+.live{font-family:var(--font-num);font-size:.84rem;background:var(--tint);color:var(--ink);border-radius:8px;padding:7px 10px}
+input.w-s{width:5em!important} input.w-l{width:100%}
+input[type=checkbox]{width:auto;accent-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.job{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.job .jhead{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.job .jhead input{flex:1 1 12em;font-weight:700}
+.meter{height:10px;border-radius:99px;background:var(--tint);overflow:hidden}
+.meter span{display:block;height:100%;background:var(--accent)}
+.meter.over span{background:var(--bad)}
+.tips{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
+.ai{white-space:pre-wrap;font-size:.9rem;background:var(--bg);border-radius:8px;padding:10px 12px;overflow-wrap:anywhere}
+.empty{padding:14px 0;color:var(--muted);font-size:.88rem}
+.tablewrap{overflow-x:auto}
+details summary{cursor:pointer;color:var(--accent);font-size:.88rem}
+.cand{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px dashed var(--line);align-items:center}
+.cand .t{min-width:0;overflow-wrap:anywhere;font-size:.9rem}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .wd{font-size:.72rem;color:var(--muted);text-align:center;padding-bottom:2px}
+.cal .wd.sun{color:var(--bad)} .cal .wd.sat{color:var(--accent)}
+.day{min-width:0;min-height:64px;display:flex;flex-direction:column;align-items:stretch;gap:2px;padding:4px;border:1px solid var(--line);border-radius:8px;background:var(--bg);text-align:left;cursor:pointer;font:inherit;color:var(--ink)}
+.day:hover{border-color:var(--accent)}
+.day .dn{font-family:var(--font-num);font-size:.78rem;line-height:1.2}
+.day.today .dn{font-weight:700;color:var(--accent)}
+.day[aria-pressed="true"]{border:2px solid var(--accent);padding:3px;background:var(--tint)}
+.day.blank{visibility:hidden}
+.day .jc{display:block;font-size:.66rem;font-family:var(--font-num);line-height:1.35;padding:0 3px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:color-mix(in srgb,var(--jc) 20%,var(--surface));color:var(--jc)}
+.jdot{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--jc);margin-right:6px;vertical-align:-1px}
+.dayform{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.dayform input[type=time]{font-family:var(--font-num);width:7.2em}
+.preview{font-family:var(--font-num);font-size:.86rem;background:var(--bg);border-radius:8px;padding:8px 10px}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom, 0px));transform:translate(-50%,16px);max-width:min(92vw,460px);z-index:20;
+  display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:12px;background:var(--ink);color:var(--surface);font-size:.92rem;font-weight:500;
+  box-shadow:0 6px 24px rgba(0,0,0,.18);opacity:0;pointer-events:none}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+#toast .mark{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;font-weight:700;background:var(--good);color:var(--surface)}
+#toast.warn .mark{background:var(--warn)} #toast.bad .mark{background:var(--bad)}
+#toast.saving .mark{background:var(--muted)}
+@media (prefers-reduced-motion:no-preference){#toast{transition:opacity .2s ease,transform .2s ease}}
+.tiles.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:560px){.tiles.four{grid-template-columns:1fr 1fr}.tiles.four .tile:last-child{grid-column:auto}}
+.rankname{font-size:1.5rem;font-weight:900;letter-spacing:.04em}
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.badge{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;min-width:0;background:var(--bg)}
+.badge .medal{width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:1.15rem;color:var(--surface);background:var(--locked);box-shadow:inset 0 -3px 0 rgba(0,0,0,.15)}
+.badge.on.t1 .medal{background:var(--bronze)} .badge.on.t2 .medal{background:var(--silver)} .badge.on.t3 .medal{background:var(--gold)}
+.badge:not(.on) .bt{color:var(--muted)}
+.badge.on{background:var(--surface)}
+.badge .bt{font-weight:700;font-size:.9rem;line-height:1.35}
+.badge .bd{font-size:.74rem;color:var(--muted);line-height:1.4}
+.badge .bdate{font-size:.72rem;color:var(--muted);font-family:var(--font-num)}
+.badge .meter{width:100%;height:6px}
+.savebox{display:flex;flex-direction:column;gap:8px}
+.plan{font-size:.92rem;line-height:1.7}
+.plan b{font-family:var(--font-num)}
+.proj{width:100%;border-collapse:collapse;font-size:.84rem;font-family:var(--font-num)}
+.proj th,.proj td{padding:5px 8px;text-align:right;border-top:1px dashed var(--line);white-space:nowrap}
+.proj th:first-child,.proj td:first-child{text-align:left}
+.proj th{font-family:var(--font-body);font-weight:500;color:var(--muted);font-size:.76rem;border-top:none}
+.proj td.neg{color:var(--bad)}
+#toast.trophy .mark{background:var(--gold)}
+.brand{font-family:var(--font-pop);font-weight:400;font-size:1.45rem;color:var(--accent);letter-spacing:.02em}
+body.in-onb #appHeader, body.in-onb nav.tabs{display:none}
+.onb{max-width:560px;width:100%;margin:0 auto;display:flex;flex-direction:column;gap:18px;padding-block:8px 24px}
+.odots{display:flex;gap:6px;justify-content:center}
+.odot{width:28px;height:6px;border-radius:99px;background:var(--line)}
+.odot.done{background:var(--accent)} .odot.cur{background:var(--pop)}
+.ostep{display:flex;flex-direction:column;gap:14px}
+.ostep-h{display:flex;flex-direction:column;gap:6px}
+.ohero{display:flex;flex-direction:column;gap:14px;text-align:center;align-items:center;padding-top:12px}
+.logo{font-family:var(--font-pop);font-size:3rem;line-height:1;color:var(--accent);transform:rotate(-3deg);text-shadow:4px 4px 0 var(--tint)}
+.logo.small{font-size:2.2rem}
+.olead{font-size:1.05rem;line-height:1.75;margin:0;text-wrap:balance}
+.ofeat{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;text-align:left}
+.ofeat li{background:var(--surface);border:2px solid var(--line);border-radius:14px;padding:10px 12px;font-size:.8rem;color:var(--muted);display:flex;flex-direction:column;gap:2px;min-width:0}
+.ofeat b{color:var(--ink);font-size:.92rem}
+@media (max-width:420px){.ofeat{grid-template-columns:1fr}}
+.oh{font-family:var(--font-pop);font-weight:400;font-size:1.5rem;line-height:1.35}
+.osub{margin:0;color:var(--muted);font-size:.9rem}
+.choices{display:flex;flex-direction:column;gap:10px}
+.choice{display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;align-items:start;padding:14px;border:2px solid var(--line);border-radius:14px;background:var(--surface);cursor:pointer}
+.choice input{grid-row:span 2;margin-top:4px;accent-color:var(--accent);width:18px;height:18px}
+.choice .ct{font-weight:700} .choice .cd{font-size:.82rem;color:var(--muted)}
+.choice.sel{border-color:var(--accent);box-shadow:3px 3px 0 var(--accent)}
+.ocard{background:var(--surface);border:2px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.ocard-h{display:flex;align-items:center;gap:4px} .ocard-h button{margin-left:auto}
+.ocard input,.ocard select,.ostep .grid2 input{width:100%}
+.opreview{background:var(--tint);border-radius:12px;padding:12px 14px;font-size:.92rem}
+.opreview b{font-family:var(--font-num)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.pchip{border-radius:99px;border:2px solid var(--line);padding:6px 12px;font-weight:500}
+.pchip.on{border-color:var(--accent);background:var(--tint);color:var(--accent)}
+.fixlist{display:flex;flex-direction:column;gap:8px}
+.fixrow{display:grid;grid-template-columns:minmax(0,1fr) 7.5em auto;gap:8px;align-items:center}
+.fixrow input{width:100%!important}
+.onav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
+.onav-r{display:flex;gap:8px}
+button.big{font-family:var(--font-pop);font-weight:400;font-size:1.05rem;padding:11px 22px;border-radius:14px;box-shadow:3px 3px 0 var(--ink);border:2px solid var(--ink)}
+button.big:disabled{box-shadow:none}
+.osum{list-style:none;margin:0;padding:0;width:100%;display:flex;flex-direction:column;gap:8px;text-align:left}
+.osum li{display:flex;justify-content:space-between;gap:12px;background:var(--surface);border:2px solid var(--line);border-radius:12px;padding:10px 14px}
+.osum span{color:var(--muted);font-size:.85rem;flex:none} .osum b{text-align:right;min-width:0;overflow-wrap:anywhere}
+.rankcard{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:16px;border-radius:18px;
+  background:linear-gradient(135deg,var(--tint),var(--surface) 70%);border:2px solid var(--accent)}
+.emblem{width:74px;height:74px;border-radius:22px;transform:rotate(-6deg);display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--accent);color:var(--surface);box-shadow:4px 4px 0 var(--ink);font-family:var(--font-pop);line-height:1}
+.emblem .lv{font-size:.8rem}.emblem .lvn{font-size:2.1rem}
+.rk-k{font-size:.74rem;color:var(--muted);letter-spacing:.08em}
+.rankcard .rankname{font-family:var(--font-pop);font-size:1.6rem;font-weight:400;line-height:1.2}
+.rk-s{font-size:.8rem;color:var(--muted)} .rk-s b{color:var(--ink);font-family:var(--font-num)}
+.xp{height:14px;border-radius:99px;background:var(--surface);border:2px solid var(--ink);overflow:hidden;margin:6px 0 4px}
+.xp span{display:block;height:100%;background:repeating-linear-gradient(-45deg,var(--gold) 0 8px,var(--med3) 8px 16px)}
+.gotcount{font-family:var(--font-pop);text-align:center;line-height:1}.gotcount b{display:block;font-size:1.8rem;font-weight:400}.gotcount span{font-size:.8rem;color:var(--muted)}
+@media (max-width:480px){.rankcard{grid-template-columns:auto minmax(0,1fr)}.gotcount{grid-column:1 / -1;display:flex;gap:6px;justify-content:center;align-items:baseline}.gotcount b{display:inline}}
+.badge{font:inherit;color:inherit;border:2px solid var(--line);border-radius:16px;cursor:default}
+button.badge{cursor:pointer}
+.badge.on{border-color:var(--ink);box-shadow:3px 3px 0 var(--ink)}
+.badge.on.t3{background:linear-gradient(180deg,color-mix(in srgb,var(--med3) 22%,var(--surface)),var(--surface))}
+.badge .btier{font-family:var(--font-pop);font-size:.66rem;letter-spacing:.06em;color:var(--muted)}
+.badge.on.t1 .btier{color:var(--rib1)} .badge.on.t2 .btier{color:var(--rib2)} .badge.on.t3 .btier{color:var(--rib3)}
+.badge:not(.on) .medalsvg{opacity:.8}
+.badge .bdate{font-family:var(--font-pop);font-size:.72rem}
+.badge.on .bdate{color:var(--accent)}
+.meter.mini{height:6px;width:100%}
+@media (prefers-reduced-motion:no-preference){
+  button.badge:hover{transform:translateY(-3px) rotate(-1.5deg)} .badge{transition:transform .15s ease}
+  .medalsvg.on .spark{animation:twinkle 1.6s ease-in-out infinite;transform-origin:52px 12px}
+  @keyframes twinkle{0%,100%{opacity:.2;transform:scale(.6)}50%{opacity:1;transform:scale(1.15)}}}
+#celebrate{position:fixed;inset:0;z-index:40;display:grid;place-items:center;padding:16px;background:color-mix(in srgb,var(--ink) 55%,transparent)}
+#celebrate[hidden]{display:none!important}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
+.cel-card{position:relative;overflow:hidden;width:min(340px,100%);border-radius:24px;padding:26px 20px 20px;text-align:center;
+  background:var(--surface);border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink);display:flex;flex-direction:column;align-items:center;gap:4px}
+.cel-rays{position:absolute;left:50%;top:118px;width:520px;height:520px;margin:-260px 0 0 -260px;z-index:0;opacity:.35;
+  background:repeating-conic-gradient(var(--gold) 0 10deg,transparent 10deg 20deg);border-radius:50%;
+  -webkit-mask:radial-gradient(circle,#000 18%,transparent 62%);mask:radial-gradient(circle,#000 18%,transparent 62%)}
+.cel-card>*:not(.cel-rays){position:relative;z-index:1}
+.cel-kicker{font-family:var(--font-pop);font-size:1.5rem;color:var(--accent);letter-spacing:.04em;text-shadow:2px 2px 0 var(--tint)}
+.cel-tier{font-family:var(--font-pop);font-size:.8rem;padding:2px 12px;border-radius:99px;color:var(--surface);background:var(--rib1)}
+.cel-tier.t2{background:var(--rib2)} .cel-tier.t3{background:var(--rib3)}
+.cel-title{font-family:var(--font-pop);font-size:1.35rem;line-height:1.3;margin-top:4px}
+.cel-desc{font-size:.88rem;color:var(--muted)}
+.cel-actions{display:flex;flex-direction:column;gap:6px;margin-top:12px;width:100%}
+.cel-actions .primary{font-family:var(--font-pop);font-weight:400;font-size:1rem;padding:10px;border-radius:12px;box-shadow:3px 3px 0 var(--ink);border:2px solid var(--ink)}
+@media (prefers-reduced-motion:no-preference){
+  .cel-card.pop{animation:celpop .55s cubic-bezier(.2,1.6,.4,1)}
+  .cel-card.pop .cel-medal{animation:medalin .8s cubic-bezier(.2,1.5,.4,1) .1s both}
+  .cel-rays{animation:spin 14s linear infinite}
+  @keyframes celpop{0%{transform:scale(.6) rotate(-4deg);opacity:0}100%{transform:none;opacity:1}}
+  @keyframes medalin{0%{transform:scale(0) rotate(-200deg)}100%{transform:none}}
+  @keyframes spin{to{transform:rotate(360deg)}}}
+@media (prefers-reduced-motion:no-preference){#toast.trophy.show .mark{animation:pop .5s ease}@keyframes pop{0%{transform:scale(.4)}60%{transform:scale(1.3)}100%{transform:scale(1)}}}
+@media (prefers-reduced-motion:no-preference){.meter span,.alloc span{transition:width .3s ease}}
+/* ===== Design A (calm edition): ink outline + offset shadow only on the 1–2 key elements per screen ===== */
+:root{--on-accent:#FFFFFF}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--on-accent:#0E211A}}
+:root[data-theme="dark"]{--on-accent:#0E211A}
+body{font-variant-numeric:tabular-nums;-webkit-tap-highlight-color:transparent}
+.wrap{max-width:560px;gap:16px;padding-block:14px calc(112px + env(safe-area-inset-bottom, 0px))}
+header.top{flex-wrap:nowrap}
+header.top h1.screen{font-family:var(--font-pop);font-weight:400;font-size:1.45rem;line-height:1.2;margin:0}
+header.top h1.brand{transform:rotate(-3deg);transform-origin:left center}
+header.top .hright{display:flex;align-items:center;gap:2px}
+.monthnav .label{min-width:4.2em;font-family:var(--font-body);font-weight:900;font-size:1rem}
+button.icon{min-width:44px;min-height:44px;border:none;background:none;font-size:1.3rem;color:var(--muted);padding:0}
+button.icon:hover{color:var(--ink)}
+button,.btn{border-radius:12px;min-height:40px;padding:8px 14px}
+button.primary{border:none}
+button.ghost{min-height:40px}
+h2{font-weight:900;font-size:.98rem}
+section.block{border:none;border-radius:18px;padding:16px;gap:12px}
+section.block.focus{border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink)}
+.tile{border:none;border-radius:18px}
+.row{border-top:1px solid var(--line)}
+.notice{border:none;border-radius:14px}
+#notices:empty{display:none}
+input,select,textarea{border-radius:10px;min-height:40px;background:var(--surface)}
+input:focus,select:focus{border-color:var(--ink)}
+/* bottom tab bar */
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:15;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:end;gap:0;
+  background:var(--surface);border-top:1px solid var(--line);border-bottom:none;overflow:visible;
+  padding:6px max(10px, calc((100vw - 540px) / 2)) calc(10px + env(safe-area-inset-bottom, 0px))}
+nav.tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:50px;padding:4px 0;border:none;border-radius:12px;background:none;color:var(--muted);font-size:.66rem;font-weight:700}
+nav.tabs button[aria-selected="true"]{color:var(--accent);font-weight:900;border:none}
+nav.tabs button svg{width:24px;height:24px}
+nav.tabs .fab{justify-self:center;width:58px;height:58px;min-height:58px;margin-top:-28px;border-radius:20px;background:var(--pop);color:#FFFFFF;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:0;display:grid;place-items:center}
+nav.tabs .fab svg{width:28px;height:28px}
+body.in-onb nav.tabs{display:none}
+#toast{bottom:calc(96px + env(safe-area-inset-bottom, 0px))}
+body.in-onb #toast{bottom:calc(20px + env(safe-area-inset-bottom, 0px))}
+/* add sheet */
+#sheet{position:fixed;inset:0;z-index:30;display:flex;align-items:flex-end;justify-content:center;background:color-mix(in srgb, var(--ink) 40%, transparent)}
+#sheet[hidden]{display:none!important}
+#sheet .panel{width:min(560px,100%);background:var(--surface);border-radius:24px 24px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom, 0px));display:flex;flex-direction:column;gap:10px}
+#sheet .grab{width:40px;height:5px;border-radius:99px;background:var(--line);align-self:center}
+#sheet .opt{display:flex;align-items:center;gap:14px;text-align:left;min-height:64px;padding:12px 14px;border:1px solid var(--line);border-radius:16px;background:var(--bg)}
+#sheet .opt .oi{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--tint);color:var(--accent);flex:none}
+#sheet .opt b{display:block;font-size:.98rem}#sheet .opt span{font-size:.78rem;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){#sheet .panel{animation:sheetup .22s ease}@keyframes sheetup{from{transform:translateY(40px);opacity:.4}to{transform:none;opacity:1}}}
+/* home */
+.hero{background:var(--accent);color:var(--on-accent);border:3px solid var(--ink);border-radius:24px;box-shadow:5px 5px 0 var(--ink);padding:18px;display:flex;flex-direction:column;gap:8px}
+.hero .hk{font-size:.82rem;font-weight:700;opacity:.92;display:flex;justify-content:space-between;gap:8px}
+.hero .hv{font-family:var(--font-pop);font-size:2.6rem;line-height:1.08;word-break:break-all}
+.hero .hbar{height:8px;border-radius:99px;background:color-mix(in srgb, var(--on-accent) 22%, transparent);display:flex;overflow:hidden}
+.hero .hbar span{display:block;height:100%}
+.hero .hs{font-size:.78rem;opacity:.92}
+.duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.mini{background:var(--surface);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:3px;min-width:0;text-align:left;border:none;font:inherit;color:inherit}
+button.mini{cursor:pointer}
+.mini .mk{font-size:.7rem;font-weight:700;color:var(--muted)}
+.mini .mv{font-size:1.4rem;font-weight:900;line-height:1.25}
+.mini .mv small{font-size:.75rem;color:var(--muted);font-weight:700}
+.mini .ms{font-size:.76rem;overflow-wrap:anywhere}
+.mini .meter{height:8px;margin-top:4px}
+.sec{display:flex;flex-direction:column;gap:6px}
+.sec-h{display:flex;justify-content:space-between;align-items:baseline;padding:0 2px}
+.sec-h a,.sec-h button.link{font-size:.78rem;font-weight:700;color:var(--accent);background:none;border:none;padding:0;min-height:0}
+.list{background:var(--surface);border-radius:18px;display:flex;flex-direction:column}
+.li{display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line)}
+.li:first-child{border-top:none}
+.li .ld{display:flex;flex-direction:column;align-items:center;width:36px;flex:none;line-height:1.15}
+.li .ld b{font-size:1.05rem}.li .ld span{font-size:.62rem;color:var(--muted)}
+.li .lm{display:flex;flex-direction:column;flex:1;min-width:0}
+.li .lm b{font-size:.9rem;overflow-wrap:anywhere}.li .lm span{font-size:.7rem;color:var(--muted)}
+.li .lm span.warn{color:var(--bad);font-weight:700}
+.li .la{font-weight:900;white-space:nowrap}
+.li .la.dim{color:var(--muted);font-weight:700}
+details.more{background:var(--surface);border-radius:18px;padding:0 16px}
+details.more>summary{list-style:none;cursor:pointer;min-height:52px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-weight:900;color:var(--ink)}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary .sv{font-weight:700;color:var(--muted);font-size:.85rem;margin-left:auto}
+details.more>summary::after{content:"＋";color:var(--muted);font-weight:700}
+details.more[open]>summary::after{content:"−"}
+details.more>.inner{padding-bottom:16px;display:flex;flex-direction:column;gap:12px}
+details.more section.block{padding:0;background:none}
+/* shift calendar: dots instead of text chips */
+.cal{gap:2px}
+.day{min-height:46px;border:none;border-radius:12px;background:transparent;align-items:center;justify-content:center;gap:3px;padding:2px}
+.day .dn{font-family:var(--font-body);font-size:.8rem;font-weight:700}
+.day.today{box-shadow:inset 0 0 0 2px var(--pop)}
+.day.today .dn{color:var(--ink)}
+.day[aria-pressed="true"]{background:var(--ink);color:var(--surface);border:none;padding:2px}
+.day[aria-pressed="true"] .dn{color:var(--surface)}
+.day .dots{display:flex;gap:2px;height:6px}
+.day .dots i{width:6px;height:6px;border-radius:50%;background:var(--jc)}
+.day[aria-pressed="true"] .dots i{box-shadow:0 0 0 1.5px var(--surface)}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{background:var(--surface);border-radius:99px;padding:6px 12px;font-size:.78rem;font-weight:700}
+/* events */
+.budgetcard .bv{font-size:1.6rem;font-weight:900}
+.groupcard .gh{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.groupcard .gh b{font-size:1rem}
+.groupcard .gt{font-family:var(--font-pop);font-size:1.15rem;white-space:nowrap}
+.groupcard .gl{display:flex;flex-direction:column;gap:6px;font-size:.84rem}
+.groupcard .gl span{display:flex;justify-content:space-between;gap:10px}
+.groupcard .gl span.rest{color:var(--muted)}
+.evrow{border-top:1px solid var(--line)}
+.evrow:first-child{border-top:none}
+.evrow>summary{list-style:none;cursor:pointer}
+.evrow>summary::-webkit-details-marker{display:none}
+.evrow .edit{padding:0 14px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.evrow[open]>summary .la::after{content:" ▴";color:var(--muted);font-size:.7rem}
+.evrow:not([open])>summary .la::after{content:" ▾";color:var(--muted);font-size:.7rem}
+/* onboarding (A calm) */
+.onb{gap:16px;padding-top:0}
+.otop{display:flex;align-items:center;gap:10px;min-height:44px}
+.otop .oback{min-width:44px;min-height:44px;margin-left:-10px;border:none;background:none;font-size:1.4rem;color:var(--muted);padding:0}
+.otop .oprog{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;flex:1}
+.otop .oprog span{height:6px;border-radius:99px;background:var(--line)}
+.otop .oprog span.on{background:var(--pop)}
+.otop .ocount{font-size:.76rem;font-weight:700;color:var(--muted);min-width:2.4em;text-align:right}
+.oh{font-size:1.6rem}
+.ocard{border:none;border-radius:20px;padding:16px;gap:14px}
+.ocard-h b{font-size:.9rem}
+.seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:var(--bg);padding:4px;border-radius:14px}
+.seg button{border:none;min-height:40px;border-radius:10px;background:transparent;color:var(--muted);font-weight:700}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);font-weight:900;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.opay{display:flex;flex-wrap:wrap;gap:6px}
+.opay button{border-radius:99px;min-height:40px;font-size:.82rem;font-weight:700}
+.opay button[aria-pressed="true"]{border:2px solid var(--accent);background:var(--tint);color:var(--accent);font-weight:900}
+.octa{position:sticky;bottom:0;display:flex;flex-direction:column;gap:6px;padding:12px 0 calc(8px + env(safe-area-inset-bottom, 0px));background:linear-gradient(to top, var(--bg) 75%, transparent)}
+.octa .big{width:100%}
+.octa .skip{border:none;background:none;color:var(--muted);font-weight:700;min-height:44px}
+.choice{border-width:1px}
+header.top h1{white-space:nowrap}
+.monthnav .label{white-space:nowrap}
+.evrow>summary,details.more>summary{color:var(--ink)}
+.evrow>summary .lm b{color:var(--ink)}
+div.f{display:flex;flex-direction:column;gap:6px;font-size:.76rem;color:var(--muted)}
+.ostep{padding-bottom:4px}
+.ostep>.ghost{margin-bottom:8px}
+.choice.sel{border:2px solid var(--accent);box-shadow:none;background:var(--tint)}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top" id="appHeader">
+    <div>
+      <h1 class="brand" id="screenTitle">シフポケ</h1>
+      <div class="small muted" id="syncState" hidden></div>
+    </div>
+    <div class="hright">
+      <div class="monthnav">
+        <button class="icon" id="prevM" aria-label="前の月">‹</button>
+        <span class="label" id="monthLabel"></span>
+        <button class="icon" id="nextM" aria-label="次の月">›</button>
+      </div>
+      <button class="icon" data-goto="settings" aria-label="設定"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="メニュー">
+    <button role="tab" data-tab="home" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>ホーム</button>
+    <button role="tab" data-tab="shifts" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>シフト</button>
+    <button type="button" class="fab" data-act="fab" aria-label="シフトや出費を追加"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button role="tab" data-tab="events" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/></svg>行事</button>
+    <button role="tab" data-tab="ach" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="6"/><path d="M8.5 14L7 22l5-3 5 3-1.5-8"/></svg>実績</button>
+  </nav>
+  <div id="sheet" hidden><div class="panel" role="dialog" aria-modal="true" aria-label="追加する">
+    <div class="grab" aria-hidden="true"></div>
+    <button type="button" class="opt" data-act="quickShift"><span class="oi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span><b>シフトを追加</b><span>今日の日付で入力をはじめます</span></span></button>
+    <button type="button" class="opt" data-act="quickEvent"><span class="oi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/></svg></span><span><b>行事・出費を追加</b><span>旅行や飲み会などの予算を立てます</span></span></button>
+    <button type="button" class="ghost" data-act="closeSheet">閉じる</button>
+  </div></div>
+
+  <div id="notices"></div>
+  <main id="view"></main>
+  <div id="celebrate" role="dialog" aria-modal="true" aria-label="実績解除" hidden><canvas id="confetti" aria-hidden="true"></canvas><div class="cel-card"></div></div>
+  <div id="toast" role="status" aria-live="polite"><span class="mark">✓</span><span class="msg"></span></div>
+</div>
+
+<script>
+(() => {
+"use strict";
+const CAL = "Google Calendar";
+const JST = 9 * 3600e3;
+const JP = new Intl.NumberFormat("ja-JP");
+const yen = n => (Math.round(n || 0) < 0 ? "−¥" : "¥") + JP.format(Math.abs(Math.round(n || 0)));
+const hrs = n => (Math.round((n || 0) * 100) / 100).toString();
+const pad = n => String(n).padStart(2, "0");
+const toHalf = v => String(v ?? "").replace(/[０-９．－]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[,，、円¥￥\s]/g, "");
+const num = v => { const x = parseFloat(toHalf(v)); return isFinite(x) ? x : 0; };
+const badNum = v => toHalf(v) !== "" && !isFinite(parseFloat(toHalf(v)));
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const DOW = ["日","月","火","水","木","金","土"];
+
+function jp(d){ const x = new Date(d.getTime() + JST); return {y:x.getUTCFullYear(), m:x.getUTCMonth()+1, d:x.getUTCDate(), dow:x.getUTCDay(), h:x.getUTCHours(), mi:x.getUTCMinutes()}; }
+function jd(y,m,d,h=0,mi=0){ return new Date(Date.UTC(y,m-1,d,h,mi) - JST); }
+function isoJ(d){ const p = jp(d); return `${p.y}-${pad(p.m)}-${pad(p.d)}T${pad(p.h)}:${pad(p.mi)}:00+09:00`; }
+function hm(d){ const p = jp(d); return `${p.h}:${pad(p.mi)}`; }
+
+/* ---------- defaults ---------- */
+const DEFAULTS = {
+  onboarded: false,
+  calMode: "",
+  jobs: [],
+  eventColors: "4",
+  ignoreTitles: "",
+  calSync: false,
+  recurring: [],
+  fixedItems: [],
+  fixedCost: 0,
+  saving: 0,
+  wall: 1500000,
+  otherIncome: 0,
+  rateJob: ""
+};
+const clone = o => JSON.parse(JSON.stringify(o));
+
+/* ---------- state ---------- */
+const now = jp(new Date());
+const S = {
+  tab: "home",
+  y: now.y, m: now.m,
+  settings: clone(DEFAULTS),
+  shifts: {},      // shift id -> {job, ymd, start, end, breakMin, note}
+  sel: null,       // selected day "YYYY-MM-DD" on the shift calendar
+  form: null,      // shift form draft {editId, job, start, end, breakMin, note}
+  confirmDel: null,
+  income: {},      // "YYYY-MM" -> {jobs: {jobId: confirmed amount}, others: [{id, label, amount}]}
+  events: {},      // calendar event id or manual id -> {included, budget, actual, memo, manual, title, ymd}
+  cal: [],         // normalized calendar events for loaded window
+  calYear: null,
+  calState: "loading", // loading | ok | error | none
+  calError: null,
+  fetchedAt: null,
+  ai: {}, aiBusy: false,
+  candFilter: ""
+};
+let db = null, mcp = null, sample = null;
+
+try { const t = (location.hash || "").slice(1); if (["home","shifts","events","ach","settings"].includes(t)) S.tab = t; } catch(e){}
+
+/* ---------- storage ---------- */
+const LS = "shipoke-v1";
+function saveLocal(){ if (db) return; try { localStorage.setItem(LS, JSON.stringify({settings:S.settings, shifts:S.shifts, events:S.events, income:S.income, ach:S.ach})); } catch(e){} }
+function loadLocal(){ try { const o = JSON.parse(localStorage.getItem(LS) || "null"); if (o){ S.settings = Object.assign(clone(DEFAULTS), o.settings||{}); S.shifts = o.shifts||{}; S.events = o.events||{}; S.income = o.income||{}; S.ach = o.ach||{}; } } catch(e){} }
+function dbErr(e){ toast("保存できませんでした（" + esc(e && (e.code || e.message) || "不明なエラー") + "）。通信状態を確認してもう一度変更してください。", "bad"); }
+function saved(p, msg){
+  // msg === false: background bookkeeping, no toast
+  if (msg !== false) toast("保存中…", "saving");
+  const done = () => { if (msg !== false) toast(msg || "保存しました"); };
+  if (p) p.then(done, dbErr); else done();
+}
+// Saves re-render on the next tick, after the browser has moved focus to whatever the viewer tapped next,
+// so render() can keep that field focused instead of replacing it mid-tap.
+let renderQueued = false;
+function renderSoon(){ if (renderQueued) return; renderQueued = true; setTimeout(() => { renderQueued = false; render(); }, 0); }
+function persistSettings(msg){ if (db) saved(db.doc("app/settings").set(S.settings), msg); else { saveLocal(); saved(null, msg); } }
+function putSettings(msg){ renderSoon(); if (db) saved(db.doc("app/settings").set(S.settings), msg); else { saveLocal(); saved(null, msg); } }
+function putDoc(col, id, data, msg){
+  if (data === null) delete S[col][id]; else S[col][id] = data;
+  renderSoon();
+  if (db){ const ref = db.doc(col + "/" + id); saved(data === null ? ref.delete() : ref.set(data), msg); }
+  else { saveLocal(); saved(null, msg); }
+}
+
+/* ---------- calendar ---------- */
+function normEvent(ev){
+  if (!ev || ev.status === "cancelled" || !ev.start) return null;
+  const allDay = !ev.start.dateTime;
+  let s, e;
+  if (allDay){
+    const sd = String(ev.start.date||"").slice(0,10).split("-").map(Number);
+    const ed = String((ev.end && ev.end.date) || "").slice(0,10).split("-").map(Number);
+    s = jd(sd[0], sd[1], sd[2]);
+    e = ed.length === 3 && ed[0] ? jd(ed[0], ed[1], ed[2]) : new Date(s.getTime() + 864e5);
+  } else { s = new Date(ev.start.dateTime); e = new Date((ev.end && ev.end.dateTime) || ev.start.dateTime); }
+  if (isNaN(s)) return null;
+  const p = jp(s);
+  return {id: ev.id, title: ev.summary || "（無題）", colorId: String(ev.colorId || ""), allDay, s, e, y:p.y, m:p.m, d:p.d, dow:p.dow, ymd:`${p.y}-${pad(p.m)}-${pad(p.d)}`, link: ev.htmlLink || ""};
+}
+
+const MCP_MSG = {
+  server_not_connected: "Google カレンダーが接続されていません。claude.ai の「設定 → コネクタ」で Google Calendar を追加してから「再取得」を押してください。",
+  needs_reauth: "Google カレンダーの認証が切れています。claude.ai の「設定 → コネクタ」で Google Calendar を再接続してください。",
+  selection_required: "Google カレンダーのコネクタが複数あります。表示された選択画面で使うアカウントを選んでください。",
+  not_in_manifest: "このページでのカレンダー利用が許可されていません。ページ右上のメニューの「権限」から Google Calendar を許可してください。",
+  blocked_by_policy: "組織のポリシーでカレンダーの読み取りが禁止されています。",
+  approval_required: "カレンダーの読み取りには承認が必要です。"
+};
+
+async function fetchCalendar(year, refresh){
+  if (!mcp){ S.calState = "none"; render(); return; }
+  S.calState = "loading"; S.calError = null; render();
+  const startTime = isoJ(jd(year-1, 11, 1)), endTime = isoJ(jd(year+1, 3, 1));
+  const all = []; let token = null;
+  try {
+    for (let i = 0; i < 20; i++){
+      const input = {startTime, endTime, pageSize:250, orderBy:"startTime", timeZone:"Asia/Tokyo"};
+      if (token) input.pageToken = token;
+      let r;
+      try { r = await mcp.callTool(CAL, "list_events", input, {cache: refresh ? {staleTime:0, gcTime:3600e3, refresh:true} : {staleTime:300e3, gcTime:3600e3}}); }
+      catch(e){
+        if (e && e.retryable){ await new Promise(res => setTimeout(res, Math.min(e.retryAfterMs || 1500 + Math.random()*1000, 10000))); r = await mcp.callTool(CAL, "list_events", input); }
+        else throw e;
+      }
+      const p = r && r.payload;
+      const evs = (p && Array.isArray(p.events)) ? p.events : (Array.isArray(p) ? p : []);
+      all.push(...evs);
+      token = p && p.nextPageToken;
+      if (!token) break;
+    }
+    const seen = new Set();
+    S.cal = all.map(normEvent).filter(x => x && !seen.has(x.id) && seen.add(x.id)).sort((a,b) => a.s - b.s);
+    S.calYear = year; S.calState = "ok"; S.fetchedAt = new Date();
+  } catch(e){
+    S.calState = "error";
+    S.calError = (e && MCP_MSG[e.code]) || ("カレンダーを読み込めませんでした（" + esc((e && (e.code || e.message)) || "不明") + "）。少し待ってから「再取得」を押してください。");
+  }
+  render();
+}
+
+/* ---------- pay calculation ---------- */
+const ignoreList = () => String(S.settings.ignoreTitles || "").split(/[,、]+/).map(x => x.trim()).filter(Boolean);
+const jobBase = j => String(j.name || "").replace(/[（(].*$/, "").trim();
+function linkedIds(){ const o = new Set(); for (const r of Object.values(S.shifts)) if (r.calEventId) o.add(r.calEventId); return o; }
+function ignored(ev){
+  if (linkedIds().has(ev.id)) return true;
+  if (ignoreList().some(k => ev.title.includes(k))) return true;
+  return S.settings.jobs.some(j => jobBase(j) && ev.title.includes(jobBase(j)));
+}
+function jobById(id){ return S.settings.jobs.find(j => j.id === id) || null; }
+function jobIndex(id){ return Math.max(0, S.settings.jobs.findIndex(j => j.id === id)); }
+const jColor = id => `var(--j${jobIndex(id) % 5})`;
+function nightHours(s, e){
+  let t = 0; const p = jp(s);
+  for (let i = -1; i <= 2; i++){
+    const ws = jd(p.y, p.m, p.d + i, 22), we = jd(p.y, p.m, p.d + i + 1, 5);
+    t += Math.max(0, Math.min(e, we) - Math.max(s, ws));
+  }
+  return t / 36e5;
+}
+/* ---------- Japanese holidays & bank business days ---------- */
+const holCache = {};
+function holidaysOf(y){
+  if (holCache[y]) return holCache[y];
+  const h = {}, set = (m, d, n) => { h[`${y}-${pad(m)}-${pad(d)}`] = n; };
+  const nthMon = (m, n) => { const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay(); return 1 + ((8 - first) % 7) + (n - 1) * 7; };
+  set(1, 1, "元日"); set(1, nthMon(1, 2), "成人の日"); set(2, 11, "建国記念の日"); set(2, 23, "天皇誕生日");
+  set(3, Math.floor(20.8431 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4)), "春分の日");
+  set(4, 29, "昭和の日"); set(5, 3, "憲法記念日"); set(5, 4, "みどりの日"); set(5, 5, "こどもの日");
+  set(7, nthMon(7, 3), "海の日"); set(8, 11, "山の日"); set(9, nthMon(9, 3), "敬老の日");
+  set(9, Math.floor(23.2488 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4)), "秋分の日");
+  set(10, nthMon(10, 2), "スポーツの日"); set(11, 3, "文化の日"); set(11, 23, "勤労感謝の日");
+  const ymd = t => { const x = new Date(t); return `${x.getUTCFullYear()}-${pad(x.getUTCMonth() + 1)}-${pad(x.getUTCDate())}`; };
+  // 国民の休日: a weekday squeezed between two holidays
+  for (const k of Object.keys(h)){
+    const t = Date.UTC(y, Number(k.slice(5, 7)) - 1, Number(k.slice(8)));
+    const mid = ymd(t + 864e5), after = ymd(t + 2 * 864e5);
+    if (h[after] && !h[mid] && new Date(t + 864e5).getUTCDay() !== 0) h[mid] = "国民の休日";
+  }
+  // 振替休日: a holiday on Sunday moves to the next day that is not a holiday
+  for (const k of Object.keys(h)){
+    let t = Date.UTC(y, Number(k.slice(5, 7)) - 1, Number(k.slice(8)));
+    if (new Date(t).getUTCDay() !== 0) continue;
+    do { t += 864e5; } while (h[ymd(t)]);
+    h[ymd(t)] = "振替休日";
+  }
+  return holCache[y] = h;
+}
+function closedReason(y, m, d){
+  const k = `${y}-${pad(m)}-${pad(d)}`, dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const hol = holidaysOf(y)[k];
+  if (hol) return hol;
+  if ((m === 12 && d === 31) || (m === 1 && d <= 3)) return "銀行休業日";
+  return dow === 0 ? "日曜" : dow === 6 ? "土曜" : "";
+}
+/* Move a date off weekends/holidays: "prev" = 前営業日, "next" = 翌営業日, anything else = keep. */
+function bizAdjust(y, m, d, mode){
+  const orig = {y, m, d};
+  if (mode !== "prev" && mode !== "next") return {y, m, d, moved: false};
+  const reason = closedReason(y, m, d);
+  if (!reason) return {y, m, d, moved: false};
+  let t = Date.UTC(y, m - 1, d);
+  for (let i = 0; i < 15; i++){
+    t += mode === "prev" ? -864e5 : 864e5;
+    const x = new Date(t);
+    if (!closedReason(x.getUTCFullYear(), x.getUTCMonth() + 1, x.getUTCDate()))
+      return {y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate(), moved: true, reason, from: orig};
+  }
+  return {y, m, d, moved: false};
+}
+const SHIFT_OPTS = [["prev", "前営業日にずらす"], ["next", "翌営業日にずらす"], ["none", "ずらさない"]];
+const movedNote = p => p && p.moved ? `（${p.from.m}/${p.from.d}が${p.reason}のため${p.y * 10000 + p.m * 100 + p.d < p.from.y * 10000 + p.from.m * 100 + p.from.d ? "前倒し" : "後ろ倒し"}）` : "";
+
+function payday(ev, job){
+  let y = ev.y, m = ev.m; const c = num(job.cutoff);
+  if (c > 0 && ev.d > c) m++;
+  m += num(job.payOffset);
+  while (m > 12){ m -= 12; y++; }
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const d = num(job.payDay) > 0 ? Math.min(num(job.payDay), last) : last;
+  const a = bizAdjust(y, m, d, job.holidayShift || "prev");
+  return {y: a.y, m: a.m, d: a.d, key: `${a.y}-${pad(a.m)}`, moved: a.moved, reason: a.reason, from: a.from};
+}
+const parseHM = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); return m ? [Number(m[1]), Number(m[2])] : null; };
+/* r = {job, ymd, start, end, breakMin} — the same shape is used for saved shifts and for the live form preview */
+function calcShift(r, job, id){
+  const [y, m, d] = String(r.ymd).split("-").map(Number);
+  const ev = {y, m, d, ymd: r.ymd, dow: new Date(Date.UTC(y, m - 1, d)).getUTCDay()};
+  const a = parseHM(r.start), b = parseHM(r.end);
+  let span = 0, night = 0, s = null, e = null;
+  if (a && b){
+    s = jd(y, m, d, a[0], a[1]); e = jd(y, m, d, b[0], b[1]);
+    if (e <= s) e = new Date(e.getTime() + 864e5);   // ends after midnight
+    span = (e - s) / 36e5;
+  }
+  const brk = Math.min(span, num(r.breakMin) / 60);
+  const paid = Math.max(0, span - brk);
+  if (s && job && job.night) night = Math.min(paid, nightHours(s, e));
+  const weekend = ev.dow === 0 || ev.dow === 6;
+  let pay = 0;
+  if (job){
+    if (job.payType === "fixed") pay = num(job.fixedPay);
+    else pay = num(job.wage) * paid + num(job.wage) * 0.25 * night + (weekend && num(job.weekendExtra) ? num(job.weekendExtra) * paid : 0);
+    pay = Math.floor(pay);
+  }
+  const hasTr = r.transport !== undefined && r.transport !== null && r.transport !== "";
+  const transport = job ? (hasTr ? num(r.transport) : num(job.transport)) : 0;
+  const wagePay = pay;
+  pay += transport;
+  const rateLabel = job && job.payType === "fixed" ? "1回の金額が未設定" : "時給が未設定";
+  const needsRate = !job ? false : job.payType === "fixed" ? !num(job.fixedPay) : !num(job.wage);
+  return {id, rec: r, ev, job, span, brk, paid, night, weekend, pay, rawPay: pay, wagePay, transport, excluded: false, needsRate,
+          rateLabel, pd: job ? payday(ev, job) : {y, m, d, key: ""}, time: a && b ? `${r.start}–${r.end}` : ""};
+}
+function allShifts(){
+  const out = [];
+  for (const [id, r] of Object.entries(S.shifts)){ const j = jobById(r.job); if (j && r.ymd) out.push(calcShift(r, j, id)); }
+  return out.sort((x, y) => (x.ev.ymd + (x.rec.start || "")).localeCompare(y.ev.ymd + (y.rec.start || "")));
+}
+
+function rateJob(){
+  const js = S.settings.jobs.filter(j => j.payType === "hourly" && num(j.wage) > 0);
+  return js.find(j => j.id === S.settings.rateJob) || js[0] || null;
+}
+
+
+/* ---------- shift → Google Calendar ---------- */
+const CAL_ID = "primary";   // the viewer's own main calendar
+const GCOLORS = [["1","ラベンダー"],["2","セージ"],["3","ブドウ"],["4","フラミンゴ"],["5","バナナ"],["6","ミカン"],["7","ピーコック"],["8","グラファイト"],["9","ブルーベリー"],["10","バジル"],["11","トマト"]];
+const syncing = new Set();
+function extractId(p){
+  if (!p || typeof p !== "object") return "";
+  return p.id || p.eventId || (p.event && p.event.id) || (p.result && p.result.id) || "";
+}
+function findExisting(r, job){
+  // An event already in the calendar for the same day and job (e.g. one typed by hand before this app) is reused instead of duplicated.
+  const linked = linkedIds(), base = jobBase(job);
+  return S.cal.find(ev => ev.ymd === r.ymd && !linked.has(ev.id) &&
+    ((base && ev.title.includes(base)) || (ev.title && job.name.includes(ev.title)))) || null;
+}
+function calTimes(r){
+  const [y, m, d] = r.ymd.split("-").map(Number);
+  const a = parseHM(r.start), b = parseHM(r.end);
+  if (a && b){
+    const st = jd(y, m, d, a[0], a[1]); let en = jd(y, m, d, b[0], b[1]);
+    if (en <= st) en = new Date(en.getTime() + 864e5);
+    return {startTime: isoJ(st), endTime: isoJ(en), allDay: false};
+  }
+  return {startTime: isoJ(jd(y, m, d)), endTime: isoJ(jd(y, m, d + 1)), allDay: true};
+}
+function calDesc(c){
+  const lines = [];
+  if (c.span) lines.push(`拘束 ${hrs(c.span)}h / 休憩 ${hrs(c.brk * 60)}分 / 実働 ${hrs(c.paid)}h`);
+  if (!c.needsRate) lines.push(`見込み ${yen(c.pay)}（支給 ${c.pd.m}/${c.pd.d}）`);
+  if (c.transport) lines.push(`交通費 ${yen(c.transport)}`);
+  if (c.rec.note) lines.push(c.rec.note);
+  lines.push("— バイト代と行事予算 から登録");
+  return lines.join("\n");
+}
+const SYNC_MSG = {
+  server_not_connected: "Google カレンダーが接続されていないため反映できません。claude.ai の「設定 → コネクタ」で追加してください。",
+  needs_reauth: "Google カレンダーの再接続が必要です（claude.ai の「設定 → コネクタ」）。",
+  not_in_manifest: "カレンダーへの書き込みが許可されていません。ページ右上のメニュー「権限」で Google Calendar を許可してください。",
+  blocked_by_policy: "組織のポリシーでカレンダーへの書き込みが禁止されています。"
+};
+function setShiftMeta(id, patch){
+  const cur = S.shifts[id]; if (!cur) return;
+  putDoc("shifts", id, Object.assign({}, cur, patch), false);
+}
+async function syncShift(id, quiet){
+  const r = S.shifts[id]; if (!r || !mcp || syncing.has(id)) return false;
+  const job = jobById(r.job); if (!job) return false;
+  syncing.add(id); render();
+  const c = calcShift(r, job, id), t = calTimes(r);
+  let evId = r.calEventId || "", adopted = !!r.calAdopted;
+  try {
+    if (!evId){ const ex = findExisting(r, job); if (ex){ evId = ex.id; adopted = true; } }
+    if (evId){
+      const upd = {eventId: evId, calendarId: CAL_ID, startTime: t.startTime, endTime: t.endTime, description: calDesc(c), notificationLevel: "NONE"};
+      if (t.allDay) upd.allDay = true;
+      if (!adopted){ upd.summary = job.name; upd.colorId = String(job.calColor || "6"); }
+      try { await mcp.callTool(CAL, "update_event", upd, {cache: false}); }
+      catch(e){
+        if (e && e.code === "tool_error"){ evId = ""; adopted = false; }   // the event was deleted in Google Calendar: create it again
+        else throw e;
+      }
+    }
+    if (!evId){
+      const res = await mcp.callTool(CAL, "create_event", {calendarId: CAL_ID, summary: job.name, colorId: String(job.calColor || "6"),
+        description: calDesc(c), startTime: t.startTime, endTime: t.endTime, allDay: t.allDay, timeZone: "Asia/Tokyo", notificationLevel: "NONE"}, {cache: false});
+      evId = extractId(res && res.payload);
+      if (!evId) throw {code: "no_id", message: "作成した予定のIDを受け取れませんでした"};
+    }
+    syncing.delete(id);
+    setShiftMeta(id, {calEventId: evId, calAdopted: adopted, calSync: "ok", calSyncedAt: new Date().toISOString()});
+    if (!quiet) addNotice("", adopted ? "保存しました。カレンダーの同じ日の予定を、入力した時刻に合わせました" : "保存しました。Google カレンダーにも登録しました");
+    return true;
+  } catch(e){
+    syncing.delete(id);
+    // A timeout is ambiguous for a write: keep any id we have and let the viewer retry by hand.
+    setShiftMeta(id, {calEventId: evId || r.calEventId || "", calAdopted: adopted, calSync: "error"});
+    if (!quiet) addNotice("bad", (e && SYNC_MSG[e.code]) || `カレンダーに反映できませんでした（${esc((e && (e.code || e.message)) || "不明")}）。シフトの「反映」を押して再度お試しください。`);
+    return false;
+  }
+}
+async function unsyncShift(r){
+  if (!r || !r.calEventId || !mcp) return;
+  if (r.calAdopted){ return; }   // leave events the viewer created by hand; only unlink
+  try { await mcp.callTool(CAL, "delete_event", {calendarId: CAL_ID, eventId: r.calEventId, notificationLevel: "NONE"}, {cache: false}); }
+  catch(e){ if (!(e && e.code === "tool_error")) addNotice("bad", (e && SYNC_MSG[e.code]) || "カレンダーの予定を消せませんでした。Google カレンダーで直接削除してください。"); }
+}
+async function syncAll(ids){
+  let ok = 0;
+  for (const id of ids){ if (await syncShift(id, true)) ok++; }
+  addNotice(ok === ids.length ? "" : "warn", `${ok} / ${ids.length} 件をカレンダーに反映しました。` + (ok < ids.length ? "失敗した分は各シフトの「反映」から再度お試しください。" : ""));
+}
+const needsSync = r => r.calSync !== "ok";
+
+/* ---------- events ---------- */
+function excludedRecurring(y, m){
+  return (S.settings.recurring || []).filter(r => (S.events[`rc_${r.id}_${y}${pad(m)}`] || {}).included === false);
+}
+function eventList(y, m){
+  const colors = String(S.settings.eventColors || "").split(/[,、\s]+/).filter(Boolean);
+  const out = [];
+  for (const ev of S.cal){
+    if (ev.y !== y || ev.m !== m || ignored(ev)) continue;
+    const doc = S.events[ev.id];
+    const inc = doc && doc.included != null ? doc.included : colors.includes(ev.colorId);
+    if (inc) out.push({id: ev.id, title: ev.title, ymd: ev.ymd, d: ev.d, dow: ev.dow, time: ev.allDay ? "終日" : hm(ev.s), doc: doc || {}, cal: true});
+  }
+  for (const r of (S.settings.recurring || [])){
+    for (const off of [-1, 0, 1]){
+      const [by, bm] = addMonths(y, m, off), blast = new Date(Date.UTC(by, bm, 0)).getUTCDate();
+      const a = bizAdjust(by, bm, Math.min(Math.max(1, num(r.day) || 1), blast), r.holidayShift || "next");
+      if (a.y !== y || a.m !== m) continue;
+      const id = `rc_${r.id}_${by}${pad(bm)}`, doc = S.events[id] || {};   // the id stays on the scheduled month
+      if (doc.included === false) continue;
+      const merged = Object.assign({}, doc);
+      if (!hasVal(merged.budget) && hasVal(r.budget)) merged.budget = num(r.budget);   // the monthly default until this month's amount is entered
+      out.push({id, title: r.title || "毎月の行事", ymd: `${y}-${pad(m)}-${pad(a.d)}`, d: a.d, dow: new Date(Date.UTC(y, m - 1, a.d)).getUTCDay(), time: "毎月", doc: merged, cal: false, rec: r, moved: a});
+    }
+  }
+  for (const [id, doc] of Object.entries(S.events)){
+    if (!doc.manual || !doc.ymd) continue;
+    const [yy, mm, dd] = doc.ymd.split("-").map(Number);
+    if (yy === y && mm === m) out.push({id, title: doc.title || "（無題）", ymd: doc.ymd, d: dd, dow: new Date(Date.UTC(yy, mm-1, dd)).getUTCDay(), time: "手動", doc, cal: false});
+  }
+  return out.sort((a, b) => a.ymd.localeCompare(b.ymd));
+}
+function evCost(doc){ const a = doc.actual, b = doc.budget; const hasA = a !== undefined && a !== "" && a !== null; return hasA ? num(a) : num(b); }
+function evStatus(doc){
+  const hasB = doc.budget !== undefined && doc.budget !== "" && doc.budget !== null;
+  const hasA = doc.actual !== undefined && doc.actual !== "" && doc.actual !== null;
+  if (!hasB && !hasA) return ["warn", "予算未設定"];
+  if (hasA && hasB && num(doc.actual) > num(doc.budget)) return ["bad", "超過 " + yen(num(doc.actual) - num(doc.budget))];
+  if (hasA) return ["good", "精算済"];
+  return ["", "予算あり"];
+}
+
+/* ---------- summary ---------- */
+const hasVal = v => v !== undefined && v !== null && v !== "";
+/* Income paid in a month: per job, the amount the viewer confirmed (from the pay slip / bank) wins over the shift estimate. */
+function monthIncome(y, m, shifts){
+  const key = `${y}-${pad(m)}`, doc = S.income[key] || {}, conf = doc.jobs || {};
+  const payIn = (shifts || allShifts()).filter(s => s.pd.key === key);
+  const rows = S.settings.jobs.map(j => {
+    const xs = payIn.filter(s => s.job.id === j.id);
+    const est = xs.reduce((a, s) => a + s.pay, 0), tr = xs.reduce((a, s) => a + s.transport, 0);
+    const confirmed = hasVal(conf[j.id]);
+    const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    const pd = xs[0] ? xs[0].pd : (() => { const a = bizAdjust(y, m, num(j.payDay) > 0 ? Math.min(num(j.payDay), last) : last, j.holidayShift || "prev"); return Object.assign(a, {key: `${a.y}-${pad(a.m)}`}); })();
+    return {job: j, n: xs.length, hours: xs.reduce((a, s) => a + s.paid, 0), est, tr, confirmed, conf: confirmed ? num(conf[j.id]) : null, used: confirmed ? num(conf[j.id]) : est, pd};
+  });
+  const others = Array.isArray(doc.others) ? doc.others : [];
+  const othersTotal = others.reduce((a, o) => a + num(o.amount), 0);
+  const total = rows.reduce((a, r) => a + r.used, 0) + othersTotal;
+  const estTr = rows.filter(r => !r.confirmed).reduce((a, r) => a + r.tr, 0);
+  return {key, doc, rows, others, othersTotal, total, estTr, payIn,
+          confirmedAll: rows.every(r => r.confirmed || !r.est), anyConfirmed: rows.some(r => r.confirmed) || others.length > 0};
+}
+const lagOf = j => hasVal(j.useLag) ? num(j.useLag) : 1;
+function addMonths(y, m, n){ m += n; while (m < 1){ m += 12; y--; } while (m > 12){ m -= 12; y++; } return [y, m]; }
+/* Money available for spending in month m: each job's pay from the month it is spent in (lag 1 = paid last month, 0 = paid this month), plus "other" income entered for m. */
+function budgetIncome(y, m, shifts){
+  shifts = shifts || allShifts();
+  const cache = {};
+  const rows = S.settings.jobs.map(j => {
+    const [sy, sm] = addMonths(y, m, -lagOf(j)), k = `${sy}-${pad(sm)}`;
+    const mi = cache[k] || (cache[k] = monthIncome(sy, sm, shifts));
+    return Object.assign({}, mi.rows.find(r => r.job.id === j.id), {srcKey: k, srcY: sy, srcM: sm, lag: lagOf(j)});
+  });
+  const key = `${y}-${pad(m)}`, doc = S.income[key] || {};
+  const others = Array.isArray(doc.others) ? doc.others : [];
+  const othersTotal = others.reduce((a, o) => a + num(o.amount), 0);
+  const payIn = shifts.filter(s => { const r = rows.find(x => x.job.id === s.job.id); return r && s.pd.key === r.srcKey; });
+  return {key, rows, others, othersTotal, payIn,
+          total: rows.reduce((a, r) => a + r.used, 0) + othersTotal,
+          estTr: rows.filter(r => !r.confirmed).reduce((a, r) => a + r.tr, 0),
+          confirmedAll: rows.every(r => r.confirmed || !r.est), anyConfirmed: rows.some(r => r.confirmed) || others.length > 0};
+}
+/* ---------- savings plan ---------- */
+const todayKey = `${now.y}-${pad(now.m)}`, todayYmd = `${now.y}-${pad(now.m)}-${pad(now.d)}`;
+const keyAdd = (k, n) => { const [y, m] = addMonths(Number(k.slice(0, 4)), Number(k.slice(5, 7)), n); return `${y}-${pad(m)}`; };
+const monthsBetween = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
+function savingPlan(){
+  const st = S.settings, goal = num(st.goalAmount), gm = String(st.goalMonth || "");
+  if (!goal || !/^\d{4}-\d{2}$/.test(gm)) return null;
+  const bal = num(st.balance), need = Math.max(0, goal - bal);
+  const left = Math.max(1, monthsBetween(todayKey, gm) + 1);   // this month through the goal month
+  return {goal, gm, bal, need, left, perMonth: Math.ceil(need / left / 100) * 100, overdue: gm < todayKey};
+}
+function savingFor(y, m){
+  const p = savingPlan(), k = `${y}-${pad(m)}`;
+  if (!p || k < todayKey) return num(S.settings.saving);
+  return k <= p.gm ? p.perMonth : num(S.settings.saving);
+}
+/* Cash-flow forecast from today's balance: pay still to arrive minus spending still to happen. */
+function projection(){
+  const p = savingPlan();
+  let endKey = p && p.gm >= todayKey ? p.gm : keyAdd(todayKey, 5);
+  if (monthsBetween(todayKey, endKey) > 23) endKey = keyAdd(todayKey, 23);
+  const shifts = allShifts(), out = [];
+  let bal = num(S.settings.balance);
+  for (let k = todayKey; k <= endKey; k = keyAdd(k, 1)){
+    const y = Number(k.slice(0, 4)), m = Number(k.slice(5, 7)), cur = k === todayKey;
+    const mi = monthIncome(y, m, shifts);
+    let inflow = mi.rows.reduce((a, r) => a + (!cur || `${r.pd.y}-${pad(r.pd.m)}-${pad(r.pd.d)}` > todayYmd ? r.used : 0), 0) + (cur ? 0 : mi.othersTotal);
+    const assumed = !cur && !mi.rows.some(r => r.used) && num(S.settings.assumeIncome) > 0;
+    if (assumed) inflow += num(S.settings.assumeIncome);
+    const outEv = eventList(y, m).filter(e => !cur || e.ymd >= todayYmd).reduce((a, e) => a + evCost(e.doc), 0);
+    const fixed = cur ? 0 : num(S.settings.fixedCost);
+    bal += inflow - outEv - fixed;
+    out.push({k, y, m, inflow, outEv, fixed, bal, assumed});
+  }
+  return out;
+}
+
+/* ---------- achievements ---------- */
+function stats(){
+  const all = allShifts(), done = all.filter(s => s.ev.ymd <= todayYmd);
+  const keys = new Set(Object.keys(S.income)); all.forEach(s => keys.add(s.pd.key));
+  const monthly = {};
+  for (const k of keys){
+    if (k > todayKey) continue;
+    const mi = monthIncome(Number(k.slice(0, 4)), Number(k.slice(5, 7)), all);
+    monthly[k] = mi.rows.reduce((a, r) => a + (r.confirmed ? r.conf : `${r.pd.y}-${pad(r.pd.m)}-${pad(r.pd.d)}` <= todayYmd ? r.est : 0), 0) + mi.othersTotal;
+  }
+  const vals = Object.values(monthly);
+  const byDay = {}, jobsByMonth = {};
+  for (const s of done){ (byDay[s.ev.ymd] = byDay[s.ev.ymd] || new Set()).add(s.job.id); (jobsByMonth[s.ev.ymd.slice(0, 7)] = jobsByMonth[s.ev.ymd.slice(0, 7)] || new Set()).add(s.job.id); }
+  const evDone = Object.values(S.events).filter(d => hasVal(d.actual) && hasVal(d.budget) && num(d.actual) <= num(d.budget)).length;
+  return {
+    monthly, thisMonth: monthly[todayKey] || 0, bestMonth: vals.length ? Math.max(...vals) : 0,
+    year: Object.entries(monthly).filter(([k]) => k.startsWith(String(now.y))).reduce((a, [, v]) => a + v, 0),
+    total: vals.reduce((a, v) => a + v, 0),
+    hours: done.reduce((a, s) => a + s.paid, 0), count: done.length,
+    night: done.filter(s => s.night > 0).length, longest: done.reduce((a, s) => Math.max(a, s.paid), 0),
+    doubleDays: Object.values(byDay).filter(x => x.size >= 2).length,
+    maxJobs: Math.max(0, ...Object.values(jobsByMonth).map(x => x.size)),
+    evDone, recMonths: Object.values(S.income).filter(d => d.jobs && Object.keys(d.jobs).length).length,
+    balance: num(S.settings.balance), goal: num(S.settings.goalAmount)
+  };
+}
+const ACH = [
+  {id:"first",  g:"初", tier:1, t:"はじめての給料",   d:"振り込まれた給料を記録する",       v:s => s.total,       goal:1, fmt:"yen"},
+  {id:"m3",     g:"3",  tier:1, t:"月3万円プレイヤー", d:"1か月に3万円かせぐ",               v:s => s.bestMonth,   goal:30000, fmt:"yen"},
+  {id:"m5",     g:"5",  tier:2, t:"月5万円の壁",      d:"1か月に5万円かせぐ",               v:s => s.bestMonth,   goal:50000, fmt:"yen"},
+  {id:"m10",    g:"10", tier:3, t:"月10万円の大台",   d:"1か月に10万円かせぐ",              v:s => s.bestMonth,   goal:100000, fmt:"yen"},
+  {id:"m15",    g:"15", tier:3, t:"社会人並み",        d:"1か月に15万円かせぐ",              v:s => s.bestMonth,   goal:150000, fmt:"yen"},
+  {id:"y10",    g:"年", tier:1, t:"年間10万円",        d:"今年の収入が10万円",              v:s => s.year,        goal:100000, fmt:"yen"},
+  {id:"y30",    g:"年", tier:2, t:"年間30万円",        d:"今年の収入が30万円",              v:s => s.year,        goal:300000, fmt:"yen"},
+  {id:"y50",    g:"年", tier:2, t:"年間50万円",        d:"今年の収入が50万円",              v:s => s.year,        goal:500000, fmt:"yen"},
+  {id:"y100",   g:"年", tier:3, t:"ミリオン達成",      d:"今年の収入が100万円",             v:s => s.year,        goal:1000000, fmt:"yen"},
+  {id:"c10",    g:"回", tier:1, t:"シフト10回",        d:"アプリでシフトを10回こなす",       v:s => s.count,       goal:10, fmt:"回"},
+  {id:"c50",    g:"回", tier:2, t:"シフト50回",        d:"アプリでシフトを50回こなす",       v:s => s.count,       goal:50, fmt:"回"},
+  {id:"c100",   g:"百", tier:3, t:"百戦錬磨",          d:"アプリでシフトを100回こなす",      v:s => s.count,       goal:100, fmt:"回"},
+  {id:"h50",    g:"時", tier:1, t:"50時間労働",        d:"実働の合計が50時間",              v:s => s.hours,       goal:50, fmt:"h"},
+  {id:"h100",   g:"時", tier:2, t:"100時間労働",       d:"実働の合計が100時間",             v:s => s.hours,       goal:100, fmt:"h"},
+  {id:"h300",   g:"時", tier:3, t:"300時間の猛者",     d:"実働の合計が300時間",             v:s => s.hours,       goal:300, fmt:"h"},
+  {id:"long",   g:"長", tier:1, t:"ロングラン",        d:"1回で実働8時間以上",              v:s => s.longest,     goal:8, fmt:"h"},
+  {id:"night",  g:"夜", tier:1, t:"夜の住人",          d:"22時以降の深夜帯に働く",          v:s => s.night,       goal:1, fmt:"回"},
+  {id:"double", g:"双", tier:2, t:"ダブルヘッダー",    d:"1日に2つのバイトをこなす",        v:s => s.doubleDays,  goal:1, fmt:"日"},
+  {id:"multi",  g:"掛", tier:2, t:"掛け持ちの達人",    d:"1か月に3つの勤務先で働く",        v:s => s.maxJobs,     goal:3, fmt:"か所"},
+  {id:"budget", g:"算", tier:2, t:"やりくり上手",      d:"予算内で精算した行事が5件",       v:s => s.evDone,      goal:5, fmt:"件"},
+  {id:"rec",    g:"記", tier:1, t:"記録マニア",        d:"3か月分の振込額を記録する",       v:s => s.recMonths,   goal:3, fmt:"か月"},
+  {id:"bal10",  g:"貯", tier:2, t:"残高10万円",        d:"口座残高が10万円",                v:s => s.balance,     goal:100000, fmt:"yen"},
+  {id:"bal30",  g:"貯", tier:3, t:"残高30万円",        d:"口座残高が30万円",                v:s => s.balance,     goal:300000, fmt:"yen"},
+  {id:"goal",   g:"達", tier:3, t:"目標達成",          d:"口座残高が貯金目標に届く",        v:s => s.goal ? s.balance : 0, goal:s => s.goal || Infinity, fmt:"yen"}
+];
+const RANKS = [[0, "見習い"], [50000, "一人前"], [200000, "ベテラン"], [500000, "店長候補"], [1000000, "稼ぎ頭"], [1500000, "伝説のバイト"]];
+const achGoal = (a, s) => typeof a.goal === "function" ? a.goal(s) : a.goal;
+const fmtV = (v, f) => f === "yen" ? yen(v) : `${hrs(v)}${f}`;
+S.ach = {}; S.ready = {settings:false, shifts:false, income:false, events:false, ach:false};
+let achWriting = false;
+const TIER = {1: "ブロンズ", 2: "シルバー", 3: "ゴールド"};
+function medal(a, on, size){
+  const t = on ? a.tier : 0;
+  return `<svg class="medalsvg${on ? " on" : ""}" viewBox="0 0 64 80" width="${size}" height="${size * 1.25}" aria-hidden="true">
+    <path d="M18 42 L9 76 L19 70 L25 78 L31 46Z" fill="var(--rib${t})"/>
+    <path d="M46 42 L55 76 L45 70 L39 78 L33 46Z" fill="var(--rib${t})" opacity=".85"/>
+    <circle cx="32" cy="31" r="27" fill="var(--med${t}-d)"/>
+    <circle cx="32" cy="29" r="26" fill="var(--med${t})"/>
+    <circle cx="32" cy="29" r="20" fill="none" stroke="var(--medline)" stroke-width="2" stroke-dasharray="2.5 3.5"/>
+    ${on ? `<path d="M15 21 A19 19 0 0 1 27 11" fill="none" stroke="var(--medline)" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="M52 6 l1.6 4 4 1.6 -4 1.6 -1.6 4 -1.6 -4 -4 -1.6 4 -1.6z" fill="var(--spark)" class="spark"/>` : ""}
+    <text x="32" y="${a.g.length > 1 ? 36 : 37}" text-anchor="middle" font-family="'Dela Gothic One','Zen Kaku Gothic New',sans-serif" font-size="${a.g.length > 1 ? 18 : 22}" fill="var(--medtext)">${on ? esc(a.g) : "?"}</text>
+  </svg>`;
+}
+/* ---------- unlock celebration ---------- */
+const celebrateQ = [];
+let celebrateTotal = 0;
+function celebrate(list){
+  celebrateQ.push(...list); celebrateTotal = Math.max(celebrateTotal, celebrateQ.length);
+  if (document.getElementById("celebrate").hidden) showNextCelebration();
+}
+function showNextCelebration(){
+  const box = document.getElementById("celebrate");
+  const a = celebrateQ.shift();
+  if (!a){ box.hidden = true; celebrateTotal = 0; return; }
+  const idx = celebrateTotal - celebrateQ.length;
+  box.querySelector(".cel-card").innerHTML = `
+    <div class="cel-rays" aria-hidden="true"></div>
+    <div class="cel-kicker">実績解除！</div>
+    <div class="cel-medal">${medal(a, true, 112)}</div>
+    <div class="cel-tier t${a.tier}">${TIER[a.tier]}</div>
+    <div class="cel-title">${esc(a.t)}</div>
+    <div class="cel-desc">${esc(a.d)}</div>
+    <div class="cel-actions"><button class="primary cel-ok" data-cel="next">${celebrateQ.length ? `つぎへ（${idx}/${celebrateTotal}）` : "やったね！"}</button>
+      ${celebrateQ.length ? `<button class="ghost" data-cel="skip">まとめて閉じる</button>` : ""}</div>`;
+  box.hidden = false;
+  box.querySelector(".cel-card").classList.remove("pop"); void box.offsetWidth; box.querySelector(".cel-card").classList.add("pop");
+  box.querySelector(".cel-ok").focus();
+  confetti(a.tier);
+}
+document.addEventListener("click", e => {
+  const c = e.target.closest("[data-cel]"); if (!c) return;
+  if (c.dataset.cel === "skip") celebrateQ.length = 0;
+  showNextCelebration();
+});
+document.addEventListener("click", e => { if (e.target.id === "sheet") e.target.hidden = true; });
+document.addEventListener("toggle", e => { const d = e.target; if (d.dataset && d.dataset.evopen){ if (d.open) S.openEv = d.dataset.evopen; else if (S.openEv === d.dataset.evopen) S.openEv = null; return; } if (d.dataset && d.dataset.more) S.openMore = d.open ? d.dataset.more : (S.openMore === d.dataset.more ? null : S.openMore); }, true);
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.getElementById("sheet").hidden = true; });
+document.addEventListener("keydown", e => { if (e.key === "Escape" && !document.getElementById("celebrate").hidden){ celebrateQ.length = 0; showNextCelebration(); } });
+function confetti(tier){
+  const cv = document.getElementById("confetti");
+  if (!cv || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const ctx = cv.getContext("2d"), W = cv.width = innerWidth, H = cv.height = innerHeight;
+  const cs = getComputedStyle(document.documentElement);
+  const cols = ["--j0", "--j1", "--j2", "--j3", "--j4", "--gold"].map(v => cs.getPropertyValue(v).trim());
+  const ps = Array.from({length: 60 + tier * 40}, () => ({
+    x: W / 2, y: H * .42, vx: (Math.random() - .5) * 14, vy: -Math.random() * 13 - 4,
+    w: 5 + Math.random() * 6, h: 8 + Math.random() * 8, r: Math.random() * 6, vr: (Math.random() - .5) * .4,
+    c: cols[Math.floor(Math.random() * cols.length)]
+  }));
+  let f = 0;
+  (function tick(){
+    ctx.clearRect(0, 0, W, H);
+    for (const p of ps){ p.vy += .38; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.r * 2))); ctx.restore(); }
+    if (++f < 130) requestAnimationFrame(tick); else ctx.clearRect(0, 0, W, H);
+  })();
+}
+function checkAchievements(){
+  if (!Object.values(S.ready).every(Boolean) || achWriting) return;
+  const s = stats(), fresh = ACH.filter(a => !S.ach[a.id] && a.v(s) >= achGoal(a, s));
+  if (!fresh.length) return;
+  fresh.forEach(a => { S.ach[a.id] = todayYmd; });
+  achWriting = true;
+  const done = () => { achWriting = false; };
+  if (db) db.doc("app/achievements").set(S.ach).then(done, done); else { saveLocal(); done(); }
+  celebrate(fresh.sort((a, b) => a.tier - b.tier));
+  if (S.tab === "ach") setTimeout(render, 0);
+}
+function viewAch(){
+  const s = stats();
+  const ri = RANKS.reduce((a, r, i) => s.total >= r[0] ? i : a, 0), next = RANKS[ri + 1];
+  const got = ACH.filter(a => S.ach[a.id]).length;
+  const rpct = next ? Math.min(100, (s.total - RANKS[ri][0]) / (next[0] - RANKS[ri][0]) * 100) : 100;
+  const badges = ACH.slice().sort((a, b) => (S.ach[b.id] ? 1 : 0) - (S.ach[a.id] ? 1 : 0) || a.tier - b.tier).map(a => {
+    const on = !!S.ach[a.id], v = a.v(s), g = achGoal(a, s);
+    const pct = isFinite(g) && g > 0 ? Math.min(100, v / g * 100) : 0;
+    return `<${on ? `button type="button" data-replay="${a.id}" aria-label="${esc(a.t)}の演出をもう一度見る"` : "div"} class="badge ${on ? "on" : ""} t${a.tier}">
+      ${medal(a, on, 54)}
+      <div class="btier">${TIER[a.tier]}</div>
+      <div class="bt">${esc(a.t)}</div><div class="bd">${esc(a.d)}</div>
+      ${on ? `<div class="bdate">${Number(S.ach[a.id].slice(5, 7))}/${Number(S.ach[a.id].slice(8))} GET!</div>`
+           : isFinite(g) ? `<div class="meter mini"><span style="width:${pct.toFixed(1)}%"></span></div><div class="bdate">${fmtV(Math.min(v, g), a.fmt)} / ${fmtV(g, a.fmt)}</div>` : `<div class="bdate">貯金目標を決めると挑戦できます</div>`}
+    </${on ? "button" : "div"}>`;
+  }).join("");
+  return `
+  <section class="rankcard">
+    <div class="emblem" aria-hidden="true"><span class="lv">Lv.</span><span class="lvn">${ri + 1}</span></div>
+    <div class="rankbody">
+      <div class="rk-k">いまの称号</div>
+      <div class="rankname">${RANKS[ri][1]}</div>
+      <div class="xp"><span style="width:${rpct.toFixed(1)}%"></span></div>
+      <div class="rk-s">${next ? `あと <b>${yen(next[0] - s.total)}</b> で「${next[1]}」にランクアップ` : "最高ランク到達！"}</div>
+    </div>
+    <div class="gotcount"><b>${got}</b><span>/ ${ACH.length}</span></div>
+  </section>
+  <div class="tiles four">
+    <div class="tile"><div class="k">今月かせいだ</div><div class="v">${yen(s.thisMonth)}</div></div>
+    <div class="tile"><div class="k">${now.y}年かせいだ</div><div class="v">${yen(s.year)}</div></div>
+    <div class="tile"><div class="k">実働の合計</div><div class="v">${hrs(s.hours)}h</div></div>
+    <div class="tile"><div class="k">こなしたシフト</div><div class="v">${s.count}回</div></div>
+  </div>
+  <section class="block">
+    <div class="blockhead"><h2>メダルコレクション</h2><span class="small muted">GETしたメダルを押すと演出をもう一度見られます</span></div>
+    <div class="badges">${badges}</div>
+    <div class="small muted">振り込まれた額（確定額、または振込日を過ぎた見込み）と、今日までに入力したシフトで判定します。</div>
+  </section>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-replay]"); if (!b) return;
+  const a = ACH.find(x => x.id === b.dataset.replay); if (a) celebrate([a]);
+});
+
+function summary(y, m){
+  const key = `${y}-${pad(m)}`;
+  const shifts = allShifts();
+  const mi = budgetIncome(y, m, shifts);
+  const payIn = mi.payIn;
+  const income = mi.total;
+  const byJob = {};
+  for (const s of payIn){ const b = byJob[s.job.id] || (byJob[s.job.id] = {job: s.job, n:0, hours:0, pay:0, tr:0, pd:s.pd}); b.n++; b.hours += s.excluded ? 0 : s.paid; b.pay += s.pay; b.tr += s.transport; }
+  const trIn = mi.estTr;
+  const evs = eventList(y, m);
+  const evTotal = evs.reduce((a, e) => a + evCost(e.doc), 0);
+  const fixed = num(S.settings.fixedCost), save = savingFor(y, m);
+  const free = income - fixed - save;
+  const left = free - evTotal;
+  let yearTr = 0, yearSum = 0;
+  for (let mm = 1; mm <= 12; mm++){ const r = monthIncome(y, mm, shifts); yearSum += r.total; yearTr += r.estTr; }
+  const yearPay = yearSum - (S.settings.wallTransport ? 0 : yearTr) + num(S.settings.otherIncome);
+  const missingRate = payIn.some(s => s.needsRate && !s.excluded && !mi.rows.find(r => r.job.id === s.job.id).confirmed);
+  const worked = shifts.filter(s => s.ev.y === y && s.ev.m === m);
+  const workedPay = worked.reduce((a, s) => a + s.pay, 0);
+  const pds = [...new Set(worked.map(s => `${s.pd.m}/${s.pd.d}`))];
+  const workedPd = pds.length === 1 ? `${pds[0]}支給` : pds.length ? `${pds.join("・")}支給` : "";
+  return {key, mi, payIn, income, trIn, yearTr, workedPay, workedPd, byJob, evs, evTotal, fixed, save, free, left, yearPay, missingRate};
+}
+
+/* ---------- notices ---------- */
+const notices = [];
+let toastTimer = null;
+function toast(html, kind){
+  const t = document.getElementById("toast"); if (!t) return;
+  t.className = "show " + (kind || "");
+  t.querySelector(".mark").textContent = kind === "bad" ? "!" : kind === "warn" ? "!" : kind === "saving" ? "…" : kind === "trophy" ? "★" : "✓";
+  t.querySelector(".msg").innerHTML = html;
+  clearTimeout(toastTimer);
+  if (kind !== "saving") toastTimer = setTimeout(() => { t.className = kind || ""; }, kind === "bad" ? 6000 : kind === "warn" || kind === "trophy" ? 4000 : 2400);
+}
+function addNotice(kind, html){ toast(html, kind); }
+function renderNotices(){
+  const box = document.getElementById("notices");
+  const parts = notices.map(n => `<div class="notice ${n.kind}">${n.html}</div>`);
+  box.innerHTML = parts.join("");
+}
+
+/* ---------- render ---------- */
+function render(){
+  document.getElementById("monthLabel").textContent = S.y === now.y ? `${S.m}月` : `${S.y}年${S.m}月`;
+  document.querySelectorAll("nav.tabs button[data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === S.tab)));
+  const tt = document.getElementById("screenTitle");
+  tt.textContent = {home: "シフポケ", shifts: "シフト", events: "行事・出費", ach: "実績", settings: "設定"}[S.tab] || "シフポケ";
+  tt.className = S.tab === "home" ? "brand" : "screen";
+  const st = document.getElementById("syncState");
+
+  renderNotices();
+  const v = document.getElementById("view");
+  const onb = !S.settings.onboarded;
+  document.body.classList.toggle("in-onb", onb);
+  const html = onb ? viewOnboarding() : S.tab === "home" ? viewHome() : S.tab === "shifts" ? viewShifts() : S.tab === "events" ? viewEvents() : S.tab === "ach" ? viewAch() : viewSettings();
+  const act = document.activeElement, fid = act && act.id && v.contains(act) ? act.id : null;
+  const fval = fid ? act.value : null, fsel = fid ? (() => { try { return act.selectionStart; } catch(_){ return null; } })() : null;
+  v.innerHTML = html;
+  if (!onb) setTimeout(checkAchievements, 0);
+  if (fid){
+    const el = document.getElementById(fid);
+    if (el){
+      if (el.type !== "checkbox" && el.tagName !== "SELECT" && el.value !== fval) el.value = fval;  // keep what the viewer is typing
+      el.focus(); if (fsel != null) try { el.setSelectionRange(fsel, fsel); } catch(_){}
+    }
+  }
+}
+
+function loadingBlock(){ return `<section class="block"><div class="empty">Google カレンダーから ${S.y}年 の予定を読み込んでいます…</div></section>`; }
+
+function nextPayday(shifts){
+  // earliest pay still to arrive (today or later), looking up to 3 months ahead
+  let best = null;
+  for (let i = 0; i < 4; i++){
+    const [y, m] = addMonths(now.y, now.m, i);
+    for (const r of monthIncome(y, m, shifts).rows){
+      if (!r.used) continue;
+      const ymd = `${r.pd.y}-${pad(r.pd.m)}-${pad(r.pd.d)}`;
+      if (ymd < todayYmd) continue;
+      if (!best || ymd < best.ymd) best = {ymd, rows: [r]};
+      else if (ymd === best.ymd) best.rows.push(r);
+    }
+    if (best) break;
+  }
+  return best;
+}
+function viewHome(){
+  const x = summary(S.y, S.m);
+  const rj = rateJob();
+  const mi = x.mi, shifts = allShifts();
+  const warn = [];
+  if (x.missingRate) warn.push(`時給が未設定のバイト先があります。<button data-goto="settings">設定で入力</button>`);
+  if (!S.settings.jobs.length) warn.push(`バイト先がまだありません。<button data-goto="settings">バイト先を登録</button>`);
+  const jobRows = mi.rows.map(r => `
+    <div class="row">
+      <div class="date">${r.pd.m}/${r.pd.d}<br><span class="small">振込</span></div>
+      <div class="main"><div class="title"><span class="jdot" style="--jc:${jColor(r.job.id)}"></span>${esc(r.job.name)}</div>${r.pd.moved ? `<div class="sub">振込日 ${r.pd.m}/${r.pd.d}${movedNote(r.pd)}</div>` : ""}
+        <div class="sub"><span class="chip">${r.lag ? `${r.srcM}月振込分` : "今月振込分"}</span> ${r.confirmed ? `<span class="chip good">確定</span>` : r.est ? `<span class="chip">見込み</span>` : `<span class="chip warn">未入力</span>`}
+          ${r.n ? `シフト${r.n}回・実働 ${hrs(r.hours)}h → 見込み ${yen(r.est)}${r.tr ? `（交通費 ${yen(r.tr)} 含む）` : ""}` : "シフト入力なし"}
+          ${r.confirmed && r.n && r.conf !== r.est ? `・差 ${r.conf - r.est > 0 ? "+" : "−"}${yen(Math.abs(r.conf - r.est))}` : ""}</div></div>
+      <div class="amt">${yen(r.used)}</div>
+      <div class="edit"><label class="inline">確定額 <input type="text" inputmode="decimal" id="ij-${esc(r.job.id)}-${r.srcKey}" data-inc-job="${esc(r.job.id)}" data-inc-key="${r.srcKey}" value="${r.confirmed ? esc(r.conf) : ""}" placeholder="${r.est ? esc(r.est) : "円"}"></label>
+        ${r.confirmed ? `<button class="ghost" data-act="clearInc" data-id="${esc(r.job.id)}" data-key="${r.srcKey}">確定を取り消す</button>` : ""}</div>
+    </div>`).join("");
+  const otherRows = mi.others.map((o, i) => `
+    <div class="row">
+      <div class="date">その他</div>
+      <div class="main"><input type="text" class="w-l" id="io-l-${i}" data-inc-other="${i}" data-field="label" value="${esc(o.label || "")}" placeholder="例：単発バイト、お小遣い" aria-label="収入の名前"></div>
+      <div class="amt"><input type="text" inputmode="decimal" id="io-a-${i}" data-inc-other="${i}" data-field="amount" value="${esc(o.amount ?? "")}" placeholder="円" aria-label="金額"></div>
+      <div class="edit"><button class="ghost" data-act="delOther" data-i="${i}">削除</button></div>
+    </div>`).join("");
+
+  // hero: what is left to spend freely this month
+  const out = x.fixed + x.save + x.evTotal, base = Math.max(x.income, out, 1);
+  const seg = (v, c) => `<span style="width:${(Math.max(0, v) / base * 100).toFixed(2)}%;background:${c}"></span>`;
+  const isCur = S.y === now.y && S.m === now.m;
+  const daysLeft = isCur ? new Date(Date.UTC(now.y, now.m, 0)).getUTCDate() - now.d + 1 : 0;
+  const hero = `<div class="hero">
+      <div class="hk"><span>${x.left < 0 ? `${S.m}月は足りません` : `${S.m}月に自由に使えるお金`}</span>${isCur && x.left > 0 && daysLeft ? `<span>1日あたり ${yen(Math.floor(x.left / daysLeft))}</span>` : ""}</div>
+      <div class="hv">${x.left < 0 ? "−" : ""}${yen(Math.abs(x.left)).replace("−", "")}</div>
+      <div class="hbar" aria-hidden="true">${seg(x.fixed, "color-mix(in srgb, var(--on-accent) 45%, transparent)")}${seg(x.save, "color-mix(in srgb, var(--on-accent) 70%, transparent)")}${seg(x.evTotal, "var(--gold)")}</div>
+      <div class="hs">入る ${yen(x.income)} − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}・行事 ${yen(x.evTotal)}</div>
+    </div>`;
+
+  // next payday + savings
+  const np = nextPayday(shifts);
+  const npHtml = np ? `<div class="mini"><span class="mk">次の給料日</span><span class="mv">${Number(np.ymd.slice(5, 7))}/${Number(np.ymd.slice(8))}<small>（${DOW[new Date(np.ymd + "T00:00:00Z").getUTCDay()]}）</small></span><span class="ms">${np.rows.map(r => `${esc(r.job.name)} ${yen(r.used)}`).join("・")}</span></div>`
+    : `<button type="button" class="mini" data-act="quickShift"><span class="mk">次の給料日</span><span class="mv">—</span><span class="ms">シフトを入れると表示されます</span></button>`;
+  const p = savingPlan();
+  const svHtml = p ? `<div class="mini"><span class="mk">貯金 ${Number(p.gm.slice(5))}月までに${yen(p.goal)}</span><span class="mv">${Math.min(100, Math.floor(p.bal / p.goal * 100))}%</span><div class="meter"><span style="width:${Math.min(100, p.bal / p.goal * 100).toFixed(1)}%"></span></div></div>`
+    : `<button type="button" class="mini" data-act="openSaving"><span class="mk">貯金の目標</span><span class="mv">—</span><span class="ms">目標を決めると毎月の貯金額を計算します</span></button>`;
+
+  // upcoming spending in the viewed month
+  const evs = x.evs.filter(e => !isCur || e.ymd >= todayYmd);
+  const upRows = evs.slice(0, 4).map(e => {
+    const c = evCost(e.doc), [k] = evStatus(e.doc);
+    const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>` : e.moved && e.moved.moved ? `<span>${movedNote(e.moved).replace(/[（）]/g, "")}</span>` : rj && c ? `<span>${esc(rj.name.replace(/（.*）/, ""))} ${hrs(c / num(rj.wage))}時間分</span>` : "";
+    return `<div class="li"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span></div>`;
+  }).join("");
+
+  const wallPct = Math.min(100, x.yearPay / Math.max(1, num(S.settings.wall)) * 100);
+  return `
+  ${warn.map(w => `<div class="notice warn"><div>${w}</div></div>`).join("")}
+  ${hero}
+  <div class="duo">${npHtml}${svHtml}</div>
+  <div class="sec">
+    <div class="sec-h"><h2>${isCur ? "もうすぐ出ていくお金" : `${S.m}月に出ていくお金`}</h2><button type="button" class="link" data-goto="events">すべて</button></div>
+    <div class="list">${upRows || `<div class="li"><span class="lm"><b>予定している出費はありません</b><span>旅行や飲み会の予算を入れておくと、使えるお金が正確になります</span></span></div>`}</div>
+  </div>
+
+  <details class="more" ${S.openMore === "income" ? "open" : ""} data-more="income"><summary>${S.m}月に使えるお金の内訳<span class="sv">${yen(x.income)}</span></summary><div class="inner">
+    <div class="small muted">${S.m}月の出費は前の月に振り込まれた給料でまかなう前提です（バイト先ごとに設定で変更可）。振込額が分かったら「確定額」に入れると、見込みより優先します。</div>
+    <div class="rows">${jobRows || `<div class="empty">バイト先がありません。<button data-goto="settings">バイト先を追加</button></div>`}${otherRows}</div>
+    <div><button data-act="addOther">＋ その他の収入を追加</button></div>
+  </div></details>
+
+  <details class="more" ${S.openMore === "saving" ? "open" : ""} data-more="saving"><summary>貯金の計画<span class="sv">${p ? `毎月 ${yen(p.perMonth)}` : "未設定"}</span></summary><div class="inner">${savingHtml(x)}</div></details>
+
+  <details class="more" ${S.openMore === "tips" ? "open" : ""} data-more="tips"><summary>やりくりのヒント</summary><div class="inner">${tipsHtml(x, rj)}</div></details>
+
+  <details class="more" ${S.openMore === "wall" ? "open" : ""} data-more="wall"><summary>${S.y}年の収入と「年収の壁」<span class="sv">${Math.floor(wallPct)}%</span></summary><div class="inner">
+    <div class="blockhead"><span class="num">${yen(x.yearPay)} / ${yen(S.settings.wall)}</span></div>
+    <div class="meter ${wallPct >= 100 ? "over" : ""}"><span style="width:${wallPct.toFixed(1)}%"></span></div>
+    <div class="small muted">振込月ベースで集計しています。${S.settings.wallTransport ? "交通費も含めています。" : `交通費 ${yen(x.yearTr)} は通勤手当として非課税なので除いています（設定で変更可）。`}壁の金額は扶養・税制で変わるので、設定で自分に合う額にしてください。残り ${yen(Math.max(0, num(S.settings.wall) - x.yearPay))}。</div>
+  </div></details>`;
+}
+function savingHtml(x){
+  const st = S.settings, p = savingPlan();
+  const bd = st.balanceDate ? `${Number(st.balanceDate.slice(5, 7))}/${Number(st.balanceDate.slice(8))}時点` : "未入力";
+  const inputs = `<div class="dayform">
+      <label class="f">今の口座残高（${bd}）<input type="text" inputmode="decimal" id="hBal" data-set="balance" value="${esc(st.balance ?? "")}" placeholder="円"></label>
+      <label class="f">貯金目標額<input type="text" inputmode="decimal" id="hGoal" data-set="goalAmount" value="${esc(st.goalAmount ?? "")}" placeholder="例：300000"></label>
+      <label class="f">いつまでに<input type="month" id="hGoalM" data-set="goalMonth" value="${esc(st.goalMonth || "")}"></label>
+      <label class="f">まだ入力のない月の収入見込み（月）<input type="text" inputmode="decimal" id="hAssume" data-set="assumeIncome" value="${esc(st.assumeIncome ?? "")}" placeholder="例：60000"></label>
+    </div>`;
+  if (!p) return `<section class="block savebox">
+    <div class="small muted">今の口座残高と、いつまでにいくら貯めたいかを入れると、毎月貯めるべき額と自由に使えるお金を計算します。</div>${inputs}</section>`;
+  const k = `${S.y}-${pad(S.m)}`, inPlan = k >= todayKey && k <= p.gm;
+  const free = x.income - x.fixed - x.save;
+  const proj = projection(), endRow = proj.find(r => r.k === p.gm) || proj[proj.length - 1];
+  const gap = endRow ? endRow.bal - p.goal : 0;
+  const pct = Math.min(100, p.bal / p.goal * 100);
+  return `<section class="block savebox">
+    <div class="blockhead"><span class="small muted">残高 / 目標</span><span class="num">${yen(p.bal)} / ${yen(p.goal)}</span></div>
+    <div class="meter ${p.bal >= p.goal ? "" : ""}"><span style="width:${pct.toFixed(1)}%"></span></div>
+    <div class="plan">${p.need ? `目標まであと <b>${yen(p.need)}</b>。${Number(p.gm.slice(5))}月まで${p.left}か月なので、<b>毎月 ${yen(p.perMonth)}</b> 貯めれば届きます。` : `目標額に届いています。`}
+      ${inPlan ? `<br>${S.m}月に自由に使えるお金は 使えるお金 ${yen(x.income)} − 固定費 ${yen(x.fixed)} − 貯金 ${yen(x.save)} = <b>${yen(free)}</b>。行事 ${yen(x.evTotal)} を引くと <b style="color:var(${x.left < 0 ? "--bad" : "--good"})">${yen(x.left)}</b> です。` : ""}
+      ${endRow ? `<br>今の予定どおりだと、${Number(endRow.k.slice(5))}月末の残高は約 <b>${yen(endRow.bal)}</b>（目標まで${gap >= 0 ? `<b style="color:var(--good)">${yen(gap)} 余裕</b>` : `<b style="color:var(--bad)">${yen(-gap)} 足りない</b>`}）。` : ""}</div>
+    <div class="tablewrap"><table class="proj"><thead><tr><th>月</th><th>入る</th><th>出る</th><th>月末の残高</th></tr></thead><tbody>
+      ${proj.map(r => `<tr><td>${r.y !== now.y ? r.y + "/" : ""}${r.m}月${r.k === todayKey ? "（今日以降）" : ""}</td><td>+${yen(r.inflow)}${r.assumed ? "*" : ""}</td><td>−${yen(r.outEv + r.fixed)}</td><td class="${r.bal < 0 ? "neg" : ""}">${yen(r.bal)}</td></tr>`).join("")}
+    </tbody></table></div>
+    <div class="small muted">今後の振込（確定額かシフトの見込み）から、行事と固定費を引いて計算しています。今月分は今日より後の振込・行事だけを数え、今月の固定費は支払い済みとしています。まだ予算を入れていない行事は0円として扱います。${num(st.assumeIncome) ? `* はシフトも確定額もまだない月で、収入見込み ${yen(st.assumeIncome)} を使っています。` : "先の月はシフトを入れるまで収入0円になるので、下の「収入見込み」を入れると現実に近くなります。"}</div>
+    <details><summary>残高・目標を変える</summary>${inputs}</details>
+  </section>`;
+}
+function tipsHtml(x, rj){
+  const tips = [];
+  const evs = x.evs.map(e => ({...e, c: evCost(e.doc)})).filter(e => e.c > 0).sort((a,b) => b.c - a.c);
+  if (x.left < 0){
+    tips.push(`<b>${yen(-x.left)}</b> 足りません。` + (rj ? `${esc(rj.name)}であと <b>約${Math.ceil(-x.left / num(rj.wage))}時間</b> 働くか、下の行事から削る必要があります。` : "下の行事から削る必要があります。"));
+    let need = -x.left;
+    const cut = [];
+    for (const e of evs){ if (need <= 0) break; const c = Math.min(e.c * 0.2, need); cut.push(`${esc(e.title)} を2割（${yen(e.c * 0.2)}）削る`); need -= c; }
+    if (cut.length) tips.push("大きい順に2割ずつ削る案：" + cut.join("、") + (need > 0 ? `。それでも ${yen(need)} 不足` : "。これで収まります"));
+  } else if (x.income > 0) {
+    tips.push(`今の予算なら <b>${yen(x.left)}</b> 残ります。余りを貯金目標に回すと年間 ${yen(x.left * 12)} のペースです。`);
+  }
+  const overs = x.evs.filter(e => evStatus(e.doc)[0] === "bad");
+  if (overs.length) tips.push(`予算オーバー：${overs.map(e => esc(e.title)).join("、")}。次回は同種の行事の予算を実績に合わせて見直しましょう。`);
+  const unset = x.evs.filter(e => evStatus(e.doc)[0] === "warn");
+  if (unset.length) tips.push(`予算が未設定の行事が ${unset.length}件 あります（${unset.slice(0,4).map(e => esc(e.title)).join("、")}${unset.length > 4 ? " ほか" : ""}）。金額を入れると残りが正確になります。`);
+  if (rj && evs[0]) tips.push(`一番大きい出費は「${esc(evs[0].title)}」の ${yen(evs[0].c)}。${esc(rj.name)}の約 ${hrs(evs[0].c / num(rj.wage))}時間分です。`);
+  if (!tips.length) return `<div class="empty">給与と行事の予算を入れると、足りない額と削り方をここに出します。</div>`;
+  return `<ul class="tips">${tips.map(t => `<li>${t}</li>`).join("")}</ul>`;
+}
+
+function defaultForm(){
+  const job = S.settings.jobs[0];
+  return formFor(job ? job.id : "");
+}
+function formFor(jobId){
+  // Prefill with the most recent shift of this job, so repeating the usual hours is one tap.
+  const last = Object.values(S.shifts).filter(r => r.job === jobId).sort((a, b) => (b.ymd || "").localeCompare(a.ymd || ""))[0];
+  return {editId: null, job: jobId, start: last ? last.start || "" : "", end: last ? last.end || "" : "", breakMin: last ? (last.breakMin ?? "") : "", transport: last && last.transport !== undefined ? last.transport : "", note: ""};
+}
+function previewText(){
+  const f = S.form; if (!f || !S.sel) return "";
+  const job = jobById(f.job); if (!job) return "勤務先を選んでください";
+  const c = calcShift({...f, ymd: S.sel}, job);
+  const tr = c.transport ? ` ＋ 交通費 ${yen(c.transport)}` : "";
+  if (job.payType === "fixed") return c.needsRate ? `${c.rateLabel}（設定タブで入力するか、時給に切り替えてください）` : `1回 ${yen(c.wagePay)}${tr} = ${yen(c.pay)}（支給 ${c.pd.m}/${c.pd.d}）`;
+  if (!c.span) return "開始と終了の時刻を入れてください";
+  return `拘束 ${hrs(c.span)}h − 休憩 ${hrs(c.brk * 60)}分 = 実働 ${hrs(c.paid)}h${c.night ? `（深夜 ${hrs(c.night)}h）` : ""} → ${c.needsRate ? c.rateLabel : `${yen(c.wagePay)}${tr} = ${yen(c.pay)}`}（支給 ${c.pd.m}/${c.pd.d}）`;
+}
+function syncChip(s){
+  if (!S.settings.calSync && !s.rec.calEventId) return "";
+  if (syncing.has(s.id)) return `<span class="chip">反映中…</span>`;
+  if (s.rec.calSync === "ok") return `<span class="chip good">カレンダー反映済</span>`;
+  return `<span class="chip ${s.rec.calSync === "error" ? "bad" : "warn"}">${s.rec.calSync === "error" ? "反映失敗" : "未反映"}</span><button data-act="syncshift" data-id="${esc(s.id)}" ${mcp ? "" : "disabled"}>反映</button>`;
+}
+function viewShifts(){
+  const jobs = S.settings.jobs;
+  const list = allShifts().filter(s => s.ev.y === S.y && s.ev.m === S.m);
+  const total = list.reduce((a, s) => a + s.pay, 0), h = list.reduce((a, s) => a + s.paid, 0);
+  const byDay = {};
+  for (const s of list) (byDay[s.ev.ymd] = byDay[s.ev.ymd] || []).push(s);
+  if (!S.sel || !S.sel.startsWith(`${S.y}-${pad(S.m)}`)) S.sel = (now.y === S.y && now.m === S.m) ? `${S.y}-${pad(S.m)}-${pad(now.d)}` : `${S.y}-${pad(S.m)}-01`;
+  if (!S.form) S.form = defaultForm();
+  if (S.form.transport === undefined) S.form.transport = "";
+  const first = new Date(Date.UTC(S.y, S.m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(S.y, S.m, 0)).getUTCDate();
+  const todayKey = `${now.y}-${pad(now.m)}-${pad(now.d)}`;
+  let cells = DOW.map((w, i) => `<div class="wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</div>`).join("");
+  for (let i = 0; i < first; i++) cells += `<div class="day blank" aria-hidden="true"></div>`;
+  for (let d = 1; d <= days; d++){
+    const key = `${S.y}-${pad(S.m)}-${pad(d)}`;
+    const ds = byDay[key] || [];
+    const dots = ds.slice(0, 3).map(s => `<i style="--jc:${jColor(s.job.id)}"></i>`).join("");
+    cells += `<button class="day ${key === todayKey ? "today" : ""}" data-day="${key}" aria-pressed="${key === S.sel}" aria-label="${S.m}月${d}日${ds.length ? `、シフト${ds.length}件` : ""}"><span class="dn">${d}</span><span class="dots">${dots}</span></button>`;
+  }
+  const [sy, sm, sd] = S.sel.split("-").map(Number);
+  const sdow = new Date(Date.UTC(sy, sm - 1, sd)).getUTCDay();
+  const dayList = (byDay[S.sel] || []).map(s => `
+    <div class="row">
+      <div class="date"><span class="jdot" style="--jc:${jColor(s.job.id)}"></span></div>
+      <div class="main"><div class="title">${esc(s.job.name)}</div>
+        <div class="sub">${s.time ? `${s.time}・拘束 ${hrs(s.span)}h・休憩 ${hrs(s.brk * 60)}分・実働 ${hrs(s.paid)}h` : "時刻なし"}${s.night ? `・深夜 ${hrs(s.night)}h` : ""}${s.rec.note ? "・" + esc(s.rec.note) : ""}</div>
+        <div class="sub">支給 ${s.pd.m}/${s.pd.d}${s.pd.moved ? "（休日のためずれ）" : ""}${s.transport ? `・給与 ${yen(s.wagePay)} ＋ 交通費 ${yen(s.transport)}` : ""} ${s.needsRate ? `<span class="chip warn">${s.rateLabel}</span> <button data-goto="settings">設定</button>` : ""}</div></div>
+      <div class="amt">${yen(s.pay)}</div>
+      <div class="edit">${syncChip(s)}<button data-act="editshift" data-id="${esc(s.id)}">編集</button><button class="ghost" data-act="delshift" data-id="${esc(s.id)}">${S.confirmDel === "s:" + s.id ? "本当に削除する" : "削除"}</button></div>
+    </div>`).join("");
+  const f = S.form, fj = jobById(f.job);
+  const form = jobs.length ? `
+    <form id="shiftForm" class="dayform" autocomplete="off">
+      <label class="f">勤務先<select id="fJob" data-form="job">${jobs.map(j => `<option value="${esc(j.id)}" ${j.id === f.job ? "selected" : ""}>${esc(j.name)}</option>`).join("")}</select></label>
+      <label class="f">開始<input type="time" id="fStart" data-form="start" value="${esc(f.start)}" step="300"></label>
+      <label class="f">終了<input type="time" id="fEnd" data-form="end" value="${esc(f.end)}" step="300"></label>
+      <label class="f">休憩（分）<input type="text" inputmode="decimal" id="fBreak" data-form="breakMin" min="0" step="5" class="w-s" value="${esc(f.breakMin)}" placeholder="0"></label>
+      <label class="f">交通費（円）<input type="text" inputmode="decimal" id="fTr" data-form="transport" min="0" step="10" class="w-s" value="${esc(f.transport ?? "")}" placeholder="${esc(String(fj ? num(fj.transport) : 0))}"></label>
+      <label class="f" style="flex:1 1 10em">メモ<input type="text" id="fNote" data-form="note" class="w-l" value="${esc(f.note)}" placeholder="任意"></label>
+      <div style="display:flex;gap:6px;flex:1 1 100%"><button class="primary" type="submit" style="flex:1;min-height:46px;font-weight:900">${f.editId ? "更新する" : "＋ この日にシフトを追加"}</button>${f.editId ? `<button type="button" data-act="cancelEdit">やめる</button>` : ""}</div>
+    </form>
+    <div class="preview" id="preview">${esc(previewText())}</div>
+    ${fj && fj.payType === "fixed" ? `<div class="small muted">1回あたり固定の勤務先は、時刻を入れなくても金額に反映されます。</div>` : ""}` :
+    `<div class="empty">勤務先がありません。<button data-goto="settings">設定で勤務先を追加</button></div>`;
+  const perJob = jobs.map(j => { const xs = list.filter(s => s.job.id === j.id); return `<span><span class="jdot" style="--jc:${jColor(j.id)}"></span>${esc(j.name)}${xs.length ? ` ${xs.length}回・${yen(xs.reduce((a, s) => a + s.pay, 0))}` : ""}</span>`; }).join("");
+  const isToday = S.sel === todayKey;
+  return `
+  <div class="pills"><span class="pill">${list.length}回 ・ ${hrs(h)}h</span><span class="pill">見込み ${yen(total)}</span></div>
+  <section class="block">
+    ${(() => { const pend = list.filter(x => needsSync(x.rec) && !syncing.has(x.id)); return S.settings.calSync && pend.length && mcp ? `<div class="notice warn"><div>Google カレンダーに未反映のシフトが ${pend.length}件 あります。</div><button data-act="syncmonth">まとめて反映</button></div>` : ""; })()}
+    <div class="cal">${cells}</div>
+    ${jobs.length ? `<div class="legend" style="justify-content:center">${perJob}</div>` : ""}
+  </section>
+  <section class="block focus" id="dayPanel">
+    <div class="blockhead"><h2>${sm}月${sd}日（${DOW[sdow]}）</h2>${isToday ? `<span class="small" style="color:var(--pop);font-weight:900">今日</span>` : ""}</div>
+    <div class="rows">${dayList || `<div class="empty">この日の勤務はまだありません。</div>`}</div>
+    ${form}
+  </section>`;
+}
+
+function evRow(e, rj){
+  const [k, l] = evStatus(e.doc); const id = esc(e.id), c = evCost(e.doc);
+  const confirming = S.confirmDel === "e:" + e.id;
+  const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>`
+    : `<span>${e.rec ? "毎月 ・ " : ""}${l}${e.moved && e.moved.moved ? " ・ " + movedNote(e.moved).replace(/[（）]/g, "") : rj && c ? ` ・ ${esc(rj.name.replace(/（.*）/, ""))} ${hrs(c / num(rj.wage))}時間分` : ""}</span>`;
+  return `<details class="evrow" data-evopen="${id}" ${S.openEv === e.id ? "open" : ""}>
+    <summary class="li"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span></summary>
+    <div class="edit">
+      ${e.cal || e.rec ? "" : `<label class="f" style="flex:1 1 12em">行事名<input type="text" class="w-l" id="et-${id}" data-ev="${id}" data-field="title" value="${esc(e.title)}"></label>
+      <label class="f">日付<input type="date" id="ed-${id}" data-ev="${id}" data-field="ymd" value="${esc(e.ymd)}"></label>`}
+      <label class="f">予算<input type="text" inputmode="decimal" id="eb-${id}" data-ev="${id}" data-field="budget" value="${esc(e.doc.budget ?? "")}" placeholder="${e.rec ? "今月の金額" : "円"}"></label>
+      <label class="f">実際に使った額<input type="text" inputmode="decimal" id="ea-${id}" data-ev="${id}" data-field="actual" value="${esc(e.doc.actual ?? "")}" placeholder="円"></label>
+      ${e.rec ? "" : `<label class="f">まとめる名前<input type="text" id="eg-${id}" data-ev="${id}" data-field="group" list="groupList" value="${esc(e.doc.group ?? "")}" placeholder="例：石川旅行"></label>`}
+      <label class="f" style="flex:1 1 12em">メモ<input type="text" class="w-l" id="em-${id}" data-ev="${id}" data-field="memo" value="${esc(e.doc.memo ?? "")}" placeholder="例：交通 3,000 / チケット 9,400"></label>
+      <button class="ghost" data-act="delevent" data-id="${id}">${confirming ? (e.rec ? "今月だけ外す" : "本当に削除する") : (e.rec ? "今月は外す" : "削除")}</button>${confirming ? `<button data-act="cancelDel">やめる</button>` : ""}
+    </div>
+  </details>`;
+}
+function viewEvents(){
+  const x = summary(S.y, S.m), evs = x.evs, rj = rateJob();
+  const d = S.evDraft || (S.evDraft = {title: "", ymd: "", budget: "", memo: "", group: ""});
+  const inMonth = d.ymd && d.ymd.startsWith(`${S.y}-${pad(S.m)}`);
+  const defDate = inMonth ? d.ymd : (now.y === S.y && now.m === S.m ? todayYmd : `${S.y}-${pad(S.m)}-01`);
+  // budget overview
+  const room = x.income - x.fixed - x.save, used = x.evTotal, pct = room > 0 ? Math.min(100, used / room * 100) : (used ? 100 : 0);
+  const budgetCard = `<section class="block budgetcard">
+      <div class="blockhead"><span class="small muted"><b>${S.m}月の行事・出費</b></span><span class="small muted">使えるお金 ${yen(room)}</span></div>
+      <div class="bv">${yen(used)}</div>
+      <div class="meter ${used > room ? "over" : ""}"><span style="width:${pct.toFixed(1)}%"></span></div>
+      <span class="small muted">${used > room ? `<b style="color:var(--bad)">${yen(used - room)} 足りません</b>` : `あと <b style="color:var(--ink)">${yen(room - used)}</b> 余裕あり`}（固定費・貯金を引いたあと）</span>
+    </section>`;
+  // groups (a trip split into items) vs single events
+  const groups = {}, singles = [];
+  for (const e of evs){ const g = String(e.doc.group || "").trim(); if (g && !e.rec) (groups[g] = groups[g] || []).push(e); else singles.push(e); }
+  const gList = Object.entries(groups).map(([name, items]) => ({name, items, total: items.reduce((a, e) => a + evCost(e.doc), 0)})).sort((a, b) => b.total - a.total);
+  const groupCards = gList.map((g, gi) => {
+    const top = g.items.slice().sort((a, b) => evCost(b.doc) - evCost(a.doc));
+    const rest = top.slice(2), restSum = rest.reduce((a, e) => a + evCost(e.doc), 0);
+    const ds = g.items.map(e => e.d), d1 = Math.min(...ds), d2 = Math.max(...ds);
+    const key = "g:" + g.name;
+    return `<section class="block groupcard ${gi === 0 ? "focus" : ""}">
+      <div class="gh"><span style="display:flex;flex-direction:column;min-width:0"><b>${esc(g.name)}</b><span class="small muted">${S.m}/${d1}${d2 !== d1 ? `〜${d2}` : ""} ・ ${g.items.length}項目</span></span><span class="gt">${yen(g.total)}</span></div>
+      <div class="gl">${top.slice(0, 2).map(e => `<span><span>${esc(e.title.replace(new RegExp("^" + g.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/旅行|一人旅/, "") + "[：:]?"), ""))}</span><b>${evCost(e.doc) ? yen(evCost(e.doc)) : "—"}</b></span>`).join("")}
+        ${rest.length ? `<span class="rest"><span>ほか${rest.length}件</span><b>${yen(restSum)}</b></span>` : ""}</div>
+      ${rj && g.total ? `<span class="pill" style="align-self:flex-start;background:var(--bg)">${esc(rj.name.replace(/（.*）/, ""))} ${Math.round(g.total / num(rj.wage))}時間分</span>` : ""}
+      <details class="more" style="padding:0;background:none" data-more="${esc(key)}" ${S.openMore === key ? "open" : ""}><summary>項目を見る・編集</summary><div class="list" style="background:var(--bg)">${g.items.map(e => evRow(e, rj)).join("")}</div></details>
+    </section>`;
+  }).join("");
+  const groupNames = [...new Set(Object.values(S.events).map(e => String(e.group || "").trim()).filter(Boolean))];
+  return `
+  ${budgetCard}
+  ${groupCards}
+  <div class="sec">
+    ${gList.length ? `<div class="sec-h"><h2>そのほかの出費</h2></div>` : ""}
+    <div class="list">${singles.map(e => evRow(e, rj)).join("") || `<div class="li"><span class="lm"><b>${gList.length ? "ほかの出費はありません" : `${S.m}月の行事はまだありません`}</b><span>下の「行事を追加」から入れてください</span></span></div>`}</div>
+    ${excludedRecurring(S.y, S.m).map(r => `<div class="small muted">毎月の「${esc(r.title)}」を${S.m}月は外しています <button data-act="restoreRec" data-id="rc_${esc(r.id)}_${S.y}${pad(S.m)}">戻す</button></div>`).join("")}
+  </div>
+
+  <section class="block" id="addEvent">
+    <div class="blockhead"><h2>行事を追加</h2><span class="small muted">${S.m}月以外の日付も選べます</span></div>
+    <form id="manualForm" class="dayform" autocomplete="off">
+      <label class="f" style="flex:2 1 12em">行事名<input type="text" class="w-l" id="mTitle" data-evdraft="title" required placeholder="例：ライブ、友達の誕生日プレゼント" value="${esc(d.title)}"></label>
+      <label class="f">日付<input type="date" id="mDate" data-evdraft="ymd" required value="${esc(defDate)}"></label>
+      <label class="f">予算<input type="text" inputmode="decimal" id="mBudget" data-evdraft="budget" placeholder="円" value="${esc(d.budget)}"></label>
+      <label class="f" style="flex:1 1 10em">まとめる名前（任意）<input type="text" class="w-l" id="mGroup" data-evdraft="group" list="groupList" placeholder="例：石川旅行" value="${esc(d.group || "")}"></label>
+      <input type="hidden" id="mMemo" value="">
+      <button class="primary" type="submit">＋ 追加</button>
+    </form>
+    <datalist id="groupList">${groupNames.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist>
+    <div class="small muted">旅行のように項目が多いものは、同じ「まとめる名前」を付けると1枚のカードにまとまります。毎月の引き落としなどは <button data-goto="settings">設定</button> から。</div>
+  </section>`;
+}
+
+function jobLive(i){
+  const j = S.settings.jobs[i]; if (!j) return "";
+  const xs = allShifts().filter(s => s.job.id === j.id && s.ev.y === S.y && s.ev.m === S.m);
+  if (!xs.length) return `${S.m}月の入力済みシフトはまだありません`;
+  const pay = xs.reduce((a, s) => a + s.pay, 0), tr = xs.reduce((a, s) => a + s.transport, 0);
+  return `${S.m}月の勤務 ${xs.length}回 → ${yen(pay)}（給与 ${yen(pay - tr)} ＋ 交通費 ${yen(tr)}）`;
+}
+function viewSettings(){
+  const s = S.settings;
+  const jobs = s.jobs.map((j, i) => {
+    const n = Object.values(S.shifts).filter(r => r.job === j.id).length;
+    const confirming = S.confirmDel === "j:" + j.id;
+    return `
+    <div class="job">
+      <div class="jhead"><span class="jdot" style="--jc:${jColor(j.id)}"></span><input type="text" id="jn-${i}" data-job="${i}" data-field="name" value="${esc(j.name)}" aria-label="勤務先名">
+        <button class="ghost" data-act="deljob" data-id="${esc(j.id)}">${confirming ? (n ? `シフト${n}件ごと削除する` : "本当に削除する") : "削除"}</button>
+        ${confirming ? `<button data-act="cancelDel">やめる</button>` : ""}</div>
+      <div class="grid2">
+        <label class="f">カレンダーでの色<select id="jcol-${i}" data-job="${i}" data-field="calColor">${GCOLORS.map(([v, n]) => `<option value="${v}" ${String(j.calColor || "6") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+        <label class="f">給与の形<select id="jt-${i}" data-job="${i}" data-field="payType"><option value="hourly" ${j.payType === "hourly" ? "selected" : ""}>時給</option><option value="fixed" ${j.payType === "fixed" ? "selected" : ""}>1回あたり固定</option></select></label>
+        ${j.payType === "hourly"
+          ? `<label class="f">時給（円）<input type="text" inputmode="decimal" min="0" step="10" id="jw-${i}" data-job="${i}" data-field="wage" value="${esc(j.wage || "")}" placeholder="未設定"></label>
+             <label class="f">土日の時給加算（円）<input type="text" inputmode="decimal" min="0" step="10" id="je-${i}" data-job="${i}" data-field="weekendExtra" value="${esc(j.weekendExtra || "")}" placeholder="0"></label>`
+          : `<label class="f">1回の金額（円）<input type="text" inputmode="decimal" min="0" step="100" id="jf-${i}" data-job="${i}" data-field="fixedPay" value="${esc(j.fixedPay || "")}" placeholder="未設定"></label>`}
+        <label class="f">振込日が土日祝のとき<select id="jh-${i}" data-job="${i}" data-field="holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(j.holidayShift || "prev") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+        <label class="f">この給料を使う月<select id="jl2-${i}" data-job="${i}" data-field="useLag"><option value="1" ${lagOf(j) === 1 ? "selected" : ""}>振り込まれた翌月</option><option value="0" ${lagOf(j) === 0 ? "selected" : ""}>振り込まれた月</option></select></label>
+        <label class="f">交通費（1回・円／シフトごとに変更可）<input type="text" inputmode="decimal" min="0" step="10" id="jc-${i}" data-job="${i}" data-field="transport" value="${esc(j.transport || "")}" placeholder="0"></label>
+        <label class="f">締め日（0＝月末）<input type="text" inputmode="decimal" min="0" max="31" id="jx-${i}" data-job="${i}" data-field="cutoff" value="${esc(j.cutoff)}"></label>
+        <label class="f">支給月<select id="jo-${i}" data-job="${i}" data-field="payOffset"><option value="0" ${num(j.payOffset) === 0 ? "selected" : ""}>締めた月</option><option value="1" ${num(j.payOffset) === 1 ? "selected" : ""}>翌月</option><option value="2" ${num(j.payOffset) === 2 ? "selected" : ""}>翌々月</option></select></label>
+        <label class="f">支給日（0＝末日）<input type="text" inputmode="decimal" min="0" max="31" id="jd-${i}" data-job="${i}" data-field="payDay" value="${esc(j.payDay)}"></label>
+      </div>
+      <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
+      ${j.payType === "hourly" ? `<label class="inline"><input type="checkbox" id="jg-${i}" data-job="${i}" data-field="night" ${j.night ? "checked" : ""}> 22時〜5時は25%増し（在宅など対象外ならオフ）</label>` : ""}
+    </div>`; }).join("");
+  const hourly = s.jobs.filter(j => j.payType === "hourly");
+  return `
+  <section class="block">
+    <div class="blockhead"><h2>勤務先</h2><button class="primary" data-act="addjob">＋ 勤務先を追加</button></div>
+    <div class="small muted">増やした勤務先はシフトの入力欄にすぐ出ます。削除するとその勤務先のシフトも消えます。</div>
+    ${jobs || `<div class="empty">勤務先がありません。「＋ 勤務先を追加」から登録してください。</div>`}
+  </section>
+  <section class="block">
+    <div class="blockhead"><h2>毎月の行事</h2><button data-act="addRec">＋ 追加</button></div>
+    <div class="small muted">毎月決まった日に出ていくお金です。土日祝や銀行の休業日（12/31〜1/3）に当たる月は、選んだ方向に日付をずらします（クレジットカードは翌営業日が一般的です）。毎月の「行事・予算」に自動で入ります。金額が月によって違うときは、ここを空欄にして各月の行事で入力してください。</div>
+    <div class="rows">${(s.recurring || []).map((r, i) => `
+      <div class="dayform" style="padding:6px 0;border-top:1px dashed var(--line)">
+        <label class="f" style="flex:2 1 12em">名前<input type="text" class="w-l" id="rt-${i}" data-rec="${i}" data-field="title" value="${esc(r.title)}" placeholder="例：サブスク、部費"></label>
+        <label class="f">毎月の日付<input type="text" inputmode="decimal" class="w-s" id="rd-${i}" data-rec="${i}" data-field="day" value="${esc(r.day)}"></label>
+        <label class="f">土日祝のとき<select id="rh-${i}" data-rec="${i}" data-field="holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(r.holidayShift || "next") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+        <label class="f">いつもの金額<input type="text" inputmode="decimal" id="rb-${i}" data-rec="${i}" data-field="budget" value="${esc(r.budget ?? "")}" placeholder="毎月入力"></label>
+        <button class="ghost" data-act="delRec" data-id="${esc(r.id)}">${S.confirmDel === "r:" + r.id ? "本当に削除する" : "削除"}</button>
+      </div>`).join("") || `<div class="empty">まだありません。</div>`}</div>
+  </section>
+  <section class="block">
+    <div class="blockhead"><h2>固定費</h2><span class="num">${yen(fixTotal())} / 月</span></div>
+    <div class="fixlist">${(s.fixedItems || []).map((f, i) => `<div class="fixrow">
+      <input type="text" id="sf-n-${i}" data-fix="${i}" data-field="name" value="${esc(f.name)}" placeholder="名前" aria-label="名前">
+      <input type="text" inputmode="decimal" id="sf-a-${i}" data-fix="${i}" data-field="amount" value="${esc(f.amount)}" placeholder="円" aria-label="金額">
+      <button type="button" class="ghost" data-act="delFix" data-i="${i}" aria-label="削除">×</button></div>`).join("")}
+      <button type="button" data-act="addFix">＋ 固定費を追加</button></div>
+  </section>
+  <section class="block">
+    <h2>毎月のお金</h2>
+    <div class="grid2">
+      <label class="f">毎月の貯金額（期限つきの目標がないとき）<input type="text" inputmode="decimal" min="0" step="1000" id="sSave" data-set="saving" value="${esc(s.saving || "")}" placeholder="0"></label>
+      <label class="f">時間換算に使う勤務先<select id="sRate" data-set="rateJob"><option value="">自動</option>${hourly.map(j => `<option value="${esc(j.id)}" ${s.rateJob === j.id ? "selected" : ""}>${esc(j.name)}</option>`).join("")}</select></label>
+    </div>
+  </section>
+  <section class="block">
+    <h2>年収の壁</h2>
+    <div class="grid2">
+      <label class="f">目安にする上限（円）<input type="text" inputmode="decimal" min="0" step="10000" id="sWall" data-set="wall" value="${esc(s.wall)}"></label>
+      <label class="f">アプリ外の今年の収入<input type="text" inputmode="decimal" min="0" step="1000" id="sOther" data-set="otherIncome" value="${esc(s.otherIncome || "")}" placeholder="0"></label>
+    </div>
+    <label class="inline"><input type="checkbox" id="sWallTr" data-set="wallTransport" ${s.wallTransport ? "checked" : ""}> 年収の壁に交通費も含める（社会保険の130万円で判定するときはオン）</label>
+    <div class="small muted">初期値の150万円は、19〜22歳の学生が親の扶養（特定親族特別控除）から外れ始める目安です。2025年の税制改正で基準が変わっているので、親の勤務先の扶養手当や社会保険（130万円など）の条件も確認してください。</div>
+  </section>
+  <section class="block">
+    <h2>データ</h2>
+    <div class="small muted">データはこの端末のブラウザにだけ保存されています。ブラウザの履歴やサイトデータを消すと、入力内容も消えます。</div>
+    <div class="dayform"><button type="button" data-onb="restart">${S.confirmDel === "restart" ? "本当にやり直す" : "初期設定をやり直す"}</button>
+      <button type="button" class="ghost" data-onb="wipe">${S.confirmDel === "wipe" ? "本当にすべて消す" : "すべてのデータを消す"}</button></div>
+  </section>`;
+}
+
+/* ---------- AI ---------- */
+async function askAI(){
+  if (!sample || S.aiBusy) return;
+  const x = summary(S.y, S.m); const rj = rateJob();
+  const lines = x.evs.map(e => `- ${e.ymd} ${e.title}：予算 ${e.doc.budget ?? "未設定"} 円 / 実績 ${e.doc.actual ?? "未入力"} 円${e.doc.memo ? " / メモ：" + e.doc.memo : ""}`).join("\n") || "（行事なし）";
+  const prompt = `あなたは名古屋在住の薬学部2年生の家計アドバイザーです。次の月の収支を見て、行事ごとの具体的なコストカット案を出してください。
+
+対象月：${S.y}年${S.m}月
+この月に使えるお金（前月振込の給料＋試験監督など当月分）：${Math.round(x.income)} 円（${x.mi.confirmedAll && x.mi.anyConfirmed ? "確定" : "一部見込み"}）
+固定費：${x.fixed} 円 / 貯金目標：${x.save} 円
+行事に使える額：${Math.round(x.free)} 円
+行事の予算・出費合計：${Math.round(x.evTotal)} 円（差引 ${Math.round(x.left)} 円）
+${rj ? `基準の時給：${rj.wage} 円（${rj.name}）` : ""}
+行事一覧：
+${lines}
+
+出力ルール：
+- 日本語。見出し記号（#）やMarkdownの太字は使わない。
+- まず1行で「今月は〇〇円の余裕／不足」と結論。
+- 次に行事ごとに「行事名：削り方（節約できる目安額）」を1〜2行。学割、早割、交通手段の変更、事前購入、持参などの現実的な手段に限る。
+- 削らない方がよい出費（体験価値が高い・人間関係）にも一言触れる。
+- 最後に来月に向けたひとことアドバイス。全体で400字程度。
+- 金額が不明な行事は、一般的な相場を「目安」として示し、断定しない。`;
+  S.aiBusy = true; S.ai[x.key] = "考えています…"; render();
+  try {
+    const r = await sample(prompt, {cache:false, onText: ({text}) => { S.ai[x.key] = text; const el = document.getElementById("aiOut"); if (el) el.textContent = text; }});
+    S.ai[x.key] = r.text;
+  } catch(e){
+    if (e && e.code === "not_granted"){ S.ai[x.key] = "AIへの相談が許可されていないため使えません。"; }
+    else if (e && e.code === "rate_limited"){ S.ai[x.key] = "利用が集中しています。しばらくしてからもう一度押してください。"; }
+    else S.ai[x.key] = (e && e.text) || "回答を取得できませんでした（" + ((e && e.code) || "不明") + "）。もう一度押してください。";
+  }
+  S.aiBusy = false; render();
+}
+
+/* ---------- events ---------- */
+function setMonth(dm){
+  let m = S.m + dm, y = S.y; if (m < 1){ m = 12; y--; } if (m > 12){ m = 1; y++; }
+  S.y = y; S.m = m;
+  S.sel = null; if (S.calYear !== y && mcp) fetchCalendar(y, false); else render();
+}
+document.getElementById("prevM").onclick = () => setMonth(-1);
+document.getElementById("nextM").onclick = () => setMonth(1);
+document.querySelector("nav.tabs").addEventListener("click", e => {
+  const b = e.target.closest("button[data-tab]"); if (!b) return;
+  S.tab = b.dataset.tab; try { history.replaceState(null, "", "#" + S.tab); } catch(_){}
+  render();
+});
+
+document.addEventListener("click", e => {
+  const g = e.target.closest("[data-goto]");
+  if (g){ S.tab = g.dataset.goto; render(); window.scrollTo(0, 0); return; }
+  const day = e.target.closest("[data-day]");
+  if (day){ S.sel = day.dataset.day; if (S.form && S.form.editId) S.form = formFor(S.form.job); S.confirmDel = null; render(); return; }
+  const a = e.target.closest("[data-act]"); if (!a) return;
+  const act = a.dataset.act, id = a.dataset.id;
+  if (!["delshift","deljob","delevent","delRec"].includes(act)) S.confirmDel = null;
+  if (act === "reload") fetchCalendar(S.y, true);
+  else if (act === "ai") askAI();
+  else if (act === "include"){ const ev = S.cal.find(v => v.id === id); putDoc("events", id, Object.assign({}, S.events[id] || {}, {included:true, title: ev ? ev.title : "", ymd: ev ? ev.ymd : ""}), `「${esc(ev ? ev.title : "")}」を行事に追加しました`); }
+  else if (act === "delevent"){
+    if (S.confirmDel !== "e:" + id){ S.confirmDel = "e:" + id; render(); return; }
+    S.confirmDel = null;
+    const doc = S.events[id] || {};
+    const recItem = id.startsWith("rc_") ? eventList(S.y, S.m).find(e => e.id === id) : null;
+    const title = doc.title || (recItem && recItem.title) || (S.cal.find(v => v.id === id) || {}).title || "行事";
+    if (recItem){ putDoc("events", id, Object.assign({}, doc, {included:false, recurring:true, title, ymd: recItem.ymd}), `${S.m}月の「${esc(title)}」を外しました`); }
+    else if (doc.manual) putDoc("events", id, null, `「${esc(title)}」を削除しました`);
+    else { const ev = S.cal.find(v => v.id === id); putDoc("events", id, Object.assign({}, doc, {included:false, title, ymd: ev ? ev.ymd : doc.ymd || ""}), `「${esc(title)}」を一覧から削除しました`); }
+  }
+  else if (act === "editshift"){ const r = S.shifts[id]; if (r){ S.form = {editId: id, job: r.job, start: r.start || "", end: r.end || "", breakMin: r.breakMin ?? "", transport: r.transport ?? "", note: r.note || ""}; render(); } }
+  else if (act === "addOther"){ const k = `${S.y}-${pad(S.m)}`, d = clone(S.income[k] || {}); d.others = (d.others || []).concat([{label: "", amount: ""}]); putDoc("income", k, d, "その他の収入の欄を追加しました");
+    setTimeout(() => { const el = document.getElementById("io-l-" + (d.others.length - 1)); if (el) el.focus(); }, 30); }
+  else if (act === "delOther"){ const k = `${S.y}-${pad(S.m)}`, d = clone(S.income[k] || {}); (d.others || []).splice(Number(a.dataset.i), 1); putDoc("income", k, d, "削除しました"); }
+  else if (act === "clearInc"){ const k = a.dataset.key || `${S.y}-${pad(S.m)}`, d = clone(S.income[k] || {}); d.jobs = d.jobs || {}; delete d.jobs[id]; putDoc("income", k, d, "確定額を取り消しました。シフトの見込みに戻します"); }
+  else if (act === "restoreRec"){ const d = Object.assign({}, S.events[id] || {}); delete d.included; putDoc("events", id, d, "戻しました"); }
+  else if (act === "addRec"){ S.settings.recurring = (S.settings.recurring || []).concat([{id: "r" + Date.now().toString(36), title: "", day: 1, budget: ""}]); putSettings("毎月の行事を追加しました。名前と日付を入れてください");
+    setTimeout(() => { const el = document.getElementById("rt-" + (S.settings.recurring.length - 1)); if (el) el.focus(); }, 30); }
+  else if (act === "delRec"){
+    if (S.confirmDel !== "r:" + id){ S.confirmDel = "r:" + id; render(); return; }
+    S.confirmDel = null; S.settings.recurring = (S.settings.recurring || []).filter(r => r.id !== id); putSettings("毎月の行事を削除しました");
+  }
+  else if (act === "fab"){ document.getElementById("sheet").hidden = false; const o = document.querySelector("#sheet .opt"); if (o) o.focus(); }
+  else if (act === "openSaving"){ S.openMore = "saving"; render(); const el = document.getElementById("hBal"); if (el){ el.scrollIntoView({block: "center"}); el.focus(); } }
+  else if (act === "closeSheet"){ document.getElementById("sheet").hidden = true; }
+  else if (act === "quickShift" || act === "quickEvent"){
+    document.getElementById("sheet").hidden = true;
+    S.y = now.y; S.m = now.m;
+    if (act === "quickShift"){ S.tab = "shifts"; S.sel = todayYmd; if (S.form && S.form.editId) S.form = null; }
+    else S.tab = "events";
+    render();
+    const el = document.getElementById(act === "quickShift" ? "fStart" : "mTitle");
+    if (el){ el.scrollIntoView({block: "center"}); el.focus(); }
+  }
+  else if (act === "addFix"){ (S.settings.fixedItems = S.settings.fixedItems || []).push({name: "", amount: ""}); S.settings.fixedCost = fixTotal(); putSettings("固定費の欄を追加しました"); setTimeout(() => { const el = document.getElementById("sf-n-" + (S.settings.fixedItems.length - 1)); if (el) el.focus(); }, 30); }
+  else if (act === "delFix"){ S.settings.fixedItems.splice(Number(a.dataset.i), 1); S.settings.fixedCost = fixTotal(); putSettings("固定費を削除しました"); }
+  else if (act === "syncshift") syncShift(id);
+  else if (act === "syncmonth"){ const ids = allShifts().filter(x => x.ev.y === S.y && x.ev.m === S.m && needsSync(x.rec)).map(x => x.id); syncAll(ids); }
+  else if (act === "cancelEdit"){ S.form = formFor(S.form.job); render(); }
+  else if (act === "delshift"){
+    if (S.confirmDel !== "s:" + id){ S.confirmDel = "s:" + id; render(); return; }
+    S.confirmDel = null; if (S.form && S.form.editId === id) S.form = formFor(S.form.job);
+    const old = S.shifts[id];
+    putDoc("shifts", id, null, "シフトを削除しました");
+    unsyncShift(old);
+  }
+  else if (act === "addjob"){
+    S.settings.jobs.push({id:"j" + Date.now().toString(36), name:"新しい勤務先", payType:"hourly", wage:0, fixedPay:0, night:true, weekendExtra:0, transport:0, cutoff:0, payOffset:1, payDay:25});
+    putSettings("勤務先を追加しました。名前と時給を入れてください");
+    setTimeout(() => { const el = document.getElementById("jn-" + (S.settings.jobs.length - 1)); if (el){ el.focus(); el.select(); } }, 0);
+  }
+  else if (act === "cancelDel"){ render(); }
+  else if (act === "deljob"){
+    if (S.confirmDel !== "j:" + id){ S.confirmDel = "j:" + id; render(); return; }
+    S.confirmDel = null;
+    S.settings.jobs = S.settings.jobs.filter(j => j.id !== id);
+    if (S.settings.rateJob === id) S.settings.rateJob = "";
+    if (S.form && S.form.job === id) S.form = null;
+    for (const [sid, r] of Object.entries(S.shifts)) if (r.job === id){ putDoc("shifts", sid, null, false); unsyncShift(r); }
+    putSettings("勤務先を削除しました");
+  }
+});
+
+document.addEventListener("change", e => {
+  const t = e.target;
+  const val = t.type === "checkbox" ? t.checked : t.value;
+  if (t.dataset.form){
+    if (t.dataset.form === "job" && S.form && !S.form.editId){ S.form = formFor(val); render(); }
+    else if (t.dataset.form === "job"){ S.form.job = val; render(); }
+    return;
+  }
+  if ((t.dataset.ev || t.dataset.set) && t.type !== "checkbox" && t.tagName !== "SELECT" && t.getAttribute("inputmode") === "decimal" && badNum(val)){
+    toast("数字で入力してください", "warn"); return;
+  }
+  if (t.dataset.incJob !== undefined || t.dataset.incOther !== undefined){
+    const k = t.dataset.incKey || `${S.y}-${pad(S.m)}`, d = clone(S.income[k] || {});
+    if (t.dataset.incJob !== undefined){
+      if (badNum(val)){ toast("数字で入力してください", "warn"); return; }
+      d.jobs = d.jobs || {};
+      const j = jobById(t.dataset.incJob);
+      if (val === "") delete d.jobs[t.dataset.incJob]; else d.jobs[t.dataset.incJob] = num(val);
+      putDoc("income", k, d, val === "" ? "確定額を空にしました" : `${Number(k.slice(5))}月振込の${esc(j ? j.name : "")}を ${yen(num(val))} で確定しました`);
+    } else {
+      const i = Number(t.dataset.incOther), f = t.dataset.field; d.others = d.others || [];
+      if (!d.others[i]) return;
+      if (f === "amount" && badNum(val)){ toast("数字で入力してください", "warn"); return; }
+      d.others[i][f] = f === "amount" ? (val === "" ? "" : num(val)) : String(val).trim();
+      putDoc("income", k, d, `${S.m}月の収入を保存しました`);
+    }
+    return;
+  }
+  if (t.dataset.ev){
+    const id = t.dataset.ev, cur = Object.assign({}, S.events[id] || {});
+    const ev = S.cal.find(v => v.id === id);
+    if (ev && !cur.manual){ cur.title = ev.title; cur.ymd = ev.ymd; }
+    if (id.startsWith("rc_")){ const it = eventList(S.y, S.m).find(e => e.id === id); if (it){ cur.title = it.title; cur.ymd = it.ymd; cur.recurring = true; } }
+    const fld = t.dataset.field;
+    if (["budget","actual"].includes(fld) && badNum(val)){ toast("数字で入力してください", "warn"); return; }
+    if (fld === "title" && !String(val).trim()){ toast("行事名を入れてください", "warn"); return; }
+    if (fld === "ymd" && !val) return;
+    cur[fld] = ["memo","title","ymd","group"].includes(fld) ? (fld === "title" || fld === "group" ? String(val).trim() : val) : (val === "" ? "" : num(val));
+    if (fld === "ymd" && !val.startsWith(`${S.y}-${pad(S.m)}`)){ putDoc("events", id, cur, `「${esc(cur.title)}」を${Number(val.slice(5,7))}月${Number(val.slice(8))}日に移しました`); return; }
+    putDoc("events", id, cur, `「${esc(cur.title || "行事")}」を保存しました`);
+  } else if (t.dataset.job){
+    const j = S.settings.jobs[Number(t.dataset.job)], f = t.dataset.field;
+    if (t.type !== "checkbox" && t.tagName !== "SELECT"){ clearTimeout(typingTimer); if (f !== "name" && badNum(val)) return; }
+    j[f] = (t.type === "checkbox" || ["name","payType","calColor","holidayShift"].includes(f)) ? val : num(val);
+    putSettings(`「${esc(j.name)}」を保存しました`);
+  } else if (t.dataset.fix !== undefined){
+    const f = (S.settings.fixedItems || [])[Number(t.dataset.fix)], fld = t.dataset.field; if (!f) return;
+    if (fld === "amount" && badNum(val)){ toast("数字で入力してください", "warn"); return; }
+    f[fld] = fld === "amount" ? (val === "" ? "" : num(val)) : String(val).trim();
+    S.settings.fixedCost = fixTotal();
+    putSettings(`「${esc(f.name || "固定費")}」を保存しました`);
+  } else if (t.dataset.rec !== undefined){
+    const r = (S.settings.recurring || [])[Number(t.dataset.rec)], f = t.dataset.field; if (!r) return;
+    if (!["title","holidayShift"].includes(f) && badNum(val)){ toast("数字で入力してください", "warn"); return; }
+    r[f] = f === "title" ? String(val).trim() : f === "holidayShift" ? val : (val === "" ? "" : num(val));
+    if (f === "day") r.day = Math.min(31, Math.max(1, num(val) || 1));
+    putSettings(`「${esc(r.title || "毎月の行事")}」を保存しました`);
+  } else if (t.dataset.set){
+    const f = t.dataset.set;
+    if (["balance","goalAmount","assumeIncome"].includes(f) && badNum(val)){ toast("数字で入力してください", "warn"); return; }
+    S.settings[f] = t.type === "checkbox" ? val : ["eventColors","rateJob","ignoreTitles","goalMonth"].includes(f) ? val : (["balance","goalAmount","assumeIncome"].includes(f) && val === "" ? "" : num(val));
+    if (f === "balance") S.settings.balanceDate = todayYmd;
+    putSettings("設定を保存しました");
+  }
+});
+let typingTimer = null;
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.dataset.job && t.type !== "checkbox" && t.tagName !== "SELECT"){
+    const i = Number(t.dataset.job), j = S.settings.jobs[i], f = t.dataset.field;
+    if (!j) return;
+    if (f !== "name" && badNum(t.value)){ toast("数字で入力してください（例：1400）", "warn"); return; }
+    j[f] = f === "name" ? t.value : num(t.value);
+    const l = document.getElementById("jl-" + i); if (l) l.textContent = jobLive(i);   // recalculated as you type
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => persistSettings(`「${esc(j.name)}」を保存しました`), 600);
+    return;
+  }
+  if ((t.dataset.set || t.dataset.ev || t.dataset.fix !== undefined || t.dataset.rec !== undefined || t.dataset.incJob !== undefined || t.dataset.incOther !== undefined) && t.type !== "checkbox" && t.tagName !== "SELECT"){
+    clearTimeout(typingTimer);
+    typingTimer = setTimeout(() => t.isConnected && t.dispatchEvent(new Event("change", {bubbles: true})), 700);
+    return;
+  }
+  if (t.dataset.form && S.form && t.dataset.form !== "job"){
+    S.form[t.dataset.form] = t.value;
+    const p = document.getElementById("preview"); if (p) p.textContent = previewText();
+    return;
+  }
+  if (t.dataset.evdraft){ (S.evDraft = S.evDraft || {})[t.dataset.evdraft] = t.value; return; }
+  if (t.id === "candFilter"){
+    S.candFilter = t.value;
+    const pos = t.selectionStart; render();
+    const el = document.getElementById("candFilter"); if (el){ el.focus(); try { el.setSelectionRange(pos, pos); } catch(_){} }
+  }
+});
+document.addEventListener("submit", e => {
+  e.preventDefault();
+  if (e.target.id === "shiftForm"){
+    const f = S.form, job = jobById(f.job);
+    if (!job){ addNotice("warn", "勤務先を選んでください。"); return; }
+    if (job.payType === "hourly" && !(parseHM(f.start) && parseHM(f.end))){ addNotice("warn", "開始と終了の時刻を入れてください。"); return; }
+    const prev = f.editId ? S.shifts[f.editId] || {} : {};
+    const rec = {job: f.job, ymd: S.sel, start: f.start || "", end: f.end || "", breakMin: f.breakMin === "" ? 0 : num(f.breakMin), transport: f.transport === "" || f.transport == null ? "" : num(f.transport), note: (f.note || "").trim(),
+                 calEventId: prev.calEventId || "", calAdopted: !!prev.calAdopted, calSync: prev.calEventId ? "pending" : ""};
+    const id = f.editId || "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+    if (prev.calAdopted && prev.job !== f.job){ rec.calEventId = ""; rec.calAdopted = false; }
+    const msg = (f.editId ? `${S.sel.slice(5).replace("-", "/")} の ${esc(job.name)} を更新しました` : `${S.sel.slice(5).replace("-", "/")} に ${esc(job.name)} を保存しました`) + (S.settings.calSync && mcp ? "。カレンダーに反映しています…" : "");
+    S.form = formFor(f.job);
+    putDoc("shifts", id, rec, msg);
+    if (S.settings.calSync && mcp) syncShift(id, false);
+    return;
+  }
+  if (e.target.id !== "manualForm") return;
+  const title = document.getElementById("mTitle").value.trim(), ymd = document.getElementById("mDate").value, b = document.getElementById("mBudget").value, memo = document.getElementById("mMemo").value.trim(), group = (document.getElementById("mGroup") || {value: ""}).value.trim();
+  if (!title){ toast("行事名を入れてください", "warn"); return; }
+  if (!ymd){ toast("日付を選んでください", "warn"); return; }
+  if (badNum(b)){ toast("予算は数字で入力してください", "warn"); return; }
+  S.evDraft = {title: "", ymd, budget: "", memo: "", group};
+  const where = ymd.startsWith(`${S.y}-${pad(S.m)}`) ? "" : `（${Number(ymd.slice(5,7))}月に入りました）`;
+  putDoc("events", "m" + Date.now().toString(36), {manual:true, included:true, title, ymd, budget: b === "" ? "" : num(b), memo, group}, `「${esc(title)}」を追加しました${where}`);
+});
+
+/* ---------- onboarding ---------- */
+const ONB_STEPS = ["ようこそ", "バイト先", "貯金目標", "固定費", "完了"];
+const FIX_PRESETS = [["スマホ代", 3000], ["サブスク", 1000], ["定期・交通費", 5000], ["家賃", 40000], ["ジム・習い事", 3000], ["部費・サークル費", 2000]];
+const newJob = () => ({id: "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: "", payType: "hourly", wage: "", fixedPay: "", night: true, weekendExtra: 0, transport: "", cutoff: 0, payOffset: 1, payDay: 25, holidayShift: "prev", useLag: 1, calColor: "6"});
+const fixTotal = () => (S.settings.fixedItems || []).reduce((a, f) => a + num(f.amount), 0);
+function persist(){ S.settings.fixedCost = fixTotal(); saveLocal(); }
+function onbGoalPreview(){
+  const p = savingPlan();
+  if (!p) return "目標額と期限を入れると、毎月いくら貯めればいいか計算します";
+  if (!p.need) return "もう目標額に届いています！";
+  return `あと ${yen(p.need)}。${Number(p.gm.slice(0, 4))}年${Number(p.gm.slice(5))}月まで${p.left}か月なので、毎月 ${yen(p.perMonth)} 貯めればOK`;
+}
+const PAY_PRESETS = [
+  {l: "月末締め・翌月25日", c: 0, o: 1, d: 25},
+  {l: "15日締め・当月25日", c: 15, o: 0, d: 25},
+  {l: "20日締め・翌月10日", c: 20, o: 1, d: 10},
+  {l: "月末締め・翌月末日", c: 0, o: 1, d: 0}
+];
+const presetOf = j => PAY_PRESETS.findIndex(p => p.c === num(j.cutoff) && p.o === num(j.payOffset) && p.d === num(j.payDay));
+function viewOnboarding(){
+  const st = S.settings, step = S.onbStep || 0;
+  S.onbCustom = S.onbCustom || {};
+  const top = step >= 1 && step <= 3 ? `<div class="otop">
+      <button type="button" class="oback" data-onb="back" aria-label="もどる">‹</button>
+      <div class="oprog" aria-hidden="true">${[1, 2, 3].map(i => `<span class="${i <= step ? "on" : ""}"></span>`).join("")}</div>
+      <span class="ocount">${step}/3</span></div>` : "";
+  const cta = (label, skip) => `<div class="octa"><button type="button" class="primary big" data-onb="next">${label}</button>${skip ? `<button type="button" class="skip" data-onb="next">あとで設定する</button>` : ""}</div>`;
+  let body = "";
+  if (step === 0) body = `
+    <div class="ohero">
+      <div class="logo">シフポケ</div>
+      <p class="olead">シフトを入れるだけで、バイト代を自動で計算。<br>今月いくら使えて、いくら貯まるかがひと目でわかります。</p>
+      <ul class="ofeat"><li><b>給料を自動計算</b>深夜割増・交通費・休日の振込ずれまで</li><li><b>行事ごとに予算</b>旅行やライブの出費を先回りで</li><li><b>貯金目標から逆算</b>毎月自由に使えるお金がわかる</li><li><b>実績を集める</b>月5万・年間100万…メダルで記録</li></ul>
+      <p class="small muted">ログイン不要。入力したデータはこの端末のブラウザにだけ保存されます。設定は1分ほどで終わります。</p>
+    </div>${cta("はじめる")}`;
+  if (step === 1){
+    const jobs = st.jobs.length ? st.jobs : (st.jobs = [newJob()]);
+    body = `<div class="ostep-h"><h2 class="oh">どこで<br>バイトしてる？</h2><p class="osub">給料の計算に使います。深夜割増などの細かい設定はあとで変えられます。</p></div>
+      ${jobs.map((j, i) => {
+        const pi = presetOf(j), custom = S.onbCustom[i] || pi < 0;
+        return `<div class="ocard">
+        <div class="ocard-h"><span class="jdot" style="--jc:var(--j${i % 5})"></span><b>${jobs.length > 1 ? `バイト先 ${i + 1}` : "バイト先"}</b>${jobs.length > 1 ? `<button type="button" class="ghost" data-onb="deljob" data-i="${i}">削除</button>` : ""}</div>
+        <label class="f">名前<input type="text" id="oj-n-${i}" data-o="jobs.${i}.name" value="${esc(j.name)}" placeholder="例：カフェ、塾講師、コンビニ"></label>
+        <div class="seg" role="group" aria-label="給料の形">
+          <button type="button" data-onb="ptype" data-i="${i}" data-v="hourly" aria-pressed="${j.payType === "hourly"}">時給</button>
+          <button type="button" data-onb="ptype" data-i="${i}" data-v="fixed" aria-pressed="${j.payType === "fixed"}">1回いくら</button>
+        </div>
+        <div class="grid2">
+          ${j.payType === "hourly" ? `<label class="f">時給<input type="text" inputmode="decimal" id="oj-w-${i}" data-o="jobs.${i}.wage" value="${esc(j.wage)}" placeholder="例：1100"></label>`
+            : `<label class="f">1回の金額<input type="text" inputmode="decimal" id="oj-f-${i}" data-o="jobs.${i}.fixedPay" value="${esc(j.fixedPay)}" placeholder="例：8000"></label>`}
+          <label class="f">交通費（1回）<input type="text" inputmode="decimal" id="oj-c-${i}" data-o="jobs.${i}.transport" value="${esc(j.transport)}" placeholder="なし"></label>
+        </div>
+        <div class="f">給料日
+          <div class="opay">${PAY_PRESETS.map((p, k) => `<button type="button" data-onb="paypreset" data-i="${i}" data-p="${k}" aria-pressed="${!custom && pi === k}">${p.l}</button>`).join("")}
+            <button type="button" data-onb="paycustom" data-i="${i}" aria-pressed="${custom}">ほかの日にち</button></div>
+        </div>
+        ${custom ? `<div class="grid2">
+          <label class="f">締め日<select id="oj-x-${i}" data-o="jobs.${i}.cutoff">${[[0, "月末"], [5, "5日"], [10, "10日"], [15, "15日"], [20, "20日"], [25, "25日"]].map(([v, n]) => `<option value="${v}" ${num(j.cutoff) === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+          <label class="f">給料が出る月<select id="oj-o-${i}" data-o="jobs.${i}.payOffset"><option value="0" ${num(j.payOffset) === 0 ? "selected" : ""}>締めた月</option><option value="1" ${num(j.payOffset) === 1 ? "selected" : ""}>翌月</option><option value="2" ${num(j.payOffset) === 2 ? "selected" : ""}>翌々月</option></select></label>
+          <label class="f">給料日<select id="oj-d-${i}" data-o="jobs.${i}.payDay">${[1, 5, 10, 15, 20, 25, 0].map(v => `<option value="${v}" ${num(j.payDay) === v ? "selected" : ""}>${v ? v + "日" : "末日"}</option>`).join("")}</select></label>
+        </div>` : ""}
+      </div>`; }).join("")}
+      <button type="button" class="ghost" style="align-self:flex-start;color:var(--accent);font-weight:900" data-onb="addjob">＋ バイト先をもう1つ追加</button>
+      ${cta("つぎへ", true)}`;
+  }
+  if (step === 2) body = `<div class="ostep-h"><h2 class="oh">貯金の目標は？</h2><p class="osub">今の残高と目標から、毎月貯める額と「自由に使えるお金」を出します。</p></div>
+      <div class="ocard"><div class="grid2">
+        <label class="f">今の口座残高<input type="text" inputmode="decimal" id="og-b" data-o="balance" value="${esc(st.balance ?? "")}" placeholder="例：50000"></label>
+        <label class="f">貯金目標額<input type="text" inputmode="decimal" id="og-g" data-o="goalAmount" value="${esc(st.goalAmount ?? "")}" placeholder="例：200000"></label>
+        <label class="f" style="grid-column:1 / -1">いつまでに<input type="month" id="og-m" data-o="goalMonth" value="${esc(st.goalMonth || "")}"></label>
+      </div></div>
+      <div class="opreview" id="onbGoal">${esc(onbGoalPreview())}</div>
+      ${cta("つぎへ", true)}`;
+  if (step === 3){
+    const items = st.fixedItems || (st.fixedItems = []);
+    const card = (st.recurring || []).find(r => r.id === "card");
+    body = `<div class="ostep-h"><h2 class="oh">毎月かならず<br>出ていくお金は？</h2><p class="osub">タップで追加して、金額を自分の額に直してください。</p></div>
+      <div class="chips">${FIX_PRESETS.map(([n, a]) => `<button type="button" class="pchip ${items.some(f => f.name === n) ? "on" : ""}" data-onb="preset" data-name="${n}" data-amount="${a}" aria-pressed="${items.some(f => f.name === n)}">${items.some(f => f.name === n) ? "✓ " : "＋ "}${n}</button>`).join("")}</div>
+      ${items.length ? `<div class="ocard"><div class="fixlist">${items.map((f, i) => `<div class="fixrow">
+          <input type="text" id="of-n-${i}" data-o="fixedItems.${i}.name" value="${esc(f.name)}" placeholder="名前" aria-label="名前">
+          <input type="text" inputmode="decimal" id="of-a-${i}" data-o="fixedItems.${i}.amount" value="${esc(f.amount)}" placeholder="円" aria-label="金額">
+          <button type="button" class="ghost" data-onb="delfix" data-i="${i}" aria-label="${esc(f.name || "固定費")}を削除">×</button></div>`).join("")}</div></div>` : ""}
+      <button type="button" class="ghost" style="align-self:flex-start;color:var(--accent);font-weight:900" data-onb="addfix">＋ ほかの固定費</button>
+      <div class="opreview">固定費の合計 <b id="onbFix">${yen(fixTotal())}</b> / 月</div>
+      <label class="choice ${card ? "sel" : ""}"><input type="checkbox" data-onb-card="1" ${card ? "checked" : ""}><span class="ct">クレジットカードの引き落としも管理する</span><span class="cd">毎月の引き落とし日に出費として入ります。金額は毎月入力します。</span></label>
+      ${card ? `<div class="grid2"><label class="f">引き落とし日<select id="oc-d" data-o="card.day">${Array.from({length: 28}, (_, i) => i + 1).map(v => `<option value="${v}" ${num(card.day) === v ? "selected" : ""}>${v}日</option>`).join("")}</select></label>
+        <label class="f">土日祝のとき<select id="oc-h" data-o="card.holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(card.holidayShift || "next") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label></div>` : ""}
+      ${cta("つぎへ")}`;
+  }
+  if (step === 4){
+    const p = savingPlan(), jobs = st.jobs.filter(j => j.name);
+    body = `<div class="ohero">
+      <div class="logo small">準備OK！</div>
+      <ul class="osum">
+        <li><span>バイト先</span><b>${jobs.length ? jobs.map(j => esc(j.name)).join("、") : "あとで登録"}</b></li>
+        <li><span>貯金</span><b>${p ? `毎月 ${yen(p.perMonth)}（${Number(p.gm.slice(5))}月までに ${yen(p.goal)}）` : "あとで設定"}</b></li>
+        <li><span>固定費</span><b>${yen(fixTotal())} / 月</b></li>
+      </ul>
+      <p class="small muted">まずは下の「＋」から、働いた日のシフトを入れてみましょう。</p>
+    </div>${cta("シフポケをはじめる")}`;
+  }
+  return `<div class="onb">${top}<div class="ostep">${body}</div></div>`;
+}
+function setPath(path, val){
+  const parts = path.split(".");
+  if (parts[0] === "card"){ const c = (S.settings.recurring || []).find(r => r.id === "card"); if (c) c[parts[1]] = parts[1] === "day" ? num(val) : val; return; }
+  let o = S.settings;
+  for (let i = 0; i < parts.length - 1; i++) o = o[isNaN(parts[i]) ? parts[i] : Number(parts[i])];
+  const k = parts[parts.length - 1];
+  const numeric = ["wage", "fixedPay", "transport", "amount", "balance", "goalAmount"];
+  o[k] = numeric.includes(k) ? (val === "" ? "" : num(val)) : ["cutoff", "payOffset", "payDay"].includes(k) ? num(val) : val;
+}
+document.addEventListener("input", e => {
+  const t = e.target; if (!t.dataset.o || S.settings.onboarded) return;
+  if (t.type === "radio" || t.tagName === "SELECT") return;
+  if (t.getAttribute("inputmode") === "decimal" && badNum(t.value)){ toast("数字で入力してください", "warn"); return; }
+  setPath(t.dataset.o, t.value); persist();
+  const g = document.getElementById("onbGoal"); if (g) g.textContent = onbGoalPreview();
+  const f = document.getElementById("onbFix"); if (f) f.textContent = yen(fixTotal());
+}, true);
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (t.dataset.onbCard){
+    S.settings.recurring = (S.settings.recurring || []).filter(r => r.id !== "card");
+    if (t.checked) S.settings.recurring.push({id: "card", title: "クレジットカード引き落とし", day: 10, budget: "", holidayShift: "next"});
+    persist(); render(); return;
+  }
+  if (!t.dataset.o || S.settings.onboarded) return;
+  if (t.type === "radio" || t.tagName === "SELECT" || t.type === "month"){ setPath(t.dataset.o, t.value); persist(); render(); }
+}, true);
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-onb]"); if (!b) return;
+  const a = b.dataset.onb, st = S.settings;
+  if (a === "next"){
+    if (S.onbStep === 1) st.jobs = st.jobs.filter(j => String(j.name).trim());
+    if (S.onbStep === 3) st.fixedItems = (st.fixedItems || []).filter(f => String(f.name).trim() || num(f.amount));
+    if (S.onbStep >= ONB_STEPS.length - 1){ st.onboarded = true; S.tab = "home"; persist(); render(); toast("ようこそ、シフポケへ！"); window.scrollTo(0, 0); return; }
+    S.onbStep = (S.onbStep || 0) + 1;
+  }
+  else if (a === "back") S.onbStep = Math.max(0, (S.onbStep || 0) - 1);
+  else if (a === "addjob") st.jobs.push(newJob());
+  else if (a === "ptype") st.jobs[Number(b.dataset.i)].payType = b.dataset.v;
+  else if (a === "paypreset"){ const j = st.jobs[Number(b.dataset.i)], pp = PAY_PRESETS[Number(b.dataset.p)]; j.cutoff = pp.c; j.payOffset = pp.o; j.payDay = pp.d; S.onbCustom[b.dataset.i] = false; }
+  else if (a === "paycustom") S.onbCustom[b.dataset.i] = true;
+  else if (a === "deljob") st.jobs.splice(Number(b.dataset.i), 1);
+  else if (a === "preset"){
+    const items = st.fixedItems || (st.fixedItems = []), n = b.dataset.name, i = items.findIndex(f => f.name === n);
+    if (i >= 0) items.splice(i, 1); else items.push({name: n, amount: num(b.dataset.amount)});
+  }
+  else if (a === "addfix"){ (st.fixedItems = st.fixedItems || []).push({name: "", amount: ""}); persist(); render(); const el = document.getElementById("of-n-" + (st.fixedItems.length - 1)); if (el) el.focus(); return; }
+  else if (a === "delfix") st.fixedItems.splice(Number(b.dataset.i), 1);
+  else if (a === "restart"){ if (S.confirmDel !== "restart"){ S.confirmDel = "restart"; render(); return; } S.confirmDel = null; st.onboarded = false; S.onbStep = 1; }
+  else if (a === "wipe"){
+    if (S.confirmDel !== "wipe"){ S.confirmDel = "wipe"; render(); return; }
+    try { localStorage.removeItem(LS); } catch(_){}
+    S.confirmDel = null; S.settings = clone(DEFAULTS); S.shifts = {}; S.events = {}; S.income = {}; S.ach = {}; S.onbStep = 0;
+    render(); toast("データを消しました"); return;
+  }
+  persist(); render(); if (a === "next" || a === "back" || a === "restart") window.scrollTo(0, 0);
+});
+
+/* ---------- boot ---------- */
+loadLocal();
+Object.keys(S.ready).forEach(k => { S.ready[k] = true; });
+S.calState = "off";
+render();
+})();
+</script>
+</body>
+</html>

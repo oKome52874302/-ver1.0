@@ -1,0 +1,17 @@
+{
+  "name": "シフポケ",
+  "short_name": "シフポケ",
+  "description": "シフトを入れるだけでバイト代を自動計算。今月いくら使えて、いくら貯まるかがひと目でわかる。",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F2F5EF",
+  "theme_color": "#12795F",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
