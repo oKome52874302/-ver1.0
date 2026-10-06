@@ -421,6 +421,7 @@ details.more section.block{padding:0;background:none}
 .ocard{border:none;border-radius:20px;padding:16px;gap:14px}
 .ocard-h b{font-size:.9rem}
 .seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:var(--bg);padding:4px;border-radius:14px}
+#monthLabel.range{font-size:15px;white-space:nowrap}
 .persona{display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
 .persona .pk{font-size:13px;font-weight:900;color:var(--muted)}
 .persona button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border:2px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);text-align:left}
@@ -526,6 +527,7 @@ const DEFAULTS = {
   wallCustom: "",
   wall: 1500000,        // legacy single wall, migrated to wallCustom
   otherIncome: 0,
+  monthStart: 1,        // 月の区切り: a "month" runs from this day to the day before it next month
   rateJob: ""
 };
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -717,6 +719,24 @@ function bizAdjust(y, m, d, mode){
 const SHIFT_OPTS = [["prev", "前営業日にずらす"], ["next", "翌営業日にずらす"], ["none", "ずらさない"]];
 const movedNote = p => p && p.moved ? `（${p.from.m}/${p.from.d}が${p.reason}のため${p.y * 10000 + p.m * 100 + p.d < p.from.y * 10000 + p.from.m * 100 + p.from.d ? "前倒し" : "後ろ倒し"}）` : "";
 
+/* ---------- 月の区切り ----------
+   With monthStart D (1–28), "October" means 10/D – 11/(D-1); D = 1 is the plain calendar month.
+   Budgets, events, usable money and paydays all use these periods; the yearly walls stay on the calendar year. */
+const startDay = () => Math.min(28, Math.max(1, num(S.settings.monthStart) || 1));
+function periodOf(y, m, d){ return d >= startDay() ? [y, m] : addMonths(y, m, -1); }
+const periodKeyOf = (y, m, d) => { const [py, pm] = periodOf(y, m, d); return `${py}-${pad(pm)}`; };
+function periodRange(y, m){
+  const D = startDay(), [ny, nm] = addMonths(y, m, 1), e = new Date(Date.UTC(ny, nm - 1, D - 1));
+  return {start: `${y}-${pad(m)}-${pad(D)}`, end: `${e.getUTCFullYear()}-${pad(e.getUTCMonth() + 1)}-${pad(e.getUTCDate())}`};
+}
+const inPeriod = (ymd, y, m) => { const r = periodRange(y, m); return !!ymd && ymd >= r.start && ymd <= r.end; };
+const md = ymd => `${Number(ymd.slice(5, 7))}/${Number(ymd.slice(8, 10))}`;
+// a payday moved off a weekend/holiday still belongs to the period of its scheduled date (10/25 paid early on 10/23 is still "the 10/25 pay")
+const schedKey = a => a.moved && a.from ? periodKeyOf(a.from.y, a.from.m, a.from.d) : periodKeyOf(a.y, a.m, a.d);
+// what a period is called: with a late start day (e.g. 25日〜翌月24日) most of its days are in the next month, so it takes that name
+const mName = (y = S.y, m = S.m) => `${startDay() > 15 ? addMonths(y, m, 1)[1] : m}月`;
+const periodLabel = (y, m) => { const r = periodRange(y, m); return startDay() === 1 ? `${m}月` : `${md(r.start)}〜${md(r.end)}`; };
+
 /* A job is paid on one or two cycles: [{cutoff (0 = month end), payOffset (months after the cutoff), payDay (0 = last day)}] */
 function cyclesOf(job){
   const cs = Array.isArray(job.cycles) && job.cycles.length ? job.cycles : [{cutoff: job.cutoff, payOffset: job.payOffset, payDay: job.payDay}];
@@ -735,7 +755,7 @@ function payday(ev, job){
     else { const dow = new Date(t).getUTCDay(), wd = hasVal(job.payWeekday) ? num(job.payWeekday) : 5; t += ((7 - dow) % 7 + (wd === 0 ? 7 : wd)) * 864e5; }
     const x = new Date(t), a = freq === "daily" && !num(job.dailyLag) ? {y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate(), moved: false}
       : bizAdjust(x.getUTCFullYear(), x.getUTCMonth() + 1, x.getUTCDate(), job.holidayShift || "prev");
-    return {y: a.y, m: a.m, d: a.d, key: `${a.y}-${pad(a.m)}`, moved: a.moved, reason: a.reason, from: a.from};
+    return {y: a.y, m: a.m, d: a.d, key: schedKey(a), moved: a.moved, reason: a.reason, from: a.from};
   }
   const lastOf = (yy, mm) => new Date(Date.UTC(yy, mm, 0)).getUTCDate();
   const cs = cyclesOf(job).map(c => Object.assign(c, {cut: c.cutoff > 0 ? c.cutoff : 31})).sort((a, b) => a.cut - b.cut);
@@ -747,7 +767,7 @@ function payday(ev, job){
   const last = lastOf(y, m);
   const d = c.payDay > 0 ? Math.min(c.payDay, last) : last;
   const a = bizAdjust(y, m, d, job.holidayShift || "prev");
-  return {y: a.y, m: a.m, d: a.d, key: `${a.y}-${pad(a.m)}`, moved: a.moved, reason: a.reason, from: a.from};
+  return {y: a.y, m: a.m, d: a.d, key: schedKey(a), moved: a.moved, reason: a.reason, from: a.from};
 }
 const parseHM = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); return m ? [Number(m[1]), Number(m[2])] : null; };
 /* r = {job, ymd, start, end, breakMin} — the same shape is used for saved shifts and for the live form preview */
@@ -888,33 +908,38 @@ const needsSync = r => r.calSync !== "ok";
 
 /* ---------- events ---------- */
 function excludedRecurring(y, m){
-  return (S.settings.recurring || []).filter(r => (S.events[`rc_${r.id}_${y}${pad(m)}`] || {}).included === false);
+  // the scheduled month of a rule can differ from the period label when months start mid-month
+  return (S.settings.recurring || []).filter(r => [-1, 0, 1, 2].some(off => {
+    const [by, bm] = addMonths(y, m, off), blast = new Date(Date.UTC(by, bm, 0)).getUTCDate();
+    const a = bizAdjust(by, bm, Math.min(Math.max(1, num(r.day) || 1), blast), r.holidayShift || "next");
+    return inPeriod(`${a.y}-${pad(a.m)}-${pad(a.d)}`, y, m) && (S.events[`rc_${r.id}_${by}${pad(bm)}`] || {}).included === false;
+  })).map(r => Object.assign({}, r, {key: [-1, 0, 1, 2].map(off => addMonths(y, m, off)).map(([by, bm]) => `${by}${pad(bm)}`).find(k => (S.events[`rc_${r.id}_${k}`] || {}).included === false)}));
 }
 function eventList(y, m){
   const colors = String(S.settings.eventColors || "").split(/[,、\s]+/).filter(Boolean);
   const out = [];
   for (const ev of S.cal){
-    if (ev.y !== y || ev.m !== m || ignored(ev)) continue;
+    if (!inPeriod(ev.ymd, y, m) || ignored(ev)) continue;
     const doc = S.events[ev.id];
     const inc = doc && doc.included != null ? doc.included : colors.includes(ev.colorId);
     if (inc) out.push({id: ev.id, title: ev.title, ymd: ev.ymd, d: ev.d, dow: ev.dow, time: ev.allDay ? "終日" : hm(ev.s), doc: doc || {}, cal: true});
   }
   for (const r of (S.settings.recurring || [])){
-    for (const off of [-1, 0, 1]){
+    for (const off of [-1, 0, 1, 2]){
       const [by, bm] = addMonths(y, m, off), blast = new Date(Date.UTC(by, bm, 0)).getUTCDate();
       const a = bizAdjust(by, bm, Math.min(Math.max(1, num(r.day) || 1), blast), r.holidayShift || "next");
-      if (a.y !== y || a.m !== m) continue;
+      if (!inPeriod(`${a.y}-${pad(a.m)}-${pad(a.d)}`, y, m)) continue;
       const id = `rc_${r.id}_${by}${pad(bm)}`, doc = S.events[id] || {};   // the id stays on the scheduled month
       if (doc.included === false) continue;
       const merged = Object.assign({}, doc);
       if (!hasVal(merged.budget) && hasVal(r.budget)) merged.budget = num(r.budget);   // the monthly default until this month's amount is entered
-      out.push({id, title: r.title || "毎月の行事", ymd: `${y}-${pad(m)}-${pad(a.d)}`, d: a.d, dow: new Date(Date.UTC(y, m - 1, a.d)).getUTCDay(), time: "毎月", doc: merged, cal: false, rec: r, moved: a});
+      out.push({id, title: r.title || "毎月の行事", ymd: `${a.y}-${pad(a.m)}-${pad(a.d)}`, d: a.d, dow: new Date(Date.UTC(a.y, a.m - 1, a.d)).getUTCDay(), time: "毎月", doc: merged, cal: false, rec: r, moved: a});
     }
   }
   for (const [id, doc] of Object.entries(S.events)){
     if (!doc.manual || !doc.ymd) continue;
     const [yy, mm, dd] = doc.ymd.split("-").map(Number);
-    if (yy === y && mm === m) out.push({id, title: doc.title || "（無題）", ymd: doc.ymd, d: dd, dow: new Date(Date.UTC(yy, mm-1, dd)).getUTCDay(), time: "手動", doc, cal: false});
+    if (inPeriod(doc.ymd, y, m)) out.push({id, title: doc.title || "（無題）", ymd: doc.ymd, d: dd, dow: new Date(Date.UTC(yy, mm-1, dd)).getUTCDay(), time: "手動", doc, cal: false});
   }
   return out.sort((a, b) => a.ymd.localeCompare(b.ymd));
 }
@@ -981,14 +1006,23 @@ function monthIncome(y, m, shifts){
     const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
     // several payouts a month: show the next one still to come, else the last one
     const nextPd = pds.length ? (xs.find(s => ymdOf(s.pd) === (pds.find(k => k >= todayYmd) || pds[pds.length - 1])) || xs[0]).pd : null;
-    const pd = freq !== "monthly" ? (nextPd || {y, m, d: last, key, moved: false}) : xs[0] ? xs[0].pd : (() => { const a = bizAdjust(y, m, num(j.payDay) > 0 ? Math.min(num(j.payDay), last) : last, j.holidayShift || "prev"); return Object.assign(a, {key: `${a.y}-${pad(a.m)}`}); })();
+    const pd = freq !== "monthly" ? (nextPd || {y, m, d: last, key, moved: false}) : xs[0] ? xs[0].pd : (() => {
+      // the job's payday that falls inside this period (this calendar month or the next one)
+      let a = null;
+      for (const off of [0, 1]){
+        const [cy, cm] = addMonths(y, m, off), cl = new Date(Date.UTC(cy, cm, 0)).getUTCDate();
+        const sd = num(j.payDay) > 0 ? Math.min(num(j.payDay), cl) : cl, b = bizAdjust(cy, cm, sd, j.holidayShift || "prev");
+        if (!a || inPeriod(`${cy}-${pad(cm)}-${pad(sd)}`, y, m)){ a = b; if (inPeriod(`${cy}-${pad(cm)}-${pad(sd)}`, y, m)) break; }
+      }
+      return Object.assign(a, {key}); })();
     return {job: j, freq, payouts: pds.length, fee, sal, ot, bonus, n: xs.length, hours: xs.reduce((a, s) => a + s.paid, 0), est, tr, confirmed, conf: confirmed ? num(conf[j.id]) : null, used: confirmed ? num(conf[j.id]) : est, pd};
   });
   const others = Array.isArray(doc.others) ? doc.others : [];
   const othersTotal = others.reduce((a, o) => a + num(o.amount), 0);
+  const othersWork = others.filter(o => !isGift(o)).reduce((a, o) => a + num(o.amount), 0);   // only income that counts as 所得
   const total = rows.reduce((a, r) => a + r.used, 0) + othersTotal;
   const estTr = rows.filter(r => !r.confirmed).reduce((a, r) => a + r.tr, 0);
-  return {key, doc, rows, others, othersTotal, total, estTr, payIn,
+  return {key, doc, rows, others, othersTotal, othersWork, total, estTr, payIn,
           confirmedAll: rows.every(r => r.confirmed || !r.est), anyConfirmed: rows.some(r => r.confirmed) || others.length > 0};
 }
 const lagOf = j => hasVal(j.useLag) ? num(j.useLag) : 1;
@@ -1011,8 +1045,14 @@ function budgetIncome(y, m, shifts){
           estTr: rows.filter(r => !r.confirmed).reduce((a, r) => a + r.tr, 0),
           confirmedAll: rows.every(r => r.confirmed || !r.est), anyConfirmed: rows.some(r => r.confirmed) || others.length > 0};
 }
+/* お年玉・お小遣い・仕送り are not 所得: usable money, but not part of the yearly income for the walls or "earned" medals */
+const GIFT_RE = /お年玉|小遣|仕送|贈与|プレゼント|お祝|祝い金|ご祝儀|もらった|返金|払い戻し|キャッシュバック/;
+const isGift = o => o.kind ? o.kind === "gift" : GIFT_RE.test(String(o.label || ""));
+
 /* ---------- savings plan ---------- */
-const todayKey = `${now.y}-${pad(now.m)}`, todayYmd = `${now.y}-${pad(now.m)}-${pad(now.d)}`;
+const todayYmd = `${now.y}-${pad(now.m)}-${pad(now.d)}`;
+let todayKey = `${now.y}-${pad(now.m)}`;   // the current period; recomputed once settings are loaded
+function refreshToday(){ const [y, m] = periodOf(now.y, now.m, now.d); todayKey = `${y}-${pad(m)}`; return [y, m]; }
 const keyAdd = (k, n) => { const [y, m] = addMonths(Number(k.slice(0, 4)), Number(k.slice(5, 7)), n); return `${y}-${pad(m)}`; };
 const monthsBetween = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
 function savingPlan(src){
@@ -1057,7 +1097,7 @@ function stats(){
   for (const k of keys){
     if (k > todayKey) continue;
     const mi = monthIncome(Number(k.slice(0, 4)), Number(k.slice(5, 7)), all);
-    monthly[k] = mi.rows.reduce((a, r) => a + (r.confirmed ? r.conf : `${r.pd.y}-${pad(r.pd.m)}-${pad(r.pd.d)}` <= todayYmd ? r.est : 0), 0) + mi.othersTotal;
+    monthly[k] = mi.rows.reduce((a, r) => a + (r.confirmed ? r.conf : `${r.pd.y}-${pad(r.pd.m)}-${pad(r.pd.d)}` <= todayYmd ? r.est : 0), 0) + mi.othersWork;
   }
   const vals = Object.values(monthly);
   const byDay = {}, jobsByMonth = {};
@@ -1067,7 +1107,7 @@ function stats(){
   const saved = settled.reduce((a, d) => a + Math.max(0, num(d.budget) - num(d.actual)), 0);
   const exact = settled.filter(d => num(d.actual) <= num(d.budget) && num(d.budget) - num(d.actual) <= Math.max(100, num(d.budget) * 0.03)).length;
   // finished months (before this one) that ended with money left over; longest streak in a row
-  const mkeys = new Set([...Object.keys(S.income), ...all.map(x => x.pd.key), ...Object.values(S.events).map(d => String(d.ymd || "").slice(0, 7))].filter(k => /^\d{4}-\d{2}$/.test(k) && k < todayKey));
+  const mkeys = new Set([...Object.keys(S.income), ...all.map(x => x.pd.key), ...Object.values(S.events).filter(d => /^\d{4}-\d{2}-\d{2}/.test(d.ymd || "")).map(d => periodKeyOf(...d.ymd.slice(0, 10).split("-").map(Number)))].filter(k => /^\d{4}-\d{2}$/.test(k) && k < todayKey));
   let black = 0, streak = 0, best = 0, perfect = 0;
   if (mkeys.size){
     const first = [...mkeys].sort()[0];
@@ -1308,10 +1348,15 @@ function summary(y, m){
   const free = income - fixed - save;
   const left = free - evTotal;
   let yearTr = 0, yearSum = 0;
-  for (let mm = 1; mm <= 12; mm++){ const r = monthIncome(y, mm, shifts); yearSum += r.total; yearTr += r.estTr; }
+  // 年収 = pay that actually arrives Jan 1 – Dec 31 (periods can straddle the new year), plus other income that is 所得
+  for (let i = 0; i <= 12; i++){
+    const [py, pm] = addMonths(y, 0, i), r = monthIncome(py, pm, shifts);
+    for (const row of r.rows) if (row.pd.y === y){ yearSum += row.used; if (!row.confirmed) yearTr += row.tr; }
+    if (py === y) yearSum += r.othersWork;
+  }
   const yearPay = yearSum - yearTr + num(S.settings.otherIncome), yearPayAll = yearSum + num(S.settings.otherIncome);
   const missingRate = payIn.some(s => s.needsRate && !s.excluded && !mi.rows.find(r => r.job.id === s.job.id).confirmed);
-  const worked = shifts.filter(s => s.ev.y === y && s.ev.m === m);
+  const worked = shifts.filter(s => inPeriod(s.ev.ymd, y, m));
   const workedPay = worked.reduce((a, s) => a + s.pay, 0);
   const pds = [...new Set(worked.map(s => `${s.pd.m}/${s.pd.d}`))];
   const workedPd = pds.length === 1 ? `${pds[0]}支給` : pds.length ? `${pds.join("・")}支給` : "";
@@ -1338,7 +1383,9 @@ function renderNotices(){
 
 /* ---------- render ---------- */
 function render(){
-  document.getElementById("monthLabel").textContent = S.y === now.y ? `${S.m}月` : `${S.y}年${S.m}月`;
+  const ml = document.getElementById("monthLabel");
+  ml.textContent = (S.y === now.y ? "" : startDay() === 1 ? `${S.y}年` : `${S.y}/`) + periodLabel(S.y, S.m);
+  ml.classList.toggle("range", startDay() !== 1);
   document.querySelectorAll("nav.tabs button[data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === S.tab)));
   const tt = document.getElementById("screenTitle");
   tt.textContent = {home: "シフポケ", shifts: "シフト", events: "行事・出費", ach: "実績", settings: "設定"}[S.tab] || "シフポケ";
@@ -1371,7 +1418,7 @@ function nextPayday(shifts){
   // so a regular job's payday is not skipped; one-off jobs (e.g. exam proctoring) only show when they have an amount
   let best = null;
   for (let i = 0; i < 4; i++){
-    const [y, m] = addMonths(now.y, now.m, i), [py, pm] = addMonths(y, m, -1), prev = monthIncome(py, pm, shifts).rows;
+    const [y, m] = addMonths(Number(todayKey.slice(0, 4)), Number(todayKey.slice(5, 7)), i), [py, pm] = addMonths(y, m, -1), prev = monthIncome(py, pm, shifts).rows;
     for (const r of monthIncome(y, m, shifts).rows){
       const regular = r.freq === "monthly" && prev.some(q => q.job.id === r.job.id && q.used);
       if (!r.used && !regular) continue;
@@ -1406,7 +1453,8 @@ function viewHome(){
   const otherRows = mi.others.map((o, i) => `
     <div class="row">
       <div class="date">その他</div>
-      <div class="main"><input type="text" class="w-l" id="io-l-${i}" data-inc-other="${i}" data-field="label" value="${esc(o.label || "")}" placeholder="例：単発バイト、お小遣い" aria-label="収入の名前"></div>
+      <div class="main"><input type="text" class="w-l" id="io-l-${i}" data-inc-other="${i}" data-field="label" value="${esc(o.label || "")}" placeholder="例：単発バイト、お小遣い" aria-label="収入の名前">
+        <select id="io-k-${i}" data-inc-other="${i}" data-field="kind" aria-label="年収に含めるか"><option value="work" ${isGift(o) ? "" : "selected"}>働いた収入（年収に含める）</option><option value="gift" ${isGift(o) ? "selected" : ""}>お小遣い・お年玉・仕送りなど（年収に含めない）</option></select></div>
       <div class="amt"><input type="text" inputmode="decimal" id="io-a-${i}" data-inc-other="${i}" data-field="amount" value="${esc(o.amount ?? "")}" placeholder="円" aria-label="金額"></div>
       <div class="edit"><button class="ghost" data-act="delOther" data-i="${i}">削除</button></div>
     </div>`).join("");
@@ -1414,10 +1462,11 @@ function viewHome(){
   // hero: what is left to spend freely this month
   const out = x.fixed + x.save + x.evTotal, base = Math.max(x.income, out, 1);
   const seg = (v, c) => `<span style="width:${(Math.max(0, v) / base * 100).toFixed(2)}%;background:${c}"></span>`;
-  const isCur = S.y === now.y && S.m === now.m;
-  const daysLeft = isCur ? new Date(Date.UTC(now.y, now.m, 0)).getUTCDate() - now.d + 1 : 0;
+  const isCur = `${S.y}-${pad(S.m)}` === todayKey;
+  const pend = periodRange(S.y, S.m).end;
+  const daysLeft = isCur ? Math.round((Date.UTC(...pend.split("-").map((v, i) => i === 1 ? v - 1 : Number(v))) - Date.UTC(now.y, now.m - 1, now.d)) / 864e5) + 1 : 0;
   const hero = `<div class="hero">
-      <div class="hk"><span>${x.left < 0 ? `${S.m}月は足りません` : `${S.m}月に自由に使えるお金`}</span>${isCur && x.left > 0 && daysLeft ? `<span>1日あたり ${yen(Math.floor(x.left / daysLeft))}</span>` : ""}</div>
+      <div class="hk"><span>${x.left < 0 ? `${mName()}は足りません` : `${mName()}に自由に使えるお金`}</span>${isCur && x.left > 0 && daysLeft ? `<span>1日あたり ${yen(Math.floor(x.left / daysLeft))}</span>` : ""}</div>
       <div class="hv">${x.left < 0 ? "−" : ""}${yen(Math.abs(x.left)).replace("−", "")}</div>
       <div class="hbar" aria-hidden="true">${seg(x.fixed, "color-mix(in srgb, var(--on-accent) 45%, transparent)")}${seg(x.save, "color-mix(in srgb, var(--on-accent) 70%, transparent)")}${seg(x.evTotal, "var(--gold)")}</div>
       <div class="hs">入る ${yen(x.income)} − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}・行事 ${yen(x.evTotal)}</div>
@@ -1451,12 +1500,12 @@ function viewHome(){
   ${hero}
   <div class="duo">${npHtml}${svHtml}</div>
   <div class="sec">
-    <div class="sec-h"><h2>${isCur ? "もうすぐ出ていくお金" : `${S.m}月に出ていくお金`}</h2><button type="button" class="link" data-goto="events">すべて</button></div>
+    <div class="sec-h"><h2>${isCur ? "もうすぐ出ていくお金" : `${mName()}に出ていくお金`}</h2><button type="button" class="link" data-goto="events">すべて</button></div>
     <div class="list">${upRows || `<div class="li"><span class="lm"><b>予定している出費はありません</b><span>旅行や飲み会の予算を入れておくと、使えるお金が正確になります</span></span></div>`}</div>
   </div>
 
-  <details class="more" ${S.openMore === "income" ? "open" : ""} data-more="income"><summary>${S.m}月に使えるお金の内訳<span class="sv">${yen(x.income)}</span></summary><div class="inner">
-    <div class="small muted">${S.m}月の出費は前の月に振り込まれた給料でまかなう前提です（${jobWord()}ごとに設定で変更可）。振込額が分かったら「確定額」に入れると、見込みより優先します。</div>
+  <details class="more" ${S.openMore === "income" ? "open" : ""} data-more="income"><summary>${mName()}に使えるお金の内訳<span class="sv">${yen(x.income)}</span></summary><div class="inner">
+    <div class="small muted">${mName()}の出費は${startDay() > 1 ? "この期間（" + periodLabel(S.y, S.m) + "）に振り込まれた給料" : "前の月に振り込まれた給料"}でまかなう前提です（${jobWord()}ごとに設定で変更可）。振込額が分かったら「確定額」に入れると、見込みより優先します。</div>
     <div class="rows">${jobRows || `<div class="empty">バイト先がありません。<button data-goto="settings">バイト先を追加</button></div>`}${otherRows}</div>
     <div><button data-act="addOther">＋ その他の収入を追加</button></div>
   </div></details>
@@ -1496,10 +1545,10 @@ function savingHtml(x){
     <div class="blockhead"><span class="small muted">残高 / 目標</span><span class="num">${yen(p.bal)} / ${yen(p.goal)}</span></div>
     <div class="meter ${p.bal >= p.goal ? "" : ""}"><span style="width:${pct.toFixed(1)}%"></span></div>
     <div class="plan">${p.need ? `目標まであと <b>${yen(p.need)}</b>。${Number(p.gm.slice(5))}月まで${p.left}か月なので、<b>毎月 ${yen(p.perMonth)}</b> 貯めれば届きます。` : `目標額に届いています。`}
-      ${inPlan ? `<br>${S.m}月に自由に使えるお金は 使えるお金 ${yen(x.income)} − 固定費 ${yen(x.fixed)} − 貯金 ${yen(x.save)} = <b>${yen(free)}</b>。行事 ${yen(x.evTotal)} を引くと <b style="color:var(${x.left < 0 ? "--bad" : "--good"})">${yen(x.left)}</b> です。` : ""}
+      ${inPlan ? `<br>${mName()}に自由に使えるお金は 使えるお金 ${yen(x.income)} − 固定費 ${yen(x.fixed)} − 貯金 ${yen(x.save)} = <b>${yen(free)}</b>。行事 ${yen(x.evTotal)} を引くと <b style="color:var(${x.left < 0 ? "--bad" : "--good"})">${yen(x.left)}</b> です。` : ""}
       ${endRow ? `<br>今の予定どおりだと、${Number(endRow.k.slice(5))}月末の残高は約 <b>${yen(endRow.bal)}</b>（目標まで${gap >= 0 ? `<b style="color:var(--good)">${yen(gap)} 余裕</b>` : `<b style="color:var(--bad)">${yen(-gap)} 足りない</b>`}）。` : ""}</div>
     <div class="tablewrap"><table class="proj"><thead><tr><th>月</th><th>入る</th><th>出る</th><th>月末の残高</th></tr></thead><tbody>
-      ${proj.map(r => `<tr><td>${r.y !== now.y ? r.y + "/" : ""}${r.m}月${r.k === todayKey ? "（今日以降）" : ""}</td><td>+${yen(r.inflow)}${r.assumed ? "*" : ""}</td><td>−${yen(r.outEv + r.fixed)}</td><td class="${r.bal < 0 ? "neg" : ""}">${yen(r.bal)}</td></tr>`).join("")}
+      ${proj.map(r => `<tr><td>${r.y !== now.y ? r.y + "/" : ""}${mName(r.y, r.m)}${r.k === todayKey ? "（今日以降）" : ""}</td><td>+${yen(r.inflow)}${r.assumed ? "*" : ""}</td><td>−${yen(r.outEv + r.fixed)}</td><td class="${r.bal < 0 ? "neg" : ""}">${yen(r.bal)}</td></tr>`).join("")}
     </tbody></table></div>
     <div class="small muted">今後の振込（確定額かシフトの見込み）から、行事と固定費を引いて計算しています。今月分は今日より後の振込・行事だけを数え、今月の固定費は支払い済みとしています。まだ予算を入れていない行事は0円として扱います。${num(st.assumeIncome) ? `* はシフトも確定額もまだない月で、収入見込み ${yen(st.assumeIncome)} を使っています。` : "先の月はシフトを入れるまで収入0円になるので、下の「収入見込み」を入れると現実に近くなります。"}</div>
     <details ${dirty ? "open" : ""}><summary>残高・目標を変える</summary>${inputs}</details>
@@ -1557,22 +1606,25 @@ function syncChip(s){
 }
 function viewShifts(){
   const jobs = S.settings.jobs;
-  const list = allShifts().filter(s => s.ev.y === S.y && s.ev.m === S.m);
+  const list = allShifts().filter(s => inPeriod(s.ev.ymd, S.y, S.m));
+  const pr = periodRange(S.y, S.m);
   const total = list.reduce((a, s) => a + s.pay, 0), h = list.reduce((a, s) => a + s.paid, 0);
   const byDay = {};
   for (const s of list) (byDay[s.ev.ymd] = byDay[s.ev.ymd] || []).push(s);
-  if (!S.sel || !S.sel.startsWith(`${S.y}-${pad(S.m)}`)) S.sel = (now.y === S.y && now.m === S.m) ? `${S.y}-${pad(S.m)}-${pad(now.d)}` : `${S.y}-${pad(S.m)}-01`;
+  if (!inPeriod(S.sel, S.y, S.m)) S.sel = inPeriod(todayYmd, S.y, S.m) ? todayYmd : pr.start;
   if (!S.form) S.form = defaultForm();
   if (S.form.transport === undefined) S.form.transport = "";
-  const first = new Date(Date.UTC(S.y, S.m - 1, 1)).getUTCDay(), days = new Date(Date.UTC(S.y, S.m, 0)).getUTCDate();
-  const todayKey = `${now.y}-${pad(now.m)}-${pad(now.d)}`;
+  const t0 = Date.UTC(S.y, S.m - 1, startDay()), first = new Date(t0).getUTCDay();
   let cells = DOW.map((w, i) => `<div class="wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</div>`).join("");
   for (let i = 0; i < first; i++) cells += `<div class="day blank" aria-hidden="true"></div>`;
-  for (let d = 1; d <= days; d++){
-    const key = `${S.y}-${pad(S.m)}-${pad(d)}`;
+  for (let t = t0, i = 0; i < 32; t += 864e5, i++){
+    const x = new Date(t), cm = x.getUTCMonth() + 1, d = x.getUTCDate();
+    const key = `${x.getUTCFullYear()}-${pad(cm)}-${pad(d)}`;
+    if (key > pr.end) break;
     const ds = byDay[key] || [];
     const dots = ds.slice(0, 3).map(s => `<i style="--jc:${jColor(s.job.id)}"></i>`).join("");
-    cells += `<button class="day ${key === todayKey ? "today" : ""}" data-day="${key}" aria-pressed="${key === S.sel}" aria-label="${S.m}月${d}日${ds.length ? `、シフト${ds.length}件` : ""}"><span class="dn">${d}</span><span class="dots">${dots}</span></button>`;
+    // when a period crosses into the next month, the 1st shows its month so the grid stays readable
+    cells += `<button class="day ${key === todayYmd ? "today" : ""}" data-day="${key}" aria-pressed="${key === S.sel}" aria-label="${cm}月${d}日${ds.length ? `、シフト${ds.length}件` : ""}"><span class="dn">${d === 1 && i > 0 ? `${cm}/1` : d}</span><span class="dots">${dots}</span></button>`;
   }
   const [sy, sm, sd] = S.sel.split("-").map(Number);
   const sdow = new Date(Date.UTC(sy, sm - 1, sd)).getUTCDay();
@@ -1601,7 +1653,7 @@ function viewShifts(){
     ${fj && fj.payType === "salary" ? `<div class="small muted">月給の勤務先は、残業した日だけ入れればOKです。月給そのものは毎月自動で入ります。</div>` : ""}` :
     `<div class="empty">勤務先がありません。<button data-goto="settings">設定で勤務先を追加</button></div>`;
   const perJob = jobs.map(j => { const xs = list.filter(s => s.job.id === j.id); return `<span><span class="jdot" style="--jc:${jColor(j.id)}"></span>${esc(j.name)}${xs.length ? ` ${xs.length}回・${yen(xs.reduce((a, s) => a + s.pay, 0))}` : ""}</span>`; }).join("");
-  const isToday = S.sel === todayKey;
+  const isToday = S.sel === todayYmd;
   return `
   <div class="pills"><span class="pill">${list.length}回 ・ ${hrs(h)}h</span><span class="pill">見込み ${yen(total)}</span></div>
   <section class="block">
@@ -1637,12 +1689,12 @@ function evRow(e, rj){
 function viewEvents(){
   const x = summary(S.y, S.m), evs = x.evs, rj = rateJob();
   const d = S.evDraft || (S.evDraft = {title: "", ymd: "", budget: "", memo: "", group: ""});
-  const inMonth = d.ymd && d.ymd.startsWith(`${S.y}-${pad(S.m)}`);
-  const defDate = inMonth ? d.ymd : (now.y === S.y && now.m === S.m ? todayYmd : `${S.y}-${pad(S.m)}-01`);
+  const inMonth = inPeriod(d.ymd, S.y, S.m);
+  const defDate = inMonth ? d.ymd : inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start;
   // budget overview
   const room = x.income - x.fixed - x.save, used = x.evTotal, pct = room > 0 ? Math.min(100, used / room * 100) : (used ? 100 : 0);
   const budgetCard = `<section class="block budgetcard">
-      <div class="blockhead"><span class="small muted"><b>${S.m}月の行事・出費</b></span><span class="small muted">使えるお金 ${yen(room)}</span></div>
+      <div class="blockhead"><span class="small muted"><b>${mName()}の行事・出費</b></span><span class="small muted">使えるお金 ${yen(room)}</span></div>
       <div class="bv">${yen(used)}</div>
       <div class="meter ${used > room ? "over" : ""}"><span style="width:${pct.toFixed(1)}%"></span></div>
       <span class="small muted">${used > room ? `<b style="color:var(--bad)">${yen(used - room)} 足りません</b>` : `あと <b style="color:var(--ink)">${yen(room - used)}</b> 余裕あり`}（固定費・貯金を引いたあと）</span>
@@ -1657,7 +1709,7 @@ function viewEvents(){
     const ds = g.items.map(e => e.d), d1 = Math.min(...ds), d2 = Math.max(...ds);
     const key = "g:" + g.name;
     return `<section class="block groupcard ${gi === 0 ? "focus" : ""}">
-      <div class="gh"><span style="display:flex;flex-direction:column;min-width:0"><b>${esc(g.name)}</b><span class="small muted">${S.m}/${d1}${d2 !== d1 ? `〜${d2}` : ""} ・ ${g.items.length}項目</span></span><span class="gt">${yen(g.total)}</span></div>
+      <div class="gh"><span style="display:flex;flex-direction:column;min-width:0"><b>${esc(g.name)}</b><span class="small muted">${(() => { const ys = g.items.map(e => e.ymd).sort(); return md(ys[0]) + (ys[ys.length - 1] !== ys[0] ? `〜${md(ys[ys.length - 1])}` : ""); })()} ・ ${g.items.length}項目</span></span><span class="gt">${yen(g.total)}</span></div>
       <div class="gl">${top.slice(0, 2).map(e => `<span><span>${esc(e.title.replace(new RegExp("^" + g.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/旅行|一人旅/, "") + "[：:]?"), ""))}</span><b>${evCost(e.doc) ? yen(evCost(e.doc)) : "—"}</b></span>`).join("")}
         ${rest.length ? `<span class="rest"><span>ほか${rest.length}件</span><b>${yen(restSum)}</b></span>` : ""}</div>
       ${rj && g.total ? `<span class="pill" style="align-self:flex-start;background:var(--bg)">${esc(rj.name.replace(/（.*）/, ""))} ${Math.round(g.total / num(rj.wage))}時間分</span>` : ""}
@@ -1670,12 +1722,12 @@ function viewEvents(){
   ${groupCards}
   <div class="sec">
     ${gList.length ? `<div class="sec-h"><h2>そのほかの出費</h2></div>` : ""}
-    <div class="list">${singles.map(e => evRow(e, rj)).join("") || `<div class="li"><span class="lm"><b>${gList.length ? "ほかの出費はありません" : `${S.m}月の行事はまだありません`}</b><span>下の「行事を追加」から入れてください</span></span></div>`}</div>
-    ${excludedRecurring(S.y, S.m).map(r => `<div class="small muted">毎月の「${esc(r.title)}」を${S.m}月は外しています <button data-act="restoreRec" data-id="rc_${esc(r.id)}_${S.y}${pad(S.m)}">戻す</button></div>`).join("")}
+    <div class="list">${singles.map(e => evRow(e, rj)).join("") || `<div class="li"><span class="lm"><b>${gList.length ? "ほかの出費はありません" : `${mName()}の行事はまだありません`}</b><span>下の「行事を追加」から入れてください</span></span></div>`}</div>
+    ${excludedRecurring(S.y, S.m).map(r => `<div class="small muted">毎月の「${esc(r.title)}」を${mName()}は外しています <button data-act="restoreRec" data-id="rc_${esc(r.id)}_${r.key}">戻す</button></div>`).join("")}
   </div>
 
   <section class="block" id="addEvent">
-    <div class="blockhead"><h2>行事を追加</h2><span class="small muted">${S.m}月以外の日付も選べます</span></div>
+    <div class="blockhead"><h2>行事を追加</h2><span class="small muted">${mName()}以外の日付も選べます</span></div>
     <form id="manualForm" class="dayform" autocomplete="off">
       <label class="f" style="flex:2 1 12em">行事名<input type="text" class="w-l" id="mTitle" data-evdraft="title" required placeholder="例：ライブ、友達の誕生日プレゼント" value="${esc(d.title)}"></label>
       <label class="f">日付<input type="date" id="mDate" data-evdraft="ymd" required value="${esc(defDate)}"></label>
@@ -1695,10 +1747,10 @@ function jobLive(i){
     if (!num(j.salary)) return "月給を入れると、毎月の手取りの目安を計算します";
     return `手取りの目安 ${yen(Math.floor(num(j.salary) * netRateOf(j) / 100) + num(j.commute))}／月（残業代は時給換算 ${yen(Math.floor(hourBase(j)))} × 1.25。残業した日だけシフトに入れればOK）`;
   }
-  const xs = allShifts().filter(s => s.job.id === j.id && s.ev.y === S.y && s.ev.m === S.m);
-  if (!xs.length) return `${S.m}月の入力済みシフトはまだありません`;
+  const xs = allShifts().filter(s => s.job.id === j.id && inPeriod(s.ev.ymd, S.y, S.m));
+  if (!xs.length) return `${mName()}の入力済みシフトはまだありません`;
   const pay = xs.reduce((a, s) => a + s.pay, 0), tr = xs.reduce((a, s) => a + s.transport, 0);
-  return `${S.m}月の勤務 ${xs.length}回 → ${yen(pay)}（給与 ${yen(pay - tr)} ＋ 交通費 ${yen(tr)}）`;
+  return `${mName()}の勤務 ${xs.length}回 → ${yen(pay)}（給与 ${yen(pay - tr)} ＋ 交通費 ${yen(tr)}）`;
 }
 function viewSettings(){
   const s = S.settings;
@@ -1769,6 +1821,7 @@ function viewSettings(){
     <h2>毎月のお金</h2>
     <div class="grid2">
       <label class="f">毎月の貯金額（期限つきの目標がないとき）<input type="text" inputmode="decimal" min="0" step="1000" id="sSave" data-set="saving" value="${esc(s.saving || "")}" placeholder="0"></label>
+      <label class="f">月の区切り（1か月の始まりの日）<select id="sStart" data-set="monthStart">${Array.from({length: 28}, (_, k) => k + 1).map(v => `<option value="${v}" ${startDay() === v ? "selected" : ""}>${v === 1 ? "1日（ふつうの月）" : `${v}日〜翌月${v - 1}日`}</option>`).join("")}</select></label>
       <label class="f">時間換算に使う勤務先<select id="sRate" data-set="rateJob"><option value="">自動</option>${hourly.map(j => `<option value="${esc(j.id)}" ${s.rateJob === j.id ? "selected" : ""}>${esc(j.name)}</option>`).join("")}</select></label>
     </div>
   </section>
@@ -1798,7 +1851,7 @@ async function askAI(){
   const lines = x.evs.map(e => `- ${e.ymd} ${e.title}：予算 ${e.doc.budget ?? "未設定"} 円 / 実績 ${e.doc.actual ?? "未入力"} 円${e.doc.memo ? " / メモ：" + e.doc.memo : ""}`).join("\n") || "（行事なし）";
   const prompt = `あなたは名古屋在住の薬学部2年生の家計アドバイザーです。次の月の収支を見て、行事ごとの具体的なコストカット案を出してください。
 
-対象月：${S.y}年${S.m}月
+対象月：${S.y}年${mName()}
 この月に使えるお金（前月振込の給料＋試験監督など当月分）：${Math.round(x.income)} 円（${x.mi.confirmedAll && x.mi.anyConfirmed ? "確定" : "一部見込み"}）
 固定費：${x.fixed} 円 / 貯金目標：${x.save} 円
 行事に使える額：${Math.round(x.free)} 円
@@ -1857,7 +1910,7 @@ document.addEventListener("click", e => {
     const doc = S.events[id] || {};
     const recItem = id.startsWith("rc_") ? eventList(S.y, S.m).find(e => e.id === id) : null;
     const title = doc.title || (recItem && recItem.title) || (S.cal.find(v => v.id === id) || {}).title || "行事";
-    if (recItem){ putDoc("events", id, Object.assign({}, doc, {included:false, recurring:true, title, ymd: recItem.ymd}), `${S.m}月の「${esc(title)}」を外しました`); }
+    if (recItem){ putDoc("events", id, Object.assign({}, doc, {included:false, recurring:true, title, ymd: recItem.ymd}), `${mName()}の「${esc(title)}」を外しました`); }
     else if (doc.manual) putDoc("events", id, null, `「${esc(title)}」を削除しました`);
     else { const ev = S.cal.find(v => v.id === id); putDoc("events", id, Object.assign({}, doc, {included:false, title, ymd: ev ? ev.ymd : doc.ymd || ""}), `「${esc(title)}」を一覧から削除しました`); }
   }
@@ -1878,7 +1931,7 @@ document.addEventListener("click", e => {
   else if (act === "closeSheet"){ document.getElementById("sheet").hidden = true; }
   else if (act === "quickShift" || act === "quickEvent"){
     document.getElementById("sheet").hidden = true;
-    S.y = now.y; S.m = now.m;
+    [S.y, S.m] = refreshToday();
     if (act === "quickShift"){ S.tab = "shifts"; S.sel = todayYmd; if (S.form && S.form.editId) S.form = null; }
     else S.tab = "events";
     render();
@@ -1888,7 +1941,7 @@ document.addEventListener("click", e => {
   else if (act === "addFix"){ (S.settings.fixedItems = S.settings.fixedItems || []).push({name: "", amount: ""}); S.settings.fixedCost = fixTotal(); putSettings("固定費の欄を追加しました"); setTimeout(() => { const el = document.getElementById("sf-n-" + (S.settings.fixedItems.length - 1)); if (el) el.focus(); }, 30); }
   else if (act === "delFix"){ S.settings.fixedItems.splice(Number(a.dataset.i), 1); S.settings.fixedCost = fixTotal(); putSettings("固定費を削除しました"); }
   else if (act === "syncshift") syncShift(id);
-  else if (act === "syncmonth"){ const ids = allShifts().filter(x => x.ev.y === S.y && x.ev.m === S.m && needsSync(x.rec)).map(x => x.id); syncAll(ids); }
+  else if (act === "syncmonth"){ const ids = allShifts().filter(x => inPeriod(x.ev.ymd, S.y, S.m) && needsSync(x.rec)).map(x => x.id); syncAll(ids); }
   else if (act === "cancelEdit"){ S.form = formFor(S.form.job); render(); }
   else if (act === "delshift"){
     if (S.confirmDel !== "s:" + id){ S.confirmDel = "s:" + id; render(); return; }
@@ -1938,7 +1991,7 @@ document.addEventListener("change", e => {
       if (!d.others[i]) return;
       if (f === "amount" && badNum(val)){ toast("数字で入力してください", "warn"); return; }
       d.others[i][f] = f === "amount" ? (val === "" ? "" : num(val)) : String(val).trim();
-      putDoc("income", k, d, `${S.m}月の収入を保存しました`);
+      putDoc("income", k, d, `${mName()}の収入を保存しました`);
     }
     return;
   }
@@ -1952,7 +2005,7 @@ document.addEventListener("change", e => {
     if (fld === "title" && !String(val).trim()){ toast("行事名を入れてください", "warn"); return; }
     if (fld === "ymd" && !val) return;
     cur[fld] = ["memo","title","ymd","group"].includes(fld) ? (fld === "title" || fld === "group" ? String(val).trim() : val) : (val === "" ? "" : num(val));
-    if (fld === "ymd" && !val.startsWith(`${S.y}-${pad(S.m)}`)){ putDoc("events", id, cur, `「${esc(cur.title)}」を${Number(val.slice(5,7))}月${Number(val.slice(8))}日に移しました`); return; }
+    if (fld === "ymd" && !inPeriod(val, S.y, S.m)){ putDoc("events", id, cur, `「${esc(cur.title)}」を${Number(val.slice(5,7))}月${Number(val.slice(8))}日に移しました`); return; }
     putDoc("events", id, cur, `「${esc(cur.title || "行事")}」を保存しました`);
   } else if (t.dataset.job){
     const j = S.settings.jobs[Number(t.dataset.job)], f = t.dataset.field;
@@ -1978,6 +2031,13 @@ document.addEventListener("change", e => {
     S.settings[f] = t.type === "checkbox" ? val : ["eventColors","rateJob","ignoreTitles","goalMonth","persona"].includes(f) ? val : (["balance","goalAmount","assumeIncome","wallCustom"].includes(f) && val === "" ? "" : num(val));
     if (f === "persona"){ S.settings.walls = WALL_DEF[val].slice(); putSettings("年収の壁を" + PERSONAS.find(p => p[0] === val)[1] + "向けにしました"); return; }
     if (f === "balance") S.settings.balanceDate = todayYmd;
+    if (f === "monthStart"){
+      // pay that arrives at the start of a period is usually spent in that same period
+      S.settings.jobs.forEach(j => { if (freqOf(j) === "monthly") j.useLag = S.settings.monthStart > 1 ? 0 : 1; });
+      [S.y, S.m] = refreshToday(); S.sel = null;
+      putSettings(S.settings.monthStart > 1 ? `1か月を${S.settings.monthStart}日〜翌月${S.settings.monthStart - 1}日にしました。給料は「振り込まれた月」に使う設定に切り替えています` : "1か月を1日〜末日に戻しました");
+      return;
+    }
     putSettings("設定を保存しました");
   }
 });
@@ -2034,7 +2094,7 @@ document.addEventListener("submit", e => {
   if (!ymd){ toast("日付を選んでください", "warn"); return; }
   if (badNum(b)){ toast("予算は数字で入力してください", "warn"); return; }
   S.evDraft = {title: "", ymd, budget: "", memo: "", group};
-  const where = ymd.startsWith(`${S.y}-${pad(S.m)}`) ? "" : `（${Number(ymd.slice(5,7))}月に入りました）`;
+  const where = inPeriod(ymd, S.y, S.m) ? "" : `（${Number(ymd.slice(5,7))}月に入りました）`;
   putDoc("events", "m" + Date.now().toString(36), {manual:true, included:true, title, ymd, budget: b === "" ? "" : num(b), memo, group}, `「${esc(title)}」を追加しました${where}`);
 });
 
@@ -2352,6 +2412,7 @@ document.addEventListener("click", e => {
 
 /* ---------- boot ---------- */
 loadLocal();
+[S.y, S.m] = refreshToday();
 Object.keys(S.ready).forEach(k => { S.ready[k] = true; });
 S.calState = "off";
 render();
