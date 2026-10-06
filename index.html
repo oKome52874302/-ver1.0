@@ -430,6 +430,25 @@ details.more section.block{padding:0;background:none}
 .rfields{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}.rfields .f{flex:1 1 8em;min-width:0}
 .rfields .f.rtimef{flex:1 1 100%}.rtime{display:flex;align-items:center;gap:6px}.rtime input{min-width:0;flex:1}
 .rpresets{display:flex;flex-wrap:wrap;gap:4px}
+.evbtn{width:100%;border:none;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;grid-template-columns:auto minmax(0,1fr) auto auto}
+.evbtn .chev{color:var(--muted);font-size:20px;padding-left:4px}
+.evbtn .bad{color:var(--bad)}
+.evadd-in{width:100%;border:none;background:none;font:inherit;color:var(--accent);font-weight:900;justify-content:center;cursor:pointer}
+.small-btn{min-height:36px;padding:0 12px;font-size:13px}
+.donebox{margin-top:8px}
+.evsheet{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center;background:rgba(15,25,20,.45)}
+.evpanel{width:100%;max-width:560px;max-height:90vh;overflow:auto;background:var(--surface);border-radius:22px 22px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;box-shadow:0 -6px 24px rgba(0,0,0,.18)}
+.evs-h{display:flex;align-items:center;justify-content:space-between;gap:8px}.evs-h h2{margin:0;font-size:18px}
+.evs-name{display:flex;flex-direction:column;gap:2px;padding:10px 12px;background:var(--bg);border-radius:12px}
+.evs-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.evs-grid .f.wide{grid-column:1 / -1}
+.evs-grid input{width:100%;box-sizing:border-box;min-height:46px;font-size:16px}
+.evs-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.evs-foot button{min-height:46px;padding:0 16px}
+.evs-review{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.evs-r{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;border-top:1px solid var(--line);font-size:14px}.evs-r:first-child{border-top:none}
+.evs-r span{color:var(--muted)}.evs-r b{text-align:right}.evs-r s{color:var(--muted);font-weight:400}
+.evs-r.head{background:var(--bg)}
+.danger{color:var(--bad)}.danger-bg{background:var(--bad)!important;border-color:var(--bad)!important}
+p.warn{color:var(--bad);margin:0}
 .persona{display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
 .persona .pk{font-size:13px;font-weight:900;color:var(--muted)}
 .persona button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border:2px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);text-align:left}
@@ -1730,28 +1749,135 @@ function viewShifts(){
 }
 
 function evRow(e, rj){
-  const [k, l] = evStatus(e.doc); const id = esc(e.id), c = evCost(e.doc);
-  const confirming = S.confirmDel === "e:" + e.id;
+  const [k, l] = evStatus(e.doc), c = evCost(e.doc);
   const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>`
-    : `<span>${e.rec ? "毎月 ・ " : ""}${l}${e.moved && e.moved.moved ? " ・ " + movedNote(e.moved).replace(/[（）]/g, "") : rj && c ? ` ・ ${esc(rj.name.replace(/（.*）/, ""))} ${hrs(c / num(rj.wage))}時間分` : ""}</span>`;
-  return `<details class="evrow" data-evopen="${id}" ${S.openEv === e.id ? "open" : ""}>
-    <summary class="li"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span></summary>
-    <div class="edit">
-      ${e.cal || e.rec ? "" : `<label class="f" style="flex:1 1 12em">行事名<input type="text" class="w-l" id="et-${id}" data-ev="${id}" data-field="title" value="${esc(e.title)}"></label>
-      <label class="f">日付<input type="date" id="ed-${id}" data-ev="${id}" data-field="ymd" value="${esc(e.ymd)}"></label>`}
-      <label class="f">予算<input type="text" inputmode="decimal" id="eb-${id}" data-ev="${id}" data-field="budget" value="${esc(e.doc.budget ?? "")}" placeholder="${e.rec ? "今月の金額" : "円"}"></label>
-      <label class="f">実際に使った額<input type="text" inputmode="decimal" id="ea-${id}" data-ev="${id}" data-field="actual" value="${esc(e.doc.actual ?? "")}" placeholder="円"></label>
-      ${e.rec ? "" : `<label class="f">まとめる名前<input type="text" id="eg-${id}" data-ev="${id}" data-field="group" list="groupList" value="${esc(e.doc.group ?? "")}" placeholder="例：石川旅行"></label>`}
-      <label class="f" style="flex:1 1 12em">メモ<input type="text" class="w-l" id="em-${id}" data-ev="${id}" data-field="memo" value="${esc(e.doc.memo ?? "")}" placeholder="例：交通 3,000 / チケット 9,400"></label>
-      <button class="ghost" data-act="delevent" data-id="${id}">${confirming ? (e.rec ? "今月だけ外す" : "本当に削除する") : (e.rec ? "今月は外す" : "削除")}</button>${confirming ? `<button data-act="cancelDel">やめる</button>` : ""}
-    </div>
-  </details>`;
+    : hasVal(e.doc.actual) && hasVal(e.doc.budget)
+      ? `<span>予算 ${yen(num(e.doc.budget))} ・ ${k === "bad" ? `<b class="bad">${yen(num(e.doc.actual) - num(e.doc.budget))} オーバー</b>` : num(e.doc.budget) > num(e.doc.actual) ? `${yen(num(e.doc.budget) - num(e.doc.actual))} 浮いた` : "ぴったり"}</span>`
+    : `<span>${e.rec ? "毎月 ・ " : ""}${l}${e.moved && e.moved.moved ? " ・ " + movedNote(e.moved).replace(/[（）]/g, "") : rj && c && !hasVal(e.doc.actual) ? ` ・ ${esc(rj.name.replace(/（.*）/, ""))} ${hrs(c / num(rj.wage))}時間分` : ""}</span>`;
+  return `<button type="button" class="li evbtn" data-evedit="${esc(e.id)}" aria-label="${esc(e.title)}を編集">
+    <span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span><span class="chev" aria-hidden="true">›</span></button>`;
 }
+const settled = e => hasVal(e.doc.actual);
+function itemName(title, group){
+  const t = String(title || ""), g = String(group || "");
+  const rest = g && t.startsWith(g) ? t.slice(g.length).replace(/^[\s：:・\-—]+/, "") : t;
+  return rest || t;
+}
+/* ---------- event editor sheet: edit freely, then confirm before anything is saved ---------- */
+const EV_FIELDS = [["title", "行事名"], ["ymd", "日付"], ["budget", "予算"], ["actual", "実際に使った額"], ["group", "まとめる名前"], ["memo", "メモ"]];
+function openEvEditor(id){
+  const groupDefault = S.evDraft && S.evDraft.group || "";
+  if (!id){
+    const ymd = inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start;
+    const v = {title: "", ymd, budget: "", actual: "", group: groupDefault, memo: ""};
+    S.evEdit = {id: null, kind: "manual", v, orig: Object.assign({}, v), step: "edit"};
+  } else {
+    const e = eventList(S.y, S.m).find(x => x.id === id); if (!e) return;
+    const v = {title: e.title, ymd: e.ymd, budget: e.doc.budget ?? "", actual: e.doc.actual ?? "", group: e.doc.group ?? "", memo: e.doc.memo ?? ""};
+    S.evEdit = {id, kind: e.rec ? "rec" : e.cal ? "cal" : "manual", v, orig: Object.assign({}, v), step: "edit"};
+  }
+  S.confirmDel = null; render();
+  setTimeout(() => { const el = document.getElementById(id ? "evf-budget" : "evf-title"); if (el) el.focus(); }, 30);
+}
+const evChanged = ed => EV_FIELDS.filter(([k]) => String(ed.v[k] ?? "").trim() !== String(ed.orig[k] ?? "").trim());
+const evShow = (k, v) => !String(v ?? "").trim() ? "（なし）" : ["budget", "actual"].includes(k) ? yen(num(v)) : k === "ymd" ? `${md(v)}（${DOW[new Date(v + "T00:00:00Z").getUTCDay()]}）` : esc(v);
+function evSheetHtml(){
+  const ed = S.evEdit; if (!ed) return "";
+  const v = ed.v, isNew = !ed.id, fixedName = ed.kind !== "manual";
+  const groupNames = [...new Set(Object.values(S.events).map(e => String(e.group || "").trim()).filter(Boolean))];
+  let body = "";
+  if (ed.step === "edit"){
+    const fld = (k, label, attrs, wide) => `<label class="f ${wide ? "wide" : ""}">${label}<input id="evf-${k}" data-evf="${k}" value="${esc(v[k] ?? "")}" ${attrs}></label>`;
+    const delLabel = S.confirmDel === "e:" + ed.id ? (ed.kind === "rec" ? "本当に今月だけ外す" : "本当に削除する") : (ed.kind === "rec" ? "今月は外す" : "削除");
+    body = `<div class="evs-h"><h2>${isNew ? "行事を追加" : "行事を編集"}</h2><button type="button" class="ghost" data-evs="close" aria-label="閉じる">✕</button></div>
+      ${fixedName ? `<div class="evs-name"><b>${esc(v.title)}</b><span class="small muted">${ed.kind === "rec" ? "毎月の行事（名前と日付は設定で変更）" : "カレンダーの予定"} ・ ${evShow("ymd", v.ymd)}</span></div>` : ""}
+      <div class="evs-grid">
+        ${fixedName ? "" : fld("title", "行事名", `type="text" placeholder="例：ライブ、友達の誕生日プレゼント" autocomplete="off"`, true) + fld("ymd", "日付", `type="date"`)}
+        ${fld("budget", ed.kind === "rec" ? "今月の金額（予算）" : "予算（円）", `type="text" inputmode="decimal" placeholder="円"`)}
+        ${isNew ? "" : fld("actual", "実際に使った額", `type="text" inputmode="decimal" placeholder="使ったら入力"`)}
+        ${ed.kind === "rec" ? "" : fld("group", "まとめる名前（任意）", `type="text" list="groupList" placeholder="例：石川旅行" autocomplete="off"`)}
+        ${fld("memo", "メモ", `type="text" placeholder="例：交通 3,000 / チケット 9,400" autocomplete="off"`, true)}
+      </div>
+      <datalist id="groupList">${groupNames.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist>
+      ${isNew ? `<p class="small muted">旅行のように項目が多いときは、同じ「まとめる名前」を付けると1枚のカードにまとまります。</p>` : ""}
+      <div class="evs-foot">
+        ${isNew ? "" : `<button type="button" class="ghost danger" data-act="delevent" data-id="${esc(ed.id)}">${delLabel}</button>`}
+        <span style="flex:1"></span>
+        <button type="button" data-evs="close">キャンセル</button>
+        <button type="button" class="primary" data-evs="review">確認へ</button>
+      </div>`;
+  } else if (ed.step === "review"){
+    const ch = evChanged(ed);
+    const rows = isNew
+      ? EV_FIELDS.filter(([k]) => k !== "actual" && String(v[k] ?? "").trim()).map(([k, l]) => `<div class="evs-r"><span>${l}</span><b>${evShow(k, v[k])}</b></div>`).join("")
+      : ch.map(([k, l]) => `<div class="evs-r"><span>${l}</span><b><s>${evShow(k, ed.orig[k])}</s> → ${evShow(k, v[k])}</b></div>`).join("");
+    const moved = v.ymd && !inPeriod(v.ymd, S.y, S.m) ? `<p class="small warn">${md(v.ymd)}は${mName()}の期間外なので、${mName(...periodOf(...v.ymd.split("-").map(Number)))}の行事に入ります。</p>` : "";
+    const over = hasVal(v.actual) && hasVal(v.budget) && num(v.actual) > num(v.budget) ? `<p class="small warn">予算より ${yen(num(v.actual) - num(v.budget))} 多く使っています。</p>` : "";
+    body = `<div class="evs-h"><h2>この内容で保存しますか？</h2></div>
+      <div class="evs-review">${isNew ? "" : `<div class="evs-r head"><span>行事</span><b>${esc(ed.orig.title)}</b></div>`}${rows || `<p class="small muted">変更はありません。</p>`}</div>
+      ${moved}${over}
+      <div class="evs-foot"><span style="flex:1"></span>
+        <button type="button" data-evs="back">戻って直す</button>
+        <button type="button" class="primary" data-evs="save" ${!isNew && !ch.length ? "disabled" : ""}>保存する</button></div>`;
+  } else {
+    body = `<div class="evs-h"><h2>保存せずに閉じますか？</h2></div>
+      <p class="small muted">入力した内容は保存されません。</p>
+      <div class="evs-foot"><span style="flex:1"></span>
+        <button type="button" data-evs="back">編集に戻る</button>
+        <button type="button" class="primary danger-bg" data-evs="discard">保存せずに閉じる</button></div>`;
+  }
+  return `<div class="evsheet" data-evs="backdrop"><div class="evpanel" role="dialog" aria-modal="true" aria-label="${isNew ? "行事を追加" : "行事を編集"}">${body}</div></div>`;
+}
+function saveEvEditor(){
+  const ed = S.evEdit, v = ed.v;
+  const clean = k => String(v[k] ?? "").trim(), money = k => clean(k) === "" ? "" : num(clean(k));
+  if (!ed.id){
+    const id = "m" + Date.now().toString(36);
+    S.evDraft = {group: clean("group")};
+    S.evEdit = null;
+    const where = inPeriod(v.ymd, S.y, S.m) ? "" : `（${mName(...periodOf(...v.ymd.split("-").map(Number)))}に入りました）`;
+    putDoc("events", id, {manual: true, included: true, title: clean("title"), ymd: v.ymd, budget: money("budget"), actual: "", memo: clean("memo"), group: clean("group")}, `「${esc(clean("title"))}」を保存しました${where}`);
+    return;
+  }
+  const id = ed.id, cur = Object.assign({}, S.events[id] || {});
+  if (ed.kind === "cal"){ const ev = S.cal.find(x => x.id === id); if (ev){ cur.title = ev.title; cur.ymd = ev.ymd; } cur.included = true; }
+  else if (ed.kind === "rec"){ cur.title = v.title; cur.ymd = v.ymd; cur.recurring = true; }
+  else { cur.title = clean("title"); cur.ymd = v.ymd; }
+  cur.budget = money("budget"); cur.actual = money("actual"); cur.memo = clean("memo");
+  if (ed.kind !== "rec") cur.group = clean("group");
+  S.evEdit = null;
+  putDoc("events", id, cur, `「${esc(cur.title || "行事")}」を保存しました`);
+}
+document.addEventListener("input", e => {
+  const t = e.target; if (!t.dataset || !t.dataset.evf || !S.evEdit) return;
+  e.stopPropagation(); S.evEdit.v[t.dataset.evf] = t.value;
+}, true);
+document.addEventListener("click", e => {
+  const row = e.target.closest("[data-evedit]");
+  if (row){ e.stopPropagation(); openEvEditor(row.dataset.evedit); return; }
+  const add = e.target.closest("[data-evadd]");
+  if (add){ e.stopPropagation(); S.evDraft = {group: add.dataset.evgroup || ""}; openEvEditor(null); return; }
+  const b = e.target.closest("[data-evs]"); if (!b || !S.evEdit) return;
+  const a = b.dataset.evs, ed = S.evEdit;
+  if (a === "backdrop" && e.target !== b) return;   // taps inside the panel are not the backdrop
+  e.stopPropagation();
+  if (a === "close" || a === "backdrop"){ if (ed.step === "edit" && evChanged(ed).length){ ed.step = "discard"; } else S.evEdit = null; render(); return; }
+  if (a === "discard"){ S.evEdit = null; render(); toast("保存せずに閉じました"); return; }
+  if (a === "back"){ ed.step = "edit"; render(); return; }
+  if (a === "review"){
+    const v = ed.v;
+    if (ed.kind === "manual" && !String(v.title).trim()){ toast("行事名を入れてください", "warn"); return; }
+    if (!v.ymd){ toast("日付を選んでください", "warn"); return; }
+    if (badNum(v.budget) || badNum(v.actual)){ toast("金額は数字で入力してください", "warn"); return; }
+    ed.step = "review"; render(); return;
+  }
+  if (a === "save") saveEvEditor();
+}, true);
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && S.evEdit){ const b = document.querySelector("[data-evs=close]") || document.querySelector("[data-evs=back]"); if (b) b.click(); }
+});
 function viewEvents(){
   const x = summary(S.y, S.m), evs = x.evs, rj = rateJob();
-  const d = S.evDraft || (S.evDraft = {title: "", ymd: "", budget: "", memo: "", group: ""});
-  const inMonth = inPeriod(d.ymd, S.y, S.m);
-  const defDate = inMonth ? d.ymd : inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start;
   // budget overview
   const room = x.income - x.fixed - x.save, used = x.evTotal, pct = room > 0 ? Math.min(100, used / room * 100) : (used ? 100 : 0);
   const budgetCard = `<section class="block budgetcard">
@@ -1771,35 +1897,27 @@ function viewEvents(){
     const key = "g:" + g.name;
     return `<section class="block groupcard ${gi === 0 ? "focus" : ""}">
       <div class="gh"><span style="display:flex;flex-direction:column;min-width:0"><b>${esc(g.name)}</b><span class="small muted">${(() => { const ys = g.items.map(e => e.ymd).sort(); return md(ys[0]) + (ys[ys.length - 1] !== ys[0] ? `〜${md(ys[ys.length - 1])}` : ""); })()} ・ ${g.items.length}項目</span></span><span class="gt">${yen(g.total)}</span></div>
-      <div class="gl">${top.slice(0, 2).map(e => `<span><span>${esc(e.title.replace(new RegExp("^" + g.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/旅行|一人旅/, "") + "[：:]?"), ""))}</span><b>${evCost(e.doc) ? yen(evCost(e.doc)) : "—"}</b></span>`).join("")}
+      <div class="gl">${top.slice(0, 2).map(e => `<span><span>${esc(itemName(e.title, g.name))}</span><b>${evCost(e.doc) ? yen(evCost(e.doc)) : "—"}</b></span>`).join("")}
         ${rest.length ? `<span class="rest"><span>ほか${rest.length}件</span><b>${yen(restSum)}</b></span>` : ""}</div>
       ${rj && g.total ? `<span class="pill" style="align-self:flex-start;background:var(--bg)">${esc(rj.name.replace(/（.*）/, ""))} ${Math.round(g.total / num(rj.wage))}時間分</span>` : ""}
-      <details class="more" style="padding:0;background:none" data-more="${esc(key)}" ${S.openMore === key ? "open" : ""}><summary>項目を見る・編集</summary><div class="list" style="background:var(--bg)">${g.items.map(e => evRow(e, rj)).join("")}</div></details>
+      <details class="more" style="padding:0;background:none" data-more="${esc(key)}" ${S.openMore === key ? "open" : ""}><summary>項目を見る・編集</summary><div class="list" style="background:var(--bg)">${g.items.slice().sort((a, b) => a.ymd.localeCompare(b.ymd)).map(e => evRow(Object.assign({}, e, {title: itemName(e.title, g.name)}), rj)).join("")}
+        <button type="button" class="li evadd-in" data-evadd="1" data-evgroup="${esc(g.name)}">＋ 「${esc(g.name)}」に項目を追加</button></div></details>
     </section>`;
   }).join("");
-  const groupNames = [...new Set(Object.values(S.events).map(e => String(e.group || "").trim()).filter(Boolean))];
+  const ahead = singles.filter(e => !settled(e)), done = singles.filter(settled);
+  const doneTotal = done.reduce((a, e) => a + evCost(e.doc), 0);
   return `
   ${budgetCard}
   ${groupCards}
   <div class="sec">
-    ${gList.length ? `<div class="sec-h"><h2>そのほかの出費</h2></div>` : ""}
-    <div class="list">${singles.map(e => evRow(e, rj)).join("") || `<div class="li"><span class="lm"><b>${gList.length ? "ほかの出費はありません" : `${mName()}の行事はまだありません`}</b><span>下の「行事を追加」から入れてください</span></span></div>`}</div>
+    <div class="sec-h"><h2>${gList.length ? "そのほかの出費" : "これからの出費"}</h2><button type="button" class="primary small-btn" data-evadd="1">＋ 行事を追加</button></div>
+    <div class="list">${ahead.map(e => evRow(e, rj)).join("") || `<div class="li"><span class="lm"><b>${done.length ? "これからの出費はありません" : `${mName()}の行事はまだありません`}</b><span>「＋ 行事を追加」から、旅行や飲み会の予算を入れてください</span></span></div>`}</div>
+    ${done.length ? `<details class="more donebox" data-more="done" ${S.openMore === "done" ? "open" : ""}><summary>精算済み ${done.length}件<span class="sv">${yen(doneTotal)}</span></summary><div class="list">${done.map(e => evRow(e, rj)).join("")}</div></details>` : ""}
+    <p class="small muted">行をタップすると編集できます。使った額を入れると「精算済み」に移ります。毎月の引き落としなどは <button type="button" class="link" data-goto="settings">設定</button> から。</p>
     ${excludedRecurring(S.y, S.m).map(r => `<div class="small muted">毎月の「${esc(r.title)}」を${mName()}は外しています <button data-act="restoreRec" data-id="rc_${esc(r.id)}_${r.key}">戻す</button></div>`).join("")}
   </div>
 
-  <section class="block" id="addEvent">
-    <div class="blockhead"><h2>行事を追加</h2><span class="small muted">${mName()}以外の日付も選べます</span></div>
-    <form id="manualForm" class="dayform" autocomplete="off">
-      <label class="f" style="flex:2 1 12em">行事名<input type="text" class="w-l" id="mTitle" data-evdraft="title" required placeholder="例：ライブ、友達の誕生日プレゼント" value="${esc(d.title)}"></label>
-      <label class="f">日付<input type="date" id="mDate" data-evdraft="ymd" required value="${esc(defDate)}"></label>
-      <label class="f">予算<input type="text" inputmode="decimal" id="mBudget" data-evdraft="budget" placeholder="円" value="${esc(d.budget)}"></label>
-      <label class="f" style="flex:1 1 10em">まとめる名前（任意）<input type="text" class="w-l" id="mGroup" data-evdraft="group" list="groupList" placeholder="例：石川旅行" value="${esc(d.group || "")}"></label>
-      <input type="hidden" id="mMemo" value="">
-      <button class="primary" type="submit">＋ 追加</button>
-    </form>
-    <datalist id="groupList">${groupNames.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist>
-    <div class="small muted">旅行のように項目が多いものは、同じ「まとめる名前」を付けると1枚のカードにまとまります。毎月の引き落としなどは <button data-goto="settings">設定</button> から。</div>
-  </section>`;
+  ${evSheetHtml()}`;
 }
 
 function jobLive(i){
@@ -1945,7 +2063,7 @@ ${lines}
 function setMonth(dm){
   let m = S.m + dm, y = S.y; if (m < 1){ m = 12; y--; } if (m > 12){ m = 1; y++; }
   S.y = y; S.m = m;
-  S.sel = null; if (S.calYear !== y && mcp) fetchCalendar(y, false); else render();
+  S.sel = null; S.evEdit = null; if (S.calYear !== y && mcp) fetchCalendar(y, false); else render();
 }
 document.getElementById("prevM").onclick = () => setMonth(-1);
 document.getElementById("nextM").onclick = () => setMonth(1);
@@ -1972,6 +2090,7 @@ document.addEventListener("click", e => {
     const doc = S.events[id] || {};
     const recItem = id.startsWith("rc_") ? eventList(S.y, S.m).find(e => e.id === id) : null;
     const title = doc.title || (recItem && recItem.title) || (S.cal.find(v => v.id === id) || {}).title || "行事";
+    S.evEdit = null;
     if (recItem){ putDoc("events", id, Object.assign({}, doc, {included:false, recurring:true, title, ymd: recItem.ymd}), `${mName()}の「${esc(title)}」を外しました`); }
     else if (doc.manual) putDoc("events", id, null, `「${esc(title)}」を削除しました`);
     else { const ev = S.cal.find(v => v.id === id); putDoc("events", id, Object.assign({}, doc, {included:false, title, ymd: ev ? ev.ymd : doc.ymd || ""}), `「${esc(title)}」を一覧から削除しました`); }
@@ -1995,9 +2114,9 @@ document.addEventListener("click", e => {
     document.getElementById("sheet").hidden = true;
     [S.y, S.m] = refreshToday();
     if (act === "quickShift"){ S.tab = "shifts"; S.sel = todayYmd; if (S.form && S.form.editId) S.form = null; }
-    else S.tab = "events";
+    else { S.tab = "events"; S.evDraft = {group: ""}; render(); openEvEditor(null); return; }
     render();
-    const el = document.getElementById(act === "quickShift" ? "fStart" : "mTitle");
+    const el = document.getElementById("fStart");
     if (el){ el.scrollIntoView({block: "center"}); el.focus(); }
   }
   else if (act === "addFix"){ (S.settings.fixedItems = S.settings.fixedItems || []).push({name: "", amount: ""}); S.settings.fixedCost = fixTotal(); putSettings("固定費の欄を追加しました"); setTimeout(() => { const el = document.getElementById("sf-n-" + (S.settings.fixedItems.length - 1)); if (el) el.focus(); }, 30); }
