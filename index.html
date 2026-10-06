@@ -422,6 +422,14 @@ details.more section.block{padding:0;background:none}
 .ocard-h b{font-size:.9rem}
 .seg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;background:var(--bg);padding:4px;border-radius:14px}
 #monthLabel.range{font-size:15px;white-space:nowrap}
+.rrow{display:flex;flex-direction:column;gap:8px;padding:10px 0;border-bottom:1px dashed var(--line)}
+.rdays{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px}
+.rdays .rd{min-height:36px;padding:0;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font-weight:700}
+.rdays .rd.sun{color:#C24A3A}.rdays .rd.sat{color:#2C5A86}
+.rdays .rd[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.rfields{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}.rfields .f{flex:1 1 8em;min-width:0}
+.rfields .f.rtimef{flex:1 1 100%}.rtime{display:flex;align-items:center;gap:6px}.rtime input{min-width:0;flex:1}
+.rpresets{display:flex;flex-wrap:wrap;gap:4px}
 .persona{display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
 .persona .pk{font-size:13px;font-weight:900;color:var(--muted)}
 .persona button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border:2px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);text-align:left}
@@ -559,7 +567,13 @@ try { const t = (location.hash || "").slice(1); if (["home","shifts","events","a
 /* ---------- storage ---------- */
 const LS = "shipoke-v1";
 function saveLocal(){ if (db) return; try { localStorage.setItem(LS, JSON.stringify({settings:S.settings, shifts:S.shifts, events:S.events, income:S.income, ach:S.ach})); } catch(e){} }
-function loadLocal(){ try { const o = JSON.parse(localStorage.getItem(LS) || "null"); if (o){ S.settings = Object.assign(clone(DEFAULTS), o.settings||{}); S.shifts = o.shifts||{}; S.events = o.events||{}; S.income = o.income||{}; S.ach = o.ach||{}; } } catch(e){} migrateWalls(); }
+function loadLocal(){ try { const o = JSON.parse(localStorage.getItem(LS) || "null"); if (o){ S.settings = Object.assign(clone(DEFAULTS), o.settings||{}); S.shifts = o.shifts||{}; S.events = o.events||{}; S.income = o.income||{}; S.ach = o.ach||{}; } } catch(e){} migrateWalls(); migrateRates(); }
+function migrateRates(){
+  for (const j of S.settings.jobs || []){
+    if (num(j.weekendExtra) && !(Array.isArray(j.rates) && j.rates.length)) j.rates = [{days: [0, 6], from: "", to: "", mode: "add", amount: num(j.weekendExtra)}];
+    j.weekendExtra = 0;
+  }
+}
 function migrateWalls(){
   const st = S.settings;
   if (Array.isArray(st.walls)) return;
@@ -769,6 +783,34 @@ function payday(ev, job){
   const a = bizAdjust(y, m, d, job.holidayShift || "prev");
   return {y: a.y, m: a.m, d: a.d, key: schedKey(a), moved: a.moved, reason: a.reason, from: a.from};
 }
+/* 特別時給: rules like "土曜は時給1,300円", "土日祝は+100円", "17時〜22時は1,200円".
+   rule = {days: [0–6, 7 = 祝日] (empty = every day), from/to "HH:MM" (empty = all day), mode "set" | "add", amount}.
+   Days follow the date the shift starts on. Several "set" rules → the highest wins; "add" rules stack on top. */
+const RDAYS = ["日", "月", "火", "水", "木", "金", "土", "祝"];
+const rulesOf = j => (Array.isArray(j.rates) ? j.rates : []).filter(r => num(r.amount) > 0);
+function ruleDayOk(r, ev){
+  const ds = Array.isArray(r.days) ? r.days.map(Number) : [];
+  if (!ds.length) return true;
+  return ds.includes(ev.dow) || (ds.includes(7) && !!holidaysOf(ev.y)[ev.ymd]);
+}
+function ruleTimeOk(r, mod){
+  const a = parseHM(r.from), b = parseHM(r.to);
+  if (!a || !b) return true;
+  const f = a[0] * 60 + a[1], t = b[0] * 60 + b[1];
+  return f <= t ? mod >= f && mod < t : mod >= f || mod < t;   // 22:00–05:00 wraps past midnight
+}
+function rateFor(base, rules, ev, mod){
+  let v = base, hit = [];
+  for (const r of rules) if (r.mode !== "add" && ruleDayOk(r, ev) && (mod == null || ruleTimeOk(r, mod)) && num(r.amount) > v){ v = num(r.amount); hit = [r]; }
+  for (const r of rules) if (r.mode === "add" && ruleDayOk(r, ev) && (mod == null || ruleTimeOk(r, mod))){ v += num(r.amount); hit.push(r); }
+  return {v, hit};
+}
+const ruleLabel = r => {
+  const ds = (Array.isArray(r.days) ? r.days.map(Number) : []).sort((a, b) => (a || 7.5) - (b || 7.5));
+  const days = !ds.length ? "毎日" : ds.length === 3 && [0, 6, 7].every(d => ds.includes(d)) ? "土日祝" : ds.map(d => RDAYS[d]).join("・");
+  const time = parseHM(r.from) && parseHM(r.to) ? ` ${r.from}〜${r.to}` : "";
+  return `${days}${time}`;
+};
 const parseHM = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); return m ? [Number(m[1]), Number(m[2])] : null; };
 /* r = {job, ymd, start, end, breakMin} — the same shape is used for saved shifts and for the live form preview */
 function calcShift(r, job, id){
@@ -785,11 +827,28 @@ function calcShift(r, job, id){
   const paid = Math.max(0, span - brk);
   if (s && job && job.night) night = Math.min(paid, nightHours(s, e));
   const weekend = ev.dow === 0 || ev.dow === 6;
-  let pay = 0;
+  let pay = 0, avgRate = 0;
+  const used = new Set();
   if (job){
-    if (job.payType === "fixed") pay = num(job.fixedPay);
+    if (job.payType === "fixed"){ const r = rateFor(num(job.fixedPay), rulesOf(job), ev, null); r.hit.forEach(h => used.add(h)); pay = r.v; }
     else if (job.payType === "salary") pay = hourBase(job) * 1.25 * Math.max(0, paid - (hasVal(job.dayHours) ? num(job.dayHours) : 8));
-    else pay = num(job.wage) * paid + num(job.wage) * 0.25 * night + (weekend && num(job.weekendExtra) ? num(job.weekendExtra) * paid : 0);
+    else {
+      const rules = rulesOf(job), base = num(job.wage);
+      if (rules.length && s && span > 0){
+        // minute by minute: the rate in force at each minute; 深夜割増 is 25% of whatever rate applies then
+        let sum = 0, nsum = 0, nmin = 0, n = 0;
+        for (let t = s.getTime(); t < e.getTime(); t += 60000){
+          const p = jp(new Date(t)), r = rateFor(base, rules, ev, p.h * 60 + p.mi);
+          sum += r.v; n++; r.hit.forEach(h => used.add(h));
+          if (p.h >= 22 || p.h < 5){ nsum += r.v; nmin++; }
+        }
+        avgRate = sum / n;
+        pay = avgRate * paid + (nmin ? nsum / nmin : avgRate) * 0.25 * night;
+      } else if (rules.length){
+        const r = rateFor(base, rules, ev, null); r.hit.forEach(h => used.add(h)); avgRate = r.v;
+        pay = avgRate * paid + avgRate * 0.25 * night;
+      } else pay = base * paid + base * 0.25 * night + (weekend && num(job.weekendExtra) ? num(job.weekendExtra) * paid : 0);
+    }
     pay = Math.floor(pay);
   }
   const hasTr = r.transport !== undefined && r.transport !== null && r.transport !== "";
@@ -799,7 +858,8 @@ function calcShift(r, job, id){
   const rateLabel = job && job.payType === "fixed" ? "1回の金額が未設定" : job && job.payType === "salary" ? "月給が未設定" : "時給が未設定";
   const needsRate = !job ? false : job.payType === "fixed" ? !num(job.fixedPay) : job.payType === "salary" ? !num(job.salary) : !num(job.wage);
   const ot = job && job.payType === "salary" ? Math.max(0, paid - (hasVal(job.dayHours) ? num(job.dayHours) : 8)) : 0;
-  return {id, rec: r, ev, job, span, brk, paid, night, weekend, ot, pay, rawPay: pay, wagePay, transport, excluded: false, needsRate,
+  const rateNote = used.size ? [...used].map(h => `${ruleLabel(h)} ${h.mode === "add" ? "+" + yen(num(h.amount)) : yen(num(h.amount))}`).join("・") : "";
+  return {id, rec: r, ev, job, span, brk, paid, night, weekend, ot, rateNote, avgRate, pay, rawPay: pay, wagePay, transport, excluded: false, needsRate,
           rateLabel, pd: job ? payday(ev, job) : {y, m, d, key: ""}, time: a && b ? `${r.start}–${r.end}` : ""};
 }
 function allShifts(){
@@ -1594,9 +1654,10 @@ function previewText(){
     if (!c.span) return "開始と終了の時刻を入れてください（定時を超えた分を残業代にします）";
     return `実働 ${hrs(c.paid)}h − 定時 ${hrs(hasVal(job.dayHours) ? num(job.dayHours) : 8)}h = 残業 ${hrs(c.ot)}h → ${yen(Math.floor(hourBase(job)))} × 1.25 × ${hrs(c.ot)}h = ${yen(c.pay)}（月給とは別に${c.pd.m}/${c.pd.d}支給）`;
   }
-  if (job.payType === "fixed") return c.needsRate ? `${c.rateLabel}（設定タブで入力するか、時給に切り替えてください）` : `1回 ${yen(c.wagePay)}${tr} = ${yen(c.pay)}（支給 ${c.pd.m}/${c.pd.d}）`;
+  const rn = c.rateNote ? `［特別：${c.rateNote}］` : "";
+  if (job.payType === "fixed") return c.needsRate ? `${c.rateLabel}（設定タブで入力するか、時給に切り替えてください）` : `1回 ${yen(c.wagePay)}${rn}${tr} = ${yen(c.pay)}（支給 ${c.pd.m}/${c.pd.d}）`;
   if (!c.span) return "開始と終了の時刻を入れてください";
-  return `拘束 ${hrs(c.span)}h − 休憩 ${hrs(c.brk * 60)}分 = 実働 ${hrs(c.paid)}h${c.night ? `（深夜 ${hrs(c.night)}h）` : ""} → ${c.needsRate ? c.rateLabel : `${yen(c.wagePay)}${tr} = ${yen(c.pay)}`}（支給 ${c.pd.m}/${c.pd.d}）`;
+  return `拘束 ${hrs(c.span)}h − 休憩 ${hrs(c.brk * 60)}分 = 実働 ${hrs(c.paid)}h${c.night ? `（深夜 ${hrs(c.night)}h）` : ""} → ${c.needsRate ? c.rateLabel : `${yen(c.wagePay)}${rn}${tr} = ${yen(c.pay)}`}（支給 ${c.pd.m}/${c.pd.d}）`;
 }
 function syncChip(s){
   if (!S.settings.calSync && !s.rec.calEventId) return "";
@@ -1767,7 +1828,7 @@ function viewSettings(){
         <label class="f">給与の形<select id="jt-${i}" data-job="${i}" data-field="payType"><option value="hourly" ${j.payType === "hourly" ? "selected" : ""}>時給</option><option value="fixed" ${j.payType === "fixed" ? "selected" : ""}>1回あたり固定</option><option value="salary" ${j.payType === "salary" ? "selected" : ""}>月給</option></select></label>
         ${j.payType === "hourly"
           ? `<label class="f">時給（円）<input type="text" inputmode="decimal" min="0" step="10" id="jw-${i}" data-job="${i}" data-field="wage" value="${esc(j.wage || "")}" placeholder="未設定"></label>
-             <label class="f">土日の時給加算（円）<input type="text" inputmode="decimal" min="0" step="10" id="je-${i}" data-job="${i}" data-field="weekendExtra" value="${esc(j.weekendExtra || "")}" placeholder="0"></label>`
+`
           : j.payType === "salary"
           ? `<label class="f">月給（額面・円）<input type="text" inputmode="decimal" id="js-${i}" data-job="${i}" data-field="salary" value="${esc(j.salary || "")}" placeholder="未設定"></label>
              <label class="f">手取りの目安（額面の％）<input type="text" inputmode="decimal" id="jn2-${i}" data-job="${i}" data-field="netRate" value="${esc(netRateOf(j))}" placeholder="80"></label>
@@ -1780,6 +1841,7 @@ function viewSettings(){
         ${freqOf(j) !== "monthly" ? "" : `<label class="f">この給料を使う月<select id="jl2-${i}" data-job="${i}" data-field="useLag"><option value="1" ${lagOf(j) === 1 ? "selected" : ""}>振り込まれた翌月</option><option value="0" ${lagOf(j) === 0 ? "selected" : ""}>振り込まれた月</option></select></label>`}
         ${j.payType === "salary" ? "" : `<label class="f">交通費（1回・円／シフトごとに変更可）<input type="text" inputmode="decimal" min="0" step="10" id="jc-${i}" data-job="${i}" data-field="transport" value="${esc(j.transport || "")}" placeholder="0"></label>`}
       </div>
+      ${j.payType === "salary" ? "" : rateEditor(j, i)}
       ${j.payType === "salary" ? bonusEditor(j, i) : `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>`}
       ${freqOf(j) === "monthly" ? `<div class="f">給料日${cycleEditor(j, i, "set")}</div>` : ""}
       <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
@@ -2160,6 +2222,54 @@ function cycleEditor(j, i, ctx){
     <div class="cycfoot"><span class="small muted">例：${ex}</span>
     ${cs.length > 1 ? `<button type="button" class="ghost" data-cycdel="${i}" data-ctx="${ctx}">1回だけにする</button>` : `<button type="button" class="ghost" data-cycadd="${i}" data-ctx="${ctx}">＋ 締め日をもう1つ（月2回払い）</button>`}</div></div>`;
 }
+const RATE_PRESETS = [
+  {l: "土日祝", days: [0, 6, 7]}, {l: "土曜", days: [6]}, {l: "日曜・祝日", days: [0, 7]},
+  {l: "17時以降", days: [], from: "17:00", to: "22:00"}, {l: "早朝（〜9時）", days: [], from: "05:00", to: "09:00"}
+];
+function rateEditor(j, i){
+  const rs = Array.isArray(j.rates) ? j.rates : [], hourly = j.payType === "hourly";
+  const unit = hourly ? "時給" : "1回の金額";
+  const rows = rs.map((r, k) => {
+    const ds = Array.isArray(r.days) ? r.days.map(Number) : [];
+    return `<div class="rrow">
+      <div class="rdays" role="group" aria-label="曜日">${[1, 2, 3, 4, 5, 6, 0, 7].map(d => `<button type="button" class="rd ${d === 0 || d === 7 ? "sun" : d === 6 ? "sat" : ""}" data-rrday="${i}" data-k="${k}" data-d="${d}" aria-pressed="${ds.includes(d)}">${RDAYS[d]}</button>`).join("")}</div>
+      <div class="rfields">
+        ${hourly ? `<label class="f rtimef">時間帯（空欄なら1日中）<span class="rtime"><input type="time" id="rr-${i}-${k}-f" data-rr="${i}" data-k="${k}" data-f="from" value="${esc(r.from || "")}" aria-label="開始"><span>〜</span><input type="time" id="rr-${i}-${k}-t" data-rr="${i}" data-k="${k}" data-f="to" value="${esc(r.to || "")}" aria-label="終了"></span></label>` : ""}
+        <label class="f">変わり方<select id="rr-${i}-${k}-m" data-rr="${i}" data-k="${k}" data-f="mode"><option value="set" ${r.mode !== "add" ? "selected" : ""}>${hourly ? "この時給" : "この金額"}にする</option><option value="add" ${r.mode === "add" ? "selected" : ""}>上乗せする</option></select></label>
+        <label class="f">金額（円）<input type="text" inputmode="decimal" id="rr-${i}-${k}-a" data-rr="${i}" data-k="${k}" data-f="amount" value="${esc(r.amount ?? "")}" placeholder="${r.mode === "add" ? "例：100" : hourly ? "例：1300" : "例：9000"}"></label>
+        <button type="button" class="ghost" data-rrdel="${i}" data-k="${k}">削除</button>
+      </div>
+      <span class="small muted">${ruleLabel(r)}${!ds.length ? "（曜日を選ばないと毎日）" : ""}${hourly && !(parseHM(r.from) && parseHM(r.to)) ? "・時間帯なし＝1日中" : ""}</span>
+    </div>`; }).join("");
+  return `<div class="f">曜日・時間帯で変わる${unit}<div class="cycbox">${rows}
+    <div class="cycfoot"><span class="small muted">${rs.length ? "曜日はシフトの開始日で判定します。重なったときは高い方の金額に、上乗せは足し算します。" : "「土曜は時給1,300円」「土日祝は+100円」などがあれば追加してください。"}</span>
+      <div class="rpresets">${RATE_PRESETS.filter(p => hourly || !p.from).map((p, k) => `<button type="button" class="ghost" data-rradd="${i}" data-p="${k}">＋ ${p.l}</button>`).join("")}</div></div></div></div>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-rradd],[data-rrdel],[data-rrday]"); if (!b) return;
+  e.stopPropagation();
+  const j = S.settings.jobs[Number(b.dataset.rradd ?? b.dataset.rrdel ?? b.dataset.rrday)]; if (!j) return;
+  j.rates = Array.isArray(j.rates) ? j.rates : [];
+  if (b.dataset.rradd !== undefined){
+    const p = RATE_PRESETS.filter(x => j.payType === "hourly" || !x.from)[Number(b.dataset.p)];
+    j.rates.push({days: p.days.slice(), from: p.from || "", to: p.to || "", mode: "set", amount: ""});
+    putSettings(`「${p.l}」の欄を追加しました。金額を入れてください`);
+  } else if (b.dataset.rrdel !== undefined){ j.rates.splice(Number(b.dataset.k), 1); putSettings("削除しました"); }
+  else {
+    const r = j.rates[Number(b.dataset.k)]; if (!r) return;
+    const d = Number(b.dataset.d), ds = new Set((r.days || []).map(Number));
+    if (ds.has(d)) ds.delete(d); else ds.add(d);
+    r.days = [...ds]; putSettings(`「${esc(j.name)}」の特別${j.payType === "hourly" ? "時給" : "金額"}を保存しました`);
+  }
+}, true);
+document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || t.dataset.rr === undefined) return;
+  e.stopPropagation();
+  const j = S.settings.jobs[Number(t.dataset.rr)], r = j && (j.rates || [])[Number(t.dataset.k)]; if (!r) return;
+  if (t.dataset.f === "amount" && badNum(t.value)){ toast("数字で入力してください", "warn"); return; }
+  r[t.dataset.f] = t.dataset.f === "amount" ? (t.value === "" ? "" : num(t.value)) : t.value;
+  putSettings(`「${esc(j.name)}」の特別${j.payType === "hourly" ? "時給" : "金額"}を保存しました`);
+}, true);
 function toSalary(j){
   // 月給 jobs: paid monthly, overtime from shifts, no night/weekend extras; counted from this month on
   j.payFreq = "monthly"; j.night = false; if (!j.since) j.since = todayKey; if (!hasVal(j.netRate)) j.netRate = 80;
@@ -2279,7 +2389,7 @@ function viewOnboarding(){
     </div>${cta("はじめる")}`;
   if (step === 1){
     const jobs = st.jobs.length ? st.jobs : (st.jobs = [newJob()]);
-    body = `<div class="ostep-h"><h2 class="oh">どこで<br>${personaOf() === "worker" ? "働いてる？" : "バイトしてる？"}</h2><p class="osub">給料の計算に使います。${personaOf() === "worker" ? "副業があれば2つ目に追加してください。" : "深夜割増などの細かい設定はあとで変えられます。"}</p></div>
+    body = `<div class="ostep-h"><h2 class="oh">どこで<br>${personaOf() === "worker" ? "働いてる？" : "バイトしてる？"}</h2><p class="osub">給料の計算に使います。${personaOf() === "worker" ? "副業があれば2つ目に追加してください。" : "深夜割増や「土曜は時給が高い」などの細かい設定は、あとで設定画面から追加できます。"}</p></div>
       ${jobs.map((j, i) => {
         const pi = presetOf(j), custom = S.onbCustom[i] || pi < 0;
         return `<div class="ocard">
