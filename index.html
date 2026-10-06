@@ -436,6 +436,11 @@ details.more section.block{padding:0;background:none}
 .hrow .hfrom{font-weight:900;font-size:14px;padding-left:4px}
 .hrow .hto{white-space:nowrap}
 .hrow.now{background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:10px}
+.hero.empty .hv-msg{font-family:var(--font-display,inherit);font-size:24px;font-weight:900;line-height:1.3;margin:6px 0 2px}
+.hero.empty .hmsg{margin:0;font-size:13px;opacity:.9;line-height:1.6}
+.hbtns{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.hbtn{min-height:44px;padding:0 16px;border-radius:12px;border:2px solid var(--on-accent,#fff);background:var(--on-accent,#fff);color:var(--accent);font:inherit;font-weight:900;cursor:pointer}
+.hbtn.ghostb{background:transparent;color:var(--on-accent,#fff)}
 .stabs{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:4px;margin-bottom:12px;background:var(--surface);border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .stabs button{min-height:40px;border:none;border-radius:10px;background:transparent;font:inherit;font-size:13px;font-weight:700;color:var(--muted);padding:0 2px}
 .stabs button[aria-selected="true"]{background:var(--accent);color:#fff;font-weight:900}
@@ -1631,11 +1636,22 @@ function viewHome(){
   const isCur = `${S.y}-${pad(S.m)}` === todayKey;
   const pend = periodRange(S.y, S.m).end;
   const daysLeft = isCur ? Math.round((Date.UTC(...pend.split("-").map((v, i) => i === 1 ? v - 1 : Number(v))) - Date.UTC(now.y, now.m - 1, now.d)) / 864e5) + 1 : 0;
-  const hero = `<div class="hero">
-      <div class="hk"><span>${x.left < 0 ? `${mName()}は足りません` : `${mName()}に自由に使えるお金`}</span>${isCur && x.left > 0 && daysLeft ? `<span>1日あたり ${yen(Math.floor(x.left / daysLeft))}</span>` : ""}</div>
+  // no pay entered for this month yet (e.g. right after the first setup): ask for it instead of showing a big minus
+  const missing = missingPay(x), noIncome = x.income <= 0, partial = !noIncome && missing.length > 0;
+  const waiting = noIncome || (partial && x.left < 0);   // a minus that only comes from pay not typed in yet
+  const hero = waiting ? `<div class="hero empty">
+      <div class="hk"><span>${mName()}に自由に使えるお金</span></div>
+      <div class="hv-msg">${noIncome ? "給料を入れると計算します" : "あと少しで計算できます"}</div>
+      <p class="hmsg">${noIncome ? `${mName()}に使う給料（${S.settings.jobs.length ? "シフトか、振り込まれた金額" : "まずは勤務先の登録"}）を入れると、ここに今月自由に使えるお金が出ます。` : `まだ入っていない給料があります：${missing.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}`}</p>
+      <div class="hbtns">${S.settings.jobs.length ? `<button type="button" class="hbtn" data-incopen="budget">給料の金額を入れる ›</button><button type="button" class="hbtn ghostb" data-act="quickShift">シフトを入れる</button>` : `<button type="button" class="hbtn" data-goto="settings">勤務先を登録する ›</button>`}</div>
+      ${!noIncome ? `<div class="hs">入力済みの分だけで計算すると ${yen(x.left)}</div>` : ""}
+      ${x.fixed + x.save + x.evTotal ? `<div class="hs">出ていく予定：固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}・行事 ${yen(x.evTotal)}</div>` : ""}
+    </div>` : `<div class="hero">
+      <div class="hk"><span>${partial ? `${mName()}に自由に使えるお金（仮）` : x.left < 0 ? `${mName()}は足りません` : `${mName()}に自由に使えるお金`}</span>${isCur && x.left > 0 && daysLeft ? `<span>1日あたり ${yen(Math.floor(x.left / daysLeft))}</span>` : ""}</div>
       <div class="hv">${x.left < 0 ? "−" : ""}${yen(Math.abs(x.left)).replace("−", "")}</div>
       <div class="hbar" aria-hidden="true">${seg(x.fixed, "color-mix(in srgb, var(--on-accent) 45%, transparent)")}${seg(x.save, "color-mix(in srgb, var(--on-accent) 70%, transparent)")}${seg(x.evTotal, "var(--gold)")}</div>
       <div class="hs">入る ${yen(x.income)} − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}・行事 ${yen(x.evTotal)}</div>
+      ${partial ? `<div class="hs">まだ入っていない給料があるので、仮の金額です。</div>` : ""}
     </div>`;
 
   // next payday + savings
@@ -1664,8 +1680,8 @@ function viewHome(){
   return `
   ${warn.map(w => `<div class="notice warn"><div>${w}</div></div>`).join("")}
   ${hero}
-  ${x.left < 0 && rj && num(rj.wage) ? `<div class="notice warn"><div>${yen(-x.left)} 足りません。${esc(rj.name)}であと<b>約${Math.ceil(-x.left / num(rj.wage))}時間</b>働くか、行事の予算を見直しましょう。</div></div>` : ""}
-  ${(() => { const ms = missingPay(x); return ms.length ? `<button type="button" class="notice warn incnote" data-incopen="budget"><div><b>${mName()}に使う給料の金額が入っていません</b><br><span class="small">${ms.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}。シフトを入れていなくても、金額だけ入れられます。</span></div><span class="incgo">入力する ›</span></button>` : ""; })()}
+  ${!noIncome && !partial && x.left < 0 && rj && num(rj.wage) ? `<div class="notice warn"><div>${yen(-x.left)} 足りません。${esc(rj.name)}であと<b>約${Math.ceil(-x.left / num(rj.wage))}時間</b>働くか、行事の予算を見直しましょう。</div></div>` : ""}
+  ${(() => { const ms = waiting ? [] : missing; return ms.length ? `<button type="button" class="notice warn incnote" data-incopen="budget"><div><b>${mName()}に使う給料の金額が入っていません</b><br><span class="small">${ms.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}。シフトを入れていなくても、金額だけ入れられます。</span></div><span class="incgo">入力する ›</span></button>` : ""; })()}
   <div class="duo">${npHtml}${svHtml}</div>
   <div class="sec">
     <div class="sec-h"><h2>${isCur ? "もうすぐ出ていくお金" : `${mName()}に出ていくお金`}</h2><button type="button" class="link" data-goto="events">すべて</button></div>
