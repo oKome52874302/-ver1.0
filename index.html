@@ -1661,11 +1661,19 @@ function viewHome(){
   // no pay entered for this month yet (e.g. right after the first setup): ask for it instead of showing a big minus
   const missing = missingPay(x), noIncome = x.income <= 0, partial = !noIncome && missing.length > 0;
   const waiting = noIncome || (partial && x.left < 0);   // a minus that only comes from pay not typed in yet
+  // pay for work done in this month arrives later; say when it becomes spendable
+  const wk = (() => {
+    const worked = shifts.filter(t => inPeriod(t.ev.ymd, S.y, S.m)); if (!worked.length) return null;
+    return {n: worked.length, total: worked.reduce((a, t) => a + t.pay, 0),
+      uses: [...new Set(worked.map(t => { const [py, pm] = t.pd.key.split("-").map(Number); return mName(...addMonths(py, pm, lagOf(t.job))); }))].join("・"),
+      pds: [...new Set(worked.map(t => `${t.pd.m}/${t.pd.d}`))].join("・")};
+  })();
+  const wkHero = noIncome && wk;   // the hero would be empty: show the worked pay there instead of a separate tile
   const hero = waiting ? `<div class="hero empty">
-      <div class="hk"><span>${mName()}に自由に使えるお金</span></div>
-      <div class="hv-msg">${noIncome ? "給料を入れると計算します" : "あと少しで計算できます"}</div>
-      <p class="hmsg">${noIncome ? `${mName()}に使う給料（${S.settings.jobs.length ? "シフトか、振り込まれた金額" : `まずは${jobWord()}の登録`}）を入れると、ここに今月自由に使えるお金が出ます。` : `まだ入っていない給料があります：${missing.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}`}</p>
-      <div class="hbtns">${S.settings.jobs.length ? `<button type="button" class="hbtn" data-incopen="budget">給料の金額を入れる ›</button><button type="button" class="hbtn ghostb" data-act="quickShift">シフトを入れる</button>` : `<button type="button" class="hbtn" data-goto="settings">勤務先を登録する ›</button>`}</div>
+      <div class="hk"><span>${wkHero ? `${mName()}に働いた分（${wk.n}回）` : `${mName()}に自由に使えるお金`}</span></div>
+      <div class="hv-msg">${wkHero ? `${wk.uses}に使える見込み ${yen(wk.total)}` : noIncome ? "給料を入れると計算します" : "あと少しで計算できます"}</div>
+      <p class="hmsg">${wkHero ? `${wk.pds}に振り込まれて、${wk.uses}に使えるお金になります。${mName()}に使う給料（前の月までに働いた分）を入れると、ここに${mName()}に自由に使えるお金が出ます。` : noIncome ? `${mName()}に使う給料（${S.settings.jobs.length ? "シフトか、振り込まれた金額" : `まずは${jobWord()}の登録`}）を入れると、ここに今月自由に使えるお金が出ます。` : `まだ入っていない給料があります：${missing.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}`}</p>
+      <div class="hbtns">${S.settings.jobs.length ? `<button type="button" class="hbtn" data-incopen="budget">給料の金額を入れる ›</button><button type="button" class="hbtn ghostb" data-act="quickShift">シフトを入れる</button>` : `<button type="button" class="hbtn" data-goto="settings">${jobWord()}を登録する ›</button>`}</div>
       ${!noIncome ? `<div class="hs">入力済みの分だけで計算すると ${yen(x.left)}</div>` : ""}
       ${x.fixed + x.save + x.evTotal ? `<div class="hs">出ていく予定：固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}・行事 ${yen(x.evTotal)}</div>` : ""}
     </div>` : `<div class="hero">
@@ -1704,14 +1712,7 @@ function viewHome(){
   ${hero}
   ${!noIncome && !partial && x.left < 0 && rj && num(rj.wage) ? `<div class="notice warn"><div>${yen(-x.left)} 足りません。${esc(rj.name)}であと<b>約${Math.ceil(-x.left / num(rj.wage))}時間</b>働くか、行事の予算を見直しましょう。</div></div>` : ""}
   ${(() => { const ms = waiting ? [] : missing; return ms.length ? `<button type="button" class="notice warn incnote" data-incopen="budget"><div><b>${mName()}に使う給料の金額が入っていません</b><br><span class="small">${ms.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}。シフトを入れていなくても、金額だけ入れられます。</span></div><span class="incgo">入力する ›</span></button>` : ""; })()}
-  ${(() => {
-    // pay for work done in this month arrives later; say when it becomes spendable
-    const worked = shifts.filter(t => inPeriod(t.ev.ymd, S.y, S.m)); if (!worked.length) return "";
-    const total = worked.reduce((a, t) => a + t.pay, 0);
-    const uses = [...new Set(worked.map(t => { const [py, pm] = t.pd.key.split("-").map(Number); return mName(...addMonths(py, pm, lagOf(t.job))); }))];
-    const pds = [...new Set(worked.map(t => `${t.pd.m}/${t.pd.d}`))];
-    return `<div class="workedtile"><span class="wk">${mName()}に働いた分（${worked.length}回）</span><span class="wv">${yen(total)}</span><span class="ws">${pds.join("・")}に振込 → <b>${uses.join("・")}に使えるお金</b>になります</span></div>`;
-  })()}
+  ${wk && !wkHero ? `<div class="workedtile"><span class="wk">${mName()}に働いた分（${wk.n}回）</span><span class="wv">${yen(wk.total)}</span><span class="ws">${wk.pds}に振込 → <b>${wk.uses}に使えるお金</b>になります</span></div>` : ""}
   <div class="duo">${npHtml}${svHtml}</div>
   <div class="sec">
     <div class="sec-h"><h2>${isCur ? "もうすぐ出ていくお金" : `${mName()}に出ていくお金`}</h2><button type="button" class="link" data-goto="events">すべて</button></div>
@@ -1799,10 +1800,20 @@ function formFor(jobId){
   // the break is NOT copied: a short day with last time's 60-minute break silently underpays
   return {editId: null, job: jobId, start: last ? last.start || "" : "", end: last ? last.end || "" : "", breakMin: "", transport: last && last.transport !== undefined ? last.transport : "", note: "", copied: !!(last && last.start)};
 }
+/* いつもの休憩: a blank break uses the job's rule (e.g. over 6h → 45 min), so a short day never gets a long break */
+const hasBrkRule = j => !!j && num(j.brkMin) > 0;
+const brkRuleText = j => `${num(j.brkOver) > 0 ? `${hrs(num(j.brkOver))}時間を超えたら` : "毎回"}${num(j.brkMin)}分`;
+function autoBreak(f, job){
+  if (!hasBrkRule(job)) return 0;
+  const a = parseHM(f.start), b = parseHM(f.end); if (!a || !b) return 0;
+  let span = (b[0] * 60 + b[1]) - (a[0] * 60 + a[1]); if (span <= 0) span += 1440;
+  return span > num(job.brkOver) * 60 ? num(job.brkMin) : 0;
+}
+const effBreak = (f, job) => f.breakMin === "" || f.breakMin == null ? autoBreak(f, job) : num(f.breakMin);
 function previewText(){
   const f = S.form; if (!f || !S.sel) return "";
   const job = jobById(f.job); if (!job) return `${jobWord()}を選んでください`;
-  const c = calcShift({...f, ymd: S.sel}, job);
+  const c = calcShift({...f, breakMin: effBreak(f, job), ymd: S.sel}, job);
   const tr = c.transport ? ` ＋ 交通費 ${yen(c.transport)}` : "";
   if (job.payType === "salary"){
     if (c.needsRate) return "月給が未設定です（設定タブで入力してください）";
@@ -1860,12 +1871,13 @@ function viewShifts(){
       <label class="f">${jobWord()}<select id="fJob" data-form="job">${jobs.map(j => `<option value="${esc(j.id)}" ${j.id === f.job ? "selected" : ""}>${esc(j.name)}</option>`).join("")}</select></label>
       <label class="f">開始<input type="time" id="fStart" data-form="start" value="${esc(f.start)}" step="300"></label>
       <label class="f">終了<input type="time" id="fEnd" data-form="end" value="${esc(f.end)}" step="300"></label>
-      <label class="f">休憩（分）<input type="text" inputmode="decimal" id="fBreak" data-form="breakMin" min="0" step="5" class="w-s" value="${esc(f.breakMin)}" placeholder="0"></label>
+      <label class="f">休憩（分）<input type="text" inputmode="decimal" id="fBreak" data-form="breakMin" min="0" step="5" class="w-s" value="${esc(f.breakMin)}" placeholder="${hasBrkRule(fj) ? "自動" : "0"}"></label>
       <label class="f">交通費（円）<input type="text" inputmode="decimal" id="fTr" data-form="transport" min="0" step="10" class="w-s" value="${esc(f.transport ?? "")}" placeholder="${esc(String(fj ? num(fj.transport) : 0))}"></label>
       <label class="f" style="flex:1 1 10em">メモ<input type="text" id="fNote" data-form="note" class="w-l" value="${esc(f.note)}" placeholder="任意"></label>
       <div style="display:flex;gap:6px;flex:1 1 100%"><button class="primary" type="submit" style="flex:1;min-height:46px;font-weight:900">${f.editId ? "更新する" : "＋ この日にシフトを追加"}</button>${f.editId ? `<button type="button" data-act="cancelEdit">やめる</button>` : ""}</div>
     </form>
-    ${f.copied && !f.editId ? `<div class="small muted copied">開始・終了は前回と同じ時刻を入れています。休憩は毎回入れてください。</div>` : ""}
+    ${f.copied && !f.editId ? `<div class="small muted copied">開始・終了は前回と同じ時刻を入れています。${hasBrkRule(fj) ? `休憩は空欄なら、いつもの休憩（${brkRuleText(fj)}）で計算します。` : "休憩は毎回入れてください。"}</div>` : ""}
+    ${!hasBrkRule(fj) && fj && fj.payType !== "fixed" ? `<div class="small muted">休憩がいつも同じなら、設定の${jobWord()}で「いつもの休憩」を決めておくと自動で入ります。</div>` : ""}
     <div class="preview" id="preview">${esc(previewText())}</div>
     ${fj && fj.payType === "fixed" ? `<div class="small muted">1回あたり固定の${jobWord()}は、時刻を入れなくても金額に反映されます。</div>` : ""}
     ${fj && fj.payType === "salary" ? `<div class="small muted">月給の${jobWord()}は、残業した日だけ入れればOKです。月給そのものは毎月自動で入ります。</div>` : ""}` :
@@ -2207,6 +2219,8 @@ function viewSettings(){
           <label class="f">給与の形<select id="jt-${i}" data-job="${i}" data-field="payType"><option value="hourly" ${j.payType === "hourly" ? "selected" : ""}>時給</option><option value="fixed" ${j.payType === "fixed" ? "selected" : ""}>1回あたり固定</option><option value="salary" ${j.payType === "salary" ? "selected" : ""}>月給</option></select></label>
           ${amountFields}
           ${j.payType === "salary" ? "" : `<label class="f">交通費（1回・円）<input type="text" inputmode="decimal" id="jc-${i}" data-job="${i}" data-field="transport" value="${esc(j.transport || "")}" placeholder="0"></label>`}
+          ${j.payType === "fixed" ? "" : `<label class="f">いつもの休憩（分）<input type="text" inputmode="decimal" id="jbm-${i}" data-job="${i}" data-field="brkMin" value="${esc(num(j.brkMin) ? j.brkMin : "")}" placeholder="例：45"></label>
+          <label class="f">勤務が何時間を超えたら<input type="text" inputmode="decimal" id="jbo-${i}" data-job="${i}" data-field="brkOver" value="${esc(num(j.brkOver) ? j.brkOver : "")}" placeholder="例：6（空欄なら毎回）"></label>`}
         </div>
         ${freqOf(j) === "monthly" ? `<div class="f">給料日${cycleEditor(j, i, "set")}</div>` : `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>`}
         <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
@@ -2251,7 +2265,7 @@ function viewSettings(){
   } else if (tab === "wall"){
     body = `<section class="block">
       <h2>年収の壁</h2>
-      <div class="small muted">ホームに表示する壁を選んでください（2026年分の目安）。社会保険の「106万円の壁」は2026年10月に賃金要件がなくなり、勤務先の社会保険に入るかどうかは主に週20時間以上かで決まります。</div>
+      <div class="small muted">ホームに表示する壁を選んでください（2026年分の目安）。社会保険の「106万円の壁」（勤務先の社会保険に入る基準）は、賃金要件（月8.8万円）をなくすことが決まっていて、なくなった後は主に週20時間以上働くかどうかで決まります。いつからかは勤務先や厚生労働省の案内で確かめてください。</div>
       <div class="wallpick">${WALLS.map(w => `<label class="inline"><input type="checkbox" data-wall="${w.id}" ${(s.walls || []).includes(w.id) ? "checked" : ""}> <b>${yen(w.amount)}</b> ${esc(w.name)}</label>`).join("")}</div>
       <div class="grid2">
         <label class="f">自分で決めた上限（円・任意）<input type="text" inputmode="decimal" id="sWall" data-set="wallCustom" value="${esc(s.wallCustom || "")}" placeholder="なし"></label>
@@ -2593,13 +2607,13 @@ document.addEventListener("submit", e => {
     if (!job){ addNotice("warn", `${jobWord()}を選んでください。`); return; }
     if (job.payType !== "fixed" && !(parseHM(f.start) && parseHM(f.end))){ addNotice("warn", "開始と終了の時刻を入れてください。"); return; }
     const prev = f.editId ? S.shifts[f.editId] || {} : {};
-    const rec = {job: f.job, ymd: S.sel, start: f.start || "", end: f.end || "", breakMin: f.breakMin === "" ? 0 : num(f.breakMin), transport: f.transport === "" || f.transport == null ? "" : num(f.transport), note: (f.note || "").trim(),
+    const rec = {job: f.job, ymd: S.sel, start: f.start || "", end: f.end || "", breakMin: effBreak(f, job), transport: f.transport === "" || f.transport == null ? "" : num(f.transport), note: (f.note || "").trim(),
                  calEventId: prev.calEventId || "", calAdopted: !!prev.calAdopted, calSync: prev.calEventId ? "pending" : ""};
     const id = f.editId || "s" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
     if (prev.calAdopted && prev.job !== f.job){ rec.calEventId = ""; rec.calAdopted = false; }
     const msg = (f.editId ? `${S.sel.slice(5).replace("-", "/")} の ${esc(job.name)} を更新しました` : `${S.sel.slice(5).replace("-", "/")} に ${esc(job.name)} を保存しました`) + (S.settings.calSync && mcp ? "。カレンダーに反映しています…" : "");
-    S.form = formFor(f.job);
     putDoc("shifts", id, rec, msg);
+    S.form = formFor(f.job);   // after saving, so "前回" is the shift just entered
     if (S.settings.calSync && mcp) syncShift(id, false);
     return;
   }
