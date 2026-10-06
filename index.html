@@ -430,6 +430,10 @@ details.more section.block{padding:0;background:none}
 .rfields{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}.rfields .f{flex:1 1 8em;min-width:0}
 .rfields .f.rtimef{flex:1 1 100%}.rtime{display:flex;align-items:center;gap:6px}.rtime input{min-width:0;flex:1}
 .rpresets{display:flex;flex-wrap:wrap;gap:4px}
+.odetail-t{border:none;background:none;font:inherit;font-size:13px;font-weight:900;color:var(--accent);text-align:left;padding:4px 0;cursor:pointer}
+.odetail{display:flex;flex-direction:column;gap:10px}
+.alwtr{flex:1 1 100%;order:3;display:flex;align-items:center;gap:8px}
+.alwtr input[type=checkbox],.odetail input[type=checkbox]{width:20px!important;height:20px!important;min-height:0!important;flex:none;padding:0;margin:0}
 .inc-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden}
 .inc-row{display:grid;grid-template-columns:minmax(0,1fr) 9.5em;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}.inc-row:first-child{border-top:none}
 .inc-n{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -840,6 +844,24 @@ const ruleLabel = r => {
   const time = parseHM(r.from) && parseHM(r.to) ? ` ${r.from}〜${r.to}` : "";
   return `${days}${time}`;
 };
+/* 条件つきの手当: {name, scope "shift" | "month", minDays, minHours, logic "or" | "and", amount, isTr}
+   shift: paid on a single shift of minHours or more. month: paid once per pay when the days / hours worked in it reach the bar.
+   isTr = treated as 交通費 (left out of the tax walls). */
+const alwOf = j => (Array.isArray(j.allowances) ? j.allowances : []).filter(a => num(a.amount) > 0);
+function alwMet(a, days, hours){
+  const cs = [];
+  if (a.scope !== "shift" && num(a.minDays) > 0) cs.push(days >= num(a.minDays));
+  if (num(a.minHours) > 0) cs.push(hours >= num(a.minHours));
+  if (!cs.length) return true;
+  return a.logic === "and" ? cs.every(Boolean) : cs.some(Boolean);
+}
+const alwCond = a => {
+  const p = [];
+  if (a.scope !== "shift" && num(a.minDays) > 0) p.push(`${num(a.minDays)}日以上`);
+  if (num(a.minHours) > 0) p.push(`${hrs(num(a.minHours))}時間以上`);
+  if (!p.length) return a.scope === "shift" ? "毎回" : "毎月";
+  return (a.scope === "shift" ? "1回" : "月") + p.join(a.logic === "and" ? "かつ" : "または") + "働いたら";
+};
 const parseHM = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); return m ? [Number(m[1]), Number(m[2])] : null; };
 /* r = {job, ymd, start, end, breakMin} — the same shape is used for saved shifts and for the live form preview */
 function calcShift(r, job, id){
@@ -882,13 +904,17 @@ function calcShift(r, job, id){
   }
   const hasTr = r.transport !== undefined && r.transport !== null && r.transport !== "";
   const transport = job && job.payType !== "salary" ? (hasTr ? num(r.transport) : num(job.transport)) : 0;   // 月給: 通勤手当 is monthly
+  let alwPay = 0, alwTr = 0;
+  const alwHit = [];
+  if (job && job.payType !== "salary") for (const al of alwOf(job)) if (al.scope === "shift" && alwMet(al, 1, paid)){ if (al.isTr) alwTr += num(al.amount); else alwPay += num(al.amount); alwHit.push(al); }
+  pay += alwPay;
   const wagePay = pay;
-  pay += transport;
+  pay += transport + alwTr;
   const rateLabel = job && job.payType === "fixed" ? "1回の金額が未設定" : job && job.payType === "salary" ? "月給が未設定" : "時給が未設定";
   const needsRate = !job ? false : job.payType === "fixed" ? !num(job.fixedPay) : job.payType === "salary" ? !num(job.salary) : !num(job.wage);
   const ot = job && job.payType === "salary" ? Math.max(0, paid - (hasVal(job.dayHours) ? num(job.dayHours) : 8)) : 0;
   const rateNote = used.size ? [...used].map(h => `${ruleLabel(h)} ${h.mode === "add" ? "+" + yen(num(h.amount)) : yen(num(h.amount))}`).join("・") : "";
-  return {id, rec: r, ev, job, span, brk, paid, night, weekend, ot, rateNote, avgRate, pay, rawPay: pay, wagePay, transport, excluded: false, needsRate,
+  return {id, rec: r, ev, job, span, brk, paid, night, weekend, ot, rateNote, avgRate, pay, rawPay: pay, wagePay, transport: transport + alwTr, alwHit, excluded: false, needsRate,
           rateLabel, pd: job ? payday(ev, job) : {y, m, d, key: ""}, time: a && b ? `${r.start}–${r.end}` : ""};
 }
 function allShifts(){
@@ -1081,6 +1107,13 @@ function monthIncome(y, m, shifts){
     let est = Math.max(0, xs.reduce((a, s) => a + s.pay, 0) - fee), tr = xs.reduce((a, s) => a + s.transport, 0);
     // 月給: this month's base pay (whichever work month is paid now) + overtime, × take-home share, + 通勤手当 + bonus
     let sal = 0, ot = 0, bonus = 0;
+    let alw = 0;
+    const alwHitM = [];
+    if (j.payType !== "salary" && xs.length){
+      const days = new Set(xs.map(x => x.ev.ymd)).size, hours = xs.reduce((a, x) => a + x.paid, 0);
+      for (const al of alwOf(j)) if (al.scope !== "shift" && alwMet(al, days, hours)){ alw += num(al.amount); if (al.isTr) tr += num(al.amount); alwHitM.push(al); }
+      est += alw;
+    }
     if (j.payType === "salary"){
       for (let off = -3; off <= 0; off++){
         const [wy, wm] = addMonths(y, m, off), wk = `${wy}-${pad(wm)}`;
@@ -1104,7 +1137,7 @@ function monthIncome(y, m, shifts){
         if (!a || inPeriod(`${cy}-${pad(cm)}-${pad(sd)}`, y, m)){ a = b; if (inPeriod(`${cy}-${pad(cm)}-${pad(sd)}`, y, m)) break; }
       }
       return Object.assign(a, {key}); })();
-    return {job: j, freq, payouts: pds.length, fee, sal, ot, bonus, n: xs.length, hours: xs.reduce((a, s) => a + s.paid, 0), est, tr, confirmed, conf: confirmed ? num(conf[j.id]) : null, used: confirmed ? num(conf[j.id]) : est, pd};
+    return {job: j, freq, payouts: pds.length, fee, sal, ot, bonus, alw, alwHitM, n: xs.length, hours: xs.reduce((a, s) => a + s.paid, 0), est, tr, confirmed, conf: confirmed ? num(conf[j.id]) : null, used: confirmed ? num(conf[j.id]) : est, pd};
   });
   const others = Array.isArray(doc.others) ? doc.others : [];
   const othersTotal = others.reduce((a, o) => a + num(o.amount), 0);
@@ -1534,7 +1567,7 @@ function viewHome(){
       <div class="main"><div class="title"><span class="jdot" style="--jc:${jColor(r.job.id)}"></span>${esc(r.job.name)}</div>${r.pd.moved ? `<div class="sub">振込日 ${r.pd.m}/${r.pd.d}${movedNote(r.pd)}</div>` : ""}
         <div class="sub"><span class="chip">${r.lag ? `${r.srcM}月振込分` : "今月振込分"}</span> ${r.confirmed ? `<span class="chip good">確定</span>` : r.est ? `<span class="chip">見込み</span>` : `<span class="chip warn">未入力</span>`}
           ${r.job.payType === "salary" ? (r.sal || r.ot || r.bonus ? [r.sal ? `月給 ${yen(r.sal)}` : "", r.ot ? `残業 ${yen(r.ot)}` : "", r.bonus ? `ボーナス ${yen(r.bonus)}` : "", r.tr ? `通勤手当 ${yen(r.tr)}` : ""].filter(Boolean).join("＋") + ` → 手取り目安 ${yen(r.est)}（額面の${netRateOf(r.job)}%）` : "この月の振込なし")
-            : r.n ? `シフト${r.n}回・実働 ${hrs(r.hours)}h → 見込み ${yen(r.est)}${r.tr ? `（交通費 ${yen(r.tr)} 含む）` : ""}${r.fee ? `・手数料 −${yen(r.fee)}` : ""}` : "シフト入力なし"}
+            : r.n ? `シフト${r.n}回・実働 ${hrs(r.hours)}h → 見込み ${yen(r.est)}${r.tr ? `（交通費 ${yen(r.tr)} 含む）` : ""}${r.fee ? `・手数料 −${yen(r.fee)}` : ""}${r.alw ? `・手当 +${yen(r.alw)}（${r.alwHitM.map(a => esc(a.name || "手当")).join("・")}）` : ""}` : "シフト入力なし"}
           ${r.confirmed && r.n && r.conf !== r.est ? `・差 ${r.conf - r.est > 0 ? "+" : "−"}${yen(Math.abs(r.conf - r.est))}` : ""}</div></div>
       <div class="amt">${yen(r.used)}</div>
       <div class="edit"><label class="inline">確定額 <input type="text" inputmode="decimal" id="ij-${esc(r.job.id)}-${r.srcKey}" data-inc-job="${esc(r.job.id)}" data-inc-key="${r.srcKey}" value="${r.confirmed ? esc(r.conf) : ""}" placeholder="${r.est ? esc(r.est) : "円"}"></label>
@@ -1686,7 +1719,7 @@ function previewText(){
     if (!c.span) return "開始と終了の時刻を入れてください（定時を超えた分を残業代にします）";
     return `実働 ${hrs(c.paid)}h − 定時 ${hrs(hasVal(job.dayHours) ? num(job.dayHours) : 8)}h = 残業 ${hrs(c.ot)}h → ${yen(Math.floor(hourBase(job)))} × 1.25 × ${hrs(c.ot)}h = ${yen(c.pay)}（月給とは別に${c.pd.m}/${c.pd.d}支給）`;
   }
-  const rn = c.rateNote ? `［特別：${c.rateNote}］` : "";
+  const rn = (c.rateNote ? `［特別：${c.rateNote}］` : "") + (c.alwHit && c.alwHit.length ? `［手当：${c.alwHit.map(a => `${a.name || "手当"} ${yen(num(a.amount))}`).join("・")}］` : "");
   if (job.payType === "fixed") return c.needsRate ? `${c.rateLabel}（設定タブで入力するか、時給に切り替えてください）` : `1回 ${yen(c.wagePay)}${rn}${tr} = ${yen(c.pay)}（支給 ${c.pd.m}/${c.pd.d}）`;
   if (!c.span) return "開始と終了の時刻を入れてください";
   return `拘束 ${hrs(c.span)}h − 休憩 ${hrs(c.brk * 60)}分 = 実働 ${hrs(c.paid)}h${c.night ? `（深夜 ${hrs(c.night)}h）` : ""} → ${c.needsRate ? c.rateLabel : `${yen(c.wagePay)}${rn}${tr} = ${yen(c.pay)}`}（支給 ${c.pd.m}/${c.pd.d}）`;
@@ -2050,7 +2083,7 @@ function viewSettings(){
         ${freqOf(j) !== "monthly" ? "" : `<label class="f">この給料を使う月<select id="jl2-${i}" data-job="${i}" data-field="useLag"><option value="1" ${lagOf(j) === 1 ? "selected" : ""}>振り込まれた翌月</option><option value="0" ${lagOf(j) === 0 ? "selected" : ""}>振り込まれた月</option></select></label>`}
         ${j.payType === "salary" ? "" : `<label class="f">交通費（1回・円／シフトごとに変更可）<input type="text" inputmode="decimal" min="0" step="10" id="jc-${i}" data-job="${i}" data-field="transport" value="${esc(j.transport || "")}" placeholder="0"></label>`}
       </div>
-      ${j.payType === "salary" ? "" : rateEditor(j, i)}
+      ${j.payType === "salary" ? "" : rateEditor(j, i) + allowanceEditor(j, i)}
       ${j.payType === "salary" ? bonusEditor(j, i) : `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>`}
       ${freqOf(j) === "monthly" ? `<div class="f">給料日${cycleEditor(j, i, "set")}</div>` : ""}
       <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
@@ -2437,6 +2470,54 @@ const RATE_PRESETS = [
   {l: "土日祝", days: [0, 6, 7]}, {l: "土曜", days: [6]}, {l: "日曜・祝日", days: [0, 7]},
   {l: "17時以降", days: [], from: "17:00", to: "22:00"}, {l: "早朝（〜9時）", days: [], from: "05:00", to: "09:00"}
 ];
+const ALW_PRESETS = [
+  {l: "月○日以上で交通費", a: {name: "交通費", scope: "month", minDays: 8, minHours: "", logic: "or", amount: "", isTr: true}},
+  {l: "1回○時間以上で交通費", a: {name: "交通費", scope: "shift", minDays: "", minHours: 4, logic: "or", amount: "", isTr: true}},
+  {l: "その他の手当", a: {name: "手当", scope: "month", minDays: "", minHours: "", logic: "or", amount: "", isTr: false}}
+];
+function allowanceEditor(j, i){
+  const as = Array.isArray(j.allowances) ? j.allowances : [];
+  const rows = as.map((a, k) => {
+    const id = f => `al-${i}-${k}-${f}`, at = f => `data-alw="${i}" data-k="${k}" data-f="${f}"`;
+    const both = a.scope !== "shift" && num(a.minDays) > 0 && num(a.minHours) > 0;
+    return `<div class="rrow">
+      <div class="rfields">
+        <label class="f">名前<input type="text" id="${id("n")}" ${at("name")} value="${esc(a.name || "")}" placeholder="例：交通費"></label>
+        <label class="f">いつ判定？<select id="${id("s")}" ${at("scope")}><option value="month" ${a.scope !== "shift" ? "selected" : ""}>1か月ごと</option><option value="shift" ${a.scope === "shift" ? "selected" : ""}>1回の勤務ごと</option></select></label>
+      </div>
+      <div class="rfields">
+        ${a.scope === "shift" ? "" : `<label class="f">○日以上<input type="text" inputmode="decimal" id="${id("d")}" ${at("minDays")} value="${esc(a.minDays ?? "")}" placeholder="なし"></label>`}
+        <label class="f">○時間以上<input type="text" inputmode="decimal" id="${id("h")}" ${at("minHours")} value="${esc(a.minHours ?? "")}" placeholder="なし"></label>
+        ${both ? `<label class="f">条件<select id="${id("l")}" ${at("logic")}><option value="or" ${a.logic !== "and" ? "selected" : ""}>どちらか満たせば</option><option value="and" ${a.logic === "and" ? "selected" : ""}>両方満たしたら</option></select></label>` : ""}
+      </div>
+      <div class="rfields">
+        <label class="f">もらえる額（円）<input type="text" inputmode="decimal" id="${id("a")}" ${at("amount")} value="${esc(a.amount ?? "")}" placeholder="例：3000"></label>
+        <label class="inline alwtr"><input type="checkbox" id="${id("t")}" ${at("isTr")} ${a.isTr ? "checked" : ""}> 交通費として扱う（年収の壁から除く）</label>
+        <button type="button" class="ghost" data-alwdel="${i}" data-k="${k}">削除</button>
+      </div>
+      <span class="small muted">${alwCond(a)} ${num(a.amount) ? yen(num(a.amount)) : "○円"}${a.scope === "shift" ? "（その日の分に足します）" : "（その月の給料に1回足します）"}</span>
+    </div>`; }).join("");
+  return `<div class="f">条件つきの交通費・手当<div class="cycbox">${rows}
+    <div class="cycfoot"><span class="small muted">${as.length ? "日数・時間は、同じ給料日に払われる分の勤務で数えます。" : "「月8日以上働いたら交通費3,000円」「1回4時間以上で交通費500円」などがあれば追加してください。"}</span>
+      <div class="rpresets">${ALW_PRESETS.filter(p => freqOf(j) === "monthly" || p.a.scope === "shift").map((p, k) => `<button type="button" class="ghost" data-alwadd="${i}" data-p="${ALW_PRESETS.indexOf(p)}">＋ ${p.l}</button>`).join("")}</div></div></div></div>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-alwadd],[data-alwdel]"); if (!b) return;
+  e.stopPropagation();
+  const j = S.settings.jobs[Number(b.dataset.alwadd ?? b.dataset.alwdel)]; if (!j) return;
+  j.allowances = Array.isArray(j.allowances) ? j.allowances : [];
+  if (b.dataset.alwadd !== undefined){ j.allowances.push(Object.assign({}, ALW_PRESETS[Number(b.dataset.p)].a)); putSettings("手当の欄を追加しました。条件と金額を入れてください"); }
+  else { j.allowances.splice(Number(b.dataset.k), 1); putSettings("削除しました"); }
+}, true);
+document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || t.dataset.alw === undefined) return;
+  e.stopPropagation();
+  const j = S.settings.jobs[Number(t.dataset.alw)], a = j && (j.allowances || [])[Number(t.dataset.k)]; if (!a) return;
+  const f = t.dataset.f;
+  if (["minDays", "minHours", "amount"].includes(f) && badNum(t.value)){ toast("数字で入力してください", "warn"); return; }
+  a[f] = f === "isTr" ? t.checked : ["minDays", "minHours", "amount"].includes(f) ? (t.value === "" ? "" : num(t.value)) : t.value;
+  putSettings(`「${esc(j.name || "勤務先")}」の手当を保存しました`);
+}, true);
 function rateEditor(j, i){
   const rs = Array.isArray(j.rates) ? j.rates : [], hourly = j.payType === "hourly";
   const unit = hourly ? "時給" : "1回の金額";
@@ -2618,6 +2699,10 @@ function viewOnboarding(){
           ${j.payType === "salary" ? `<label class="f">通勤手当（月）<input type="text" inputmode="decimal" id="oj-cm-${i}" data-o="jobs.${i}.commute" value="${esc(j.commute ?? "")}" placeholder="なし"></label>`
             : `<label class="f">交通費（1回）<input type="text" inputmode="decimal" id="oj-c-${i}" data-o="jobs.${i}.transport" value="${esc(j.transport)}" placeholder="なし"></label>`}
         </div>
+        ${j.payType === "salary" ? "" : (() => {
+          const open = S.onbDetail && S.onbDetail[i] !== undefined ? S.onbDetail[i] : (alwOf(j).length > 0 || rulesOf(j).length > 0);
+          return `<button type="button" class="odetail-t" data-onb="detail" data-i="${i}" aria-expanded="${open}">${open ? "▾" : "▸"} 土日祝で${j.payType === "hourly" ? "時給" : "金額"}が違う・条件つきで交通費や手当が出る（任意）</button>
+            ${open ? `<div class="odetail">${rateEditor(j, i)}${allowanceEditor(j, i)}</div>` : ""}`; })()}
         ${j.payType === "salary" ? `<p class="small muted">手取りは額面の約8割で見込みます（設定で変更可）。給与明細が来たら確定額を入れると、そちらを優先します。残業した日はシフトに入れると残業代も計算します。</p>` : ""}
         ${j.payType === "salary" ? "" : `<div class="f">給料の受け取り方${freqEditor(j, i, "onb")}</div>`}
         ${freqOf(j) !== "monthly" ? "" : `<div class="f">給料日
@@ -2733,6 +2818,7 @@ document.addEventListener("click", e => {
   else if (a === "back") S.onbStep = Math.max(0, (S.onbStep || 0) - 1);
   else if (a === "addjob") st.jobs.push(newJob());
   else if (a === "ptype"){ const j = st.jobs[Number(b.dataset.i)]; j.payType = b.dataset.v; if (j.payType === "salary") toSalary(j); }
+  else if (a === "detail"){ const i = b.dataset.i, j = st.jobs[Number(i)]; S.onbDetail = S.onbDetail || {}; const cur = S.onbDetail[i] !== undefined ? S.onbDetail[i] : (alwOf(j).length > 0 || rulesOf(j).length > 0); S.onbDetail[i] = !cur; }
   else if (a === "mstart"){ if (b.dataset.v === "custom") S.onbMs = true; else { S.onbMs = false; st.monthStart = num(b.dataset.v); } }
   else if (a === "persona"){
     st.persona = b.dataset.v; st.walls = WALL_DEF[st.persona].slice();
