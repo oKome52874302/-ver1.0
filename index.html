@@ -430,6 +430,12 @@ details.more section.block{padding:0;background:none}
 .rfields{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}.rfields .f{flex:1 1 8em;min-width:0}
 .rfields .f.rtimef{flex:1 1 100%}.rtime{display:flex;align-items:center;gap:6px}.rtime input{min-width:0;flex:1}
 .rpresets{display:flex;flex-wrap:wrap;gap:4px}
+.hrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,7.5em) 2.2em;gap:8px;align-items:center;padding:8px 6px;border-bottom:1px dashed var(--line)}
+.hwhen{display:flex;flex-direction:column;gap:2px;min-width:0}.hwhen input{width:100%;box-sizing:border-box}
+.hrow input{min-width:0;width:100%;box-sizing:border-box;min-height:42px;font-size:15px}
+.hrow .hfrom{font-weight:900;font-size:14px;padding-left:4px}
+.hrow .hto{white-space:nowrap}
+.hrow.now{background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:10px}
 .odetail-t{border:none;background:none;font:inherit;font-size:13px;font-weight:900;color:var(--accent);text-align:left;padding:4px 0;cursor:pointer}
 .odetail{display:flex;flex-direction:column;gap:10px}
 .alwtr{flex:1 1 100%;order:3;display:flex;align-items:center;gap:8px}
@@ -603,6 +609,7 @@ function saveLocal(){ if (db) return; try { localStorage.setItem(LS, JSON.string
 function loadLocal(){ try { const o = JSON.parse(localStorage.getItem(LS) || "null"); if (o){ S.settings = Object.assign(clone(DEFAULTS), o.settings||{}); S.shifts = o.shifts||{}; S.events = o.events||{}; S.income = o.income||{}; S.ach = o.ach||{}; } } catch(e){} migrateWalls(); migrateRates(); }
 function migrateRates(){
   for (const j of S.settings.jobs || []){
+    for (const f of ["wage", "fixedPay", "salary"]) syncPayField(j, f);
     if (num(j.weekendExtra) && !(Array.isArray(j.rates) && j.rates.length)) j.rates = [{days: [0, 6], from: "", to: "", mode: "add", amount: num(j.weekendExtra)}];
     j.weekendExtra = 0;
   }
@@ -862,6 +869,25 @@ const alwCond = a => {
   if (!p.length) return a.scope === "shift" ? "毎回" : "毎月";
   return (a.scope === "shift" ? "1回" : "月") + p.join(a.logic === "and" ? "かつ" : "または") + "働いたら";
 };
+/* 昇給などの履歴: j.hist[field] = [{from: "" (= from the start) | "YYYY-MM-DD", v}], field = wage | fixedPay | salary.
+   A shift is paid at the amount in force on its date; the plain field (j.wage …) mirrors today's amount. */
+const PAY_FIELD = {hourly: "wage", fixed: "fixedPay", salary: "salary"};
+const payFieldOf = j => PAY_FIELD[j.payType] || "wage";
+const histOf = (j, f) => (j.hist && Array.isArray(j.hist[f]) ? j.hist[f] : []).slice().sort((a, b) => String(a.from || "").localeCompare(String(b.from || "")));
+function valAt(j, f, ymd){
+  const h = histOf(j, f); if (!h.length) return num(j[f]);
+  let v = num(h[0].v);
+  for (const e of h) if (String(e.from || "") <= ymd) v = num(e.v);
+  return v;
+}
+function syncPayField(j, f){ if (histOf(j, f).length) j[f] = valAt(j, f, todayYmd); }
+/* typing in the main amount field edits the entry in force today */
+function editTodayAmount(j, f){
+  const h = histOf(j, f); if (!h.length) return;
+  let cur = h[0]; for (const e of h) if (String(e.from || "") <= todayYmd) cur = e;
+  const raw = j.hist[f].find(e => e === cur) || j.hist[f].find(e => String(e.from || "") === String(cur.from || ""));
+  if (raw) raw.v = num(j[f]);
+}
 const parseHM = t => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ""); return m ? [Number(m[1]), Number(m[2])] : null; };
 /* r = {job, ymd, start, end, breakMin} — the same shape is used for saved shifts and for the live form preview */
 function calcShift(r, job, id){
@@ -881,10 +907,10 @@ function calcShift(r, job, id){
   let pay = 0, avgRate = 0;
   const used = new Set();
   if (job){
-    if (job.payType === "fixed"){ const r = rateFor(num(job.fixedPay), rulesOf(job), ev, null); r.hit.forEach(h => used.add(h)); pay = r.v; }
-    else if (job.payType === "salary") pay = hourBase(job) * 1.25 * Math.max(0, paid - (hasVal(job.dayHours) ? num(job.dayHours) : 8));
+    if (job.payType === "fixed"){ const r = rateFor(valAt(job, "fixedPay", ev.ymd), rulesOf(job), ev, null); r.hit.forEach(h => used.add(h)); pay = r.v; }
+    else if (job.payType === "salary") pay = valAt(job, "salary", ev.ymd) / Math.max(1, num(job.stdHours) || 160) * 1.25 * Math.max(0, paid - (hasVal(job.dayHours) ? num(job.dayHours) : 8));
     else {
-      const rules = rulesOf(job), base = num(job.wage);
+      const rules = rulesOf(job), base = valAt(job, "wage", ev.ymd);
       if (rules.length && s && span > 0){
         // minute by minute: the rate in force at each minute; 深夜割増 is 25% of whatever rate applies then
         let sum = 0, nsum = 0, nmin = 0, n = 0;
@@ -1118,7 +1144,7 @@ function monthIncome(y, m, shifts){
       for (let off = -3; off <= 0; off++){
         const [wy, wm] = addMonths(y, m, off), wk = `${wy}-${pad(wm)}`;
         if (j.since && wk < j.since) continue;
-        if (payday({y: wy, m: wm, d: 1}, j).key === key) sal += num(j.salary);
+        if (payday({y: wy, m: wm, d: 1}, j).key === key) sal += valAt(j, "salary", `${wk}-01`);
       }
       if (!j.since || key >= j.since) bonus = (j.bonuses || []).filter(b => num(b.m) === m).reduce((a, b) => a + num(b.amount), 0);
       ot = est; tr = sal ? num(j.commute) : 0;
@@ -2083,6 +2109,7 @@ function viewSettings(){
         ${freqOf(j) !== "monthly" ? "" : `<label class="f">この給料を使う月<select id="jl2-${i}" data-job="${i}" data-field="useLag"><option value="1" ${lagOf(j) === 1 ? "selected" : ""}>振り込まれた翌月</option><option value="0" ${lagOf(j) === 0 ? "selected" : ""}>振り込まれた月</option></select></label>`}
         ${j.payType === "salary" ? "" : `<label class="f">交通費（1回・円／シフトごとに変更可）<input type="text" inputmode="decimal" min="0" step="10" id="jc-${i}" data-job="${i}" data-field="transport" value="${esc(j.transport || "")}" placeholder="0"></label>`}
       </div>
+      ${histEditor(j, i)}
       ${j.payType === "salary" ? "" : rateEditor(j, i) + allowanceEditor(j, i)}
       ${j.payType === "salary" ? bonusEditor(j, i) : `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>`}
       ${freqOf(j) === "monthly" ? `<div class="f">給料日${cycleEditor(j, i, "set")}</div>` : ""}
@@ -2318,6 +2345,7 @@ document.addEventListener("change", e => {
     if (t.type !== "checkbox" && t.tagName !== "SELECT"){ clearTimeout(typingTimer); if (f !== "name" && f !== "since" && badNum(val)) return; }
     j[f] = (t.type === "checkbox" || ["name","payType","calColor","holidayShift","since"].includes(f)) ? val : num(val);
     if (f === "payType" && val === "salary") toSalary(j);
+    if (f === PAY_FIELD.hourly || f === PAY_FIELD.fixed || f === PAY_FIELD.salary) editTodayAmount(j, f);
     putSettings(`「${esc(j.name)}」を保存しました`);
   } else if (t.dataset.fix !== undefined){
     const f = (S.settings.fixedItems || [])[Number(t.dataset.fix)], fld = t.dataset.field; if (!f) return;
@@ -2355,6 +2383,7 @@ document.addEventListener("input", e => {
     if (!j) return;
     if (f !== "name" && badNum(t.value)){ toast("数字で入力してください（例：1400）", "warn"); return; }
     j[f] = f === "name" ? t.value : num(t.value);
+    if (["wage", "fixedPay", "salary"].includes(f)) editTodayAmount(j, f);
     const l = document.getElementById("jl-" + i); if (l) l.textContent = jobLive(i);   // recalculated as you type
     clearTimeout(typingTimer);
     typingTimer = setTimeout(() => persistSettings(`「${esc(j.name)}」を保存しました`), 600);
@@ -2517,6 +2546,58 @@ document.addEventListener("change", e => {
   if (["minDays", "minHours", "amount"].includes(f) && badNum(t.value)){ toast("数字で入力してください", "warn"); return; }
   a[f] = f === "isTr" ? t.checked : ["minDays", "minHours", "amount"].includes(f) ? (t.value === "" ? "" : num(t.value)) : t.value;
   putSettings(`「${esc(j.name || "勤務先")}」の手当を保存しました`);
+}, true);
+function histEditor(j, i){
+  const f = payFieldOf(j), unit = {wage: "時給", fixedPay: "1回の金額", salary: "月給"}[f], h = histOf(j, f);
+  if (!h.length) return `<div class="f">${unit}の変更（昇給など）<div class="cycbox"><div class="cycfoot"><span class="small muted">${unit}が途中で変わったときは、変わった日と新しい金額を入れると、それより前のシフトは前の${unit}のまま計算します。</span>
+    <div class="rpresets"><button type="button" class="ghost" data-histadd="${i}">＋ ${unit}が変わった</button></div></div></div></div>`;
+  const rows = h.map((e, k) => {
+    const next = h[k + 1], until = next && next.from ? (() => { const d = new Date(Date.UTC(...next.from.split("-").map((x, n) => n === 1 ? x - 1 : Number(x))) - 864e5); return `${d.getUTCFullYear()}/${d.getUTCMonth() + 1}/${d.getUTCDate()}`; })() : "";
+    const now = valAt(j, f, todayYmd) === num(e.v) && String(e.from || "") <= todayYmd && (!next || String(next.from) > todayYmd);
+    return `<div class="hrow ${now ? "now" : ""}">
+      <span class="hwhen">${k === 0 ? `<span class="hfrom">最初から</span>` : `<input type="date" id="hs-${i}-${k}" data-hist="${i}" data-from="${esc(e.from)}" data-f="from" value="${esc(e.from)}" aria-label="変わった日">`}
+      <span class="small muted hto">${until ? `〜${until}まで` : "〜今も"}</span></span>
+      <input type="text" inputmode="decimal" id="hv-${i}-${k}" data-hist="${i}" data-from="${esc(e.from || "")}" data-f="v" value="${esc(e.v ?? "")}" aria-label="${unit}">
+      ${k === 0 ? `<span></span>` : `<button type="button" class="ghost" data-histdel="${i}" data-from="${esc(e.from)}" aria-label="この変更を削除">×</button>`}
+    </div>`; }).join("");
+  return `<div class="f">${unit}の変更履歴<div class="cycbox">${rows}
+    <div class="cycfoot"><span class="small muted">シフトの日付に合わせて、その時の${unit}で計算します。上の「${unit}」欄は今日の${unit}です。</span>
+      <div class="rpresets"><button type="button" class="ghost" data-histadd="${i}">＋ また${unit}が変わった</button></div></div></div></div>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-histadd],[data-histdel]"); if (!b) return;
+  e.stopPropagation();
+  const j = S.settings.jobs[Number(b.dataset.histadd ?? b.dataset.histdel)]; if (!j) return;
+  const f = payFieldOf(j); j.hist = j.hist || {};
+  if (b.dataset.histadd !== undefined){
+    const h = j.hist[f] = Array.isArray(j.hist[f]) && j.hist[f].length ? j.hist[f] : [{from: "", v: num(j[f])}];
+    // a new amount from the 1st of this month (or the day after the latest change)
+    let from = `${now.y}-${pad(now.m)}-01`;
+    while (h.some(x => x.from === from)){ const d = new Date(Date.UTC(...from.split("-").map((x, n) => n === 1 ? x - 1 : Number(x))) + 864e5); from = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`; }
+    h.push({from, v: num(j[f])});
+    syncPayField(j, f);
+    putSettings("変わった日と新しい金額を入れてください");
+    setTimeout(() => { const k = histOf(j, f).findIndex(x => x.from === from), el = document.getElementById(`hv-${S.settings.jobs.indexOf(j)}-${k}`); if (el){ el.focus(); el.select(); } }, 60);
+  } else {
+    j.hist[f] = (j.hist[f] || []).filter(x => x.from !== b.dataset.from);
+    if (j.hist[f].length <= 1){ if (j.hist[f][0]) j[f] = num(j.hist[f][0].v); delete j.hist[f]; }
+    syncPayField(j, f);
+    putSettings("変更を削除しました");
+  }
+}, true);
+document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || t.dataset.hist === undefined) return;
+  e.stopPropagation();
+  const j = S.settings.jobs[Number(t.dataset.hist)]; if (!j) return;
+  const f = payFieldOf(j), h = (j.hist || {})[f] || [], ent = h.find(x => String(x.from || "") === t.dataset.from); if (!ent) return;
+  if (t.dataset.f === "v"){ if (badNum(t.value)){ toast("数字で入力してください", "warn"); return; } ent.v = num(t.value); }
+  else {
+    if (!t.value){ toast("日付を選んでください", "warn"); return; }
+    if (h.some(x => x !== ent && x.from === t.value)){ toast("同じ日の変更がすでにあります", "warn"); return; }
+    ent.from = t.value;
+  }
+  syncPayField(j, f);
+  putSettings(`「${esc(j.name)}」の金額の変更を保存しました`);
 }, true);
 function rateEditor(j, i){
   const rs = Array.isArray(j.rates) ? j.rates : [], hourly = j.payType === "hourly";
