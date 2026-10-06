@@ -430,6 +430,15 @@ details.more section.block{padding:0;background:none}
 .rfields{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}.rfields .f{flex:1 1 8em;min-width:0}
 .rfields .f.rtimef{flex:1 1 100%}.rtime{display:flex;align-items:center;gap:6px}.rtime input{min-width:0;flex:1}
 .rpresets{display:flex;flex-wrap:wrap;gap:4px}
+.inc-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.inc-row{display:grid;grid-template-columns:minmax(0,1fr) 9.5em;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid var(--line)}.inc-row:first-child{border-top:none}
+.inc-n{display:flex;flex-direction:column;gap:2px;min-width:0}
+.inc-row input{min-height:46px;font-size:16px;width:100%;box-sizing:border-box;text-align:right}
+.incnote{width:100%;text-align:left;font:inherit;display:flex;align-items:center;gap:10px;cursor:pointer}
+.incnote .incgo{flex:none;font-weight:900;color:var(--accent)}
+.mini.tap{cursor:pointer;box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--pop) 55%,transparent)}
+.linkish{color:var(--accent);font-weight:900}
+.pillbtn{border:1px dashed var(--accent);color:var(--accent);font:inherit;font-weight:900;cursor:pointer;background:var(--surface)}
 .evbtn{width:100%;border:none;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer;grid-template-columns:auto minmax(0,1fr) auto auto}
 .evbtn .chev{color:var(--muted);font-size:20px;padding-left:4px}
 .evbtn .bad{color:var(--bad)}
@@ -508,6 +517,7 @@ div.f{display:flex;flex-direction:column;gap:6px;font-size:.76rem;color:var(--mu
     <div class="grab" aria-hidden="true"></div>
     <button type="button" class="opt" data-act="quickShift"><span class="oi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span><b>シフトを追加</b><span>今日の日付で入力をはじめます</span></span></button>
     <button type="button" class="opt" data-act="quickEvent"><span class="oi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/></svg></span><span><b>行事・出費を追加</b><span>旅行や飲み会などの予算を立てます</span></span></button>
+    <button type="button" class="opt" data-act="quickIncome"><span class="oi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/></svg></span><span class="ot"><b>給料の金額を入力</b><span>シフトを入れていない月の給料など</span></span></button>
     <button type="button" class="ghost" data-act="closeSheet">閉じる</button>
   </div></div>
 
@@ -1498,7 +1508,8 @@ function nextPayday(shifts){
   let best = null;
   for (let i = 0; i < 4; i++){
     const [y, m] = addMonths(Number(todayKey.slice(0, 4)), Number(todayKey.slice(5, 7)), i), [py, pm] = addMonths(y, m, -1), prev = monthIncome(py, pm, shifts).rows;
-    for (const r of monthIncome(y, m, shifts).rows){
+    for (const r0 of monthIncome(y, m, shifts).rows){
+      const r = Object.assign({}, r0, {key: `${y}-${pad(m)}`});   // the period the pay belongs to, for entering its amount
       const regular = r.freq === "monthly" && prev.some(q => q.job.id === r.job.id && q.used);
       if (!r.used && !regular) continue;
       const ymd = `${r.pd.y}-${pad(r.pd.m)}-${pad(r.pd.d)}`;
@@ -1553,7 +1564,7 @@ function viewHome(){
 
   // next payday + savings
   const np = nextPayday(shifts);
-  const npHtml = np ? `<div class="mini"><span class="mk">次の給料日</span><span class="mv">${Number(np.ymd.slice(5, 7))}/${Number(np.ymd.slice(8))}<small>（${DOW[new Date(np.ymd + "T00:00:00Z").getUTCDay()]}）</small></span><span class="ms">${np.rows.map(r => `${esc(r.job.name)} ${r.used ? yen(r.used) : `<span class="warn">金額未入力</span>`}`).join("・")}</span>${np.rows.some(r => !r.used) ? `<span class="ms">対象期間のシフトか、内訳の「確定額」を入れると金額が出ます</span>` : ""}</div>`
+  const npHtml = np ? `<div class="mini ${np.rows.some(r => !r.used) ? "tap" : ""}" ${np.rows.some(r => !r.used) ? `data-incopen="pay" role="button" tabindex="0"` : ""}><span class="mk">次の給料日</span><span class="mv">${Number(np.ymd.slice(5, 7))}/${Number(np.ymd.slice(8))}<small>（${DOW[new Date(np.ymd + "T00:00:00Z").getUTCDay()]}）</small></span><span class="ms">${np.rows.map(r => `${esc(r.job.name)} ${r.used ? yen(r.used) : `<span class="warn">金額未入力</span>`}`).join("・")}</span>${np.rows.some(r => !r.used) ? `<span class="ms linkish">タップして金額を入れる ›</span>` : ""}</div>`
     : `<button type="button" class="mini" data-act="quickShift"><span class="mk">次の給料日</span><span class="mv">—</span><span class="ms">シフトを入れると表示されます</span></button>`;
   const p = savingPlan();
   const svHtml = p ? `<div class="mini"><span class="mk">貯金 ${Number(p.gm.slice(5))}月までに${yen(p.goal)}</span><span class="mv">${Math.min(100, Math.floor(p.bal / p.goal * 100))}%</span><div class="meter"><span style="width:${Math.min(100, p.bal / p.goal * 100).toFixed(1)}%"></span></div></div>`
@@ -1577,6 +1588,7 @@ function viewHome(){
   return `
   ${warn.map(w => `<div class="notice warn"><div>${w}</div></div>`).join("")}
   ${hero}
+  ${(() => { const ms = missingPay(x); return ms.length ? `<button type="button" class="notice warn incnote" data-incopen="budget"><div><b>${mName()}に使う給料の金額が入っていません</b><br><span class="small">${ms.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}。シフトを入れていなくても、金額だけ入れられます。</span></div><span class="incgo">入力する ›</span></button>` : ""; })()}
   <div class="duo">${npHtml}${svHtml}</div>
   <div class="sec">
     <div class="sec-h"><h2>${isCur ? "もうすぐ出ていくお金" : `${mName()}に出ていくお金`}</h2><button type="button" class="link" data-goto="events">すべて</button></div>
@@ -1586,7 +1598,7 @@ function viewHome(){
   <details class="more" ${S.openMore === "income" ? "open" : ""} data-more="income"><summary>${mName()}に使えるお金の内訳<span class="sv">${yen(x.income)}</span></summary><div class="inner">
     <div class="small muted">${mName()}の出費は${startDay() > 1 ? "この期間（" + periodLabel(S.y, S.m) + "）に振り込まれた給料" : "前の月に振り込まれた給料"}でまかなう前提です（${jobWord()}ごとに設定で変更可）。振込額が分かったら「確定額」に入れると、見込みより優先します。</div>
     <div class="rows">${jobRows || `<div class="empty">バイト先がありません。<button data-goto="settings">バイト先を追加</button></div>`}${otherRows}</div>
-    <div><button data-act="addOther">＋ その他の収入を追加</button></div>
+    <div class="dayform"><button type="button" class="primary" data-incopen="budget">給料の金額をまとめて入力</button><button data-act="addOther">＋ その他の収入を追加</button></div>
   </div></details>
 
   <details class="more" ${S.openMore === "saving" ? "open" : ""} data-more="saving"><summary>貯金の計画<span class="sv">${p ? `毎月 ${yen(p.perMonth)}` : "未設定"}</span></summary><div class="inner">${savingHtml(x)}</div></details>
@@ -1597,7 +1609,8 @@ function viewHome(){
     <div class="blockhead"><span class="num">${yen(x.yearPay)}</span><span class="small muted">交通費込み ${yen(x.yearPayAll)}</span></div>
     ${wallRows}
     <div class="small muted">振込月ベース（1〜12月に振り込まれた分）で集計しています。税金の壁は交通費（通勤手当）を除き、社会保険の壁は含めて判定します。金額は2026年分の目安で、制度は毎年のように変わるので、勤務先や家族の勤務先にも確認してください。表示する壁は設定で選べます。</div>
-  </div></details>` : ""}`;
+  </div></details>` : ""}
+  ${incSheetHtml()}`;
 }
 function savingHtml(x){
   const st = S.settings, p = savingPlan();
@@ -1735,12 +1748,13 @@ function viewShifts(){
   const perJob = jobs.map(j => { const xs = list.filter(s => s.job.id === j.id); return `<span><span class="jdot" style="--jc:${jColor(j.id)}"></span>${esc(j.name)}${xs.length ? ` ${xs.length}回・${yen(xs.reduce((a, s) => a + s.pay, 0))}` : ""}</span>`; }).join("");
   const isToday = S.sel === todayYmd;
   return `
-  <div class="pills"><span class="pill">${list.length}回 ・ ${hrs(h)}h</span><span class="pill">見込み ${yen(total)}</span></div>
+  <div class="pills"><span class="pill">${list.length}回 ・ ${hrs(h)}h</span><span class="pill">見込み ${yen(total)}</span><button type="button" class="pill pillbtn" data-incopen="work">シフトなしで金額だけ入れる ›</button></div>
   <section class="block">
     ${(() => { const pend = list.filter(x => needsSync(x.rec) && !syncing.has(x.id)); return S.settings.calSync && pend.length && mcp ? `<div class="notice warn"><div>Google カレンダーに未反映のシフトが ${pend.length}件 あります。</div><button data-act="syncmonth">まとめて反映</button></div>` : ""; })()}
     <div class="cal">${cells}</div>
     ${jobs.length ? `<div class="legend" style="justify-content:center">${perJob}</div>` : ""}
   </section>
+  ${incSheetHtml()}
   <section class="block focus" id="dayPanel">
     <div class="blockhead"><h2>${sm}月${sd}日（${DOW[sdow]}）</h2>${isToday ? `<span class="small" style="color:var(--pop);font-weight:900">今日</span>` : ""}</div>
     <div class="rows">${dayList || `<div class="empty">この日の勤務はまだありません。</div>`}</div>
@@ -1763,6 +1777,83 @@ function itemName(title, group){
   const rest = g && t.startsWith(g) ? t.slice(g.length).replace(/^[\s：:・\-—]+/, "") : t;
   return rest || t;
 }
+/* ---------- income sheet: type the pay for months without shifts ----------
+   mode "budget": the pay that funds the viewed month; "work": the pay for work done in the viewed month; "pay": the next payday */
+function incRowsFor(mode){
+  const shifts = allShifts();
+  if (mode === "pay"){
+    const np = nextPayday(shifts); if (!np) return [];
+    return np.rows.map(r => ({jobId: r.job.id, key: r.key, name: r.job.name, sub: `${md(np.ymd)}振込`, est: r.est, conf: r.confirmed ? r.conf : ""}));
+  }
+  if (mode === "work"){
+    const pr = periodRange(S.y, S.m), [y, m, d] = pr.start.split("-").map(Number);
+    return S.settings.jobs.filter(j => freqOf(j) === "monthly").map(j => {
+      const pd = payday({y, m, d}, j), mi = monthIncome(...pd.key.split("-").map(Number), shifts), r = mi.rows.find(x => x.job.id === j.id);
+      return {jobId: j.id, key: pd.key, name: j.name, sub: `${mName()}に働いた分 ・ ${pd.m}/${pd.d}振込`, est: r ? r.est : 0, conf: r && r.confirmed ? r.conf : ""};
+    });
+  }
+  return budgetIncome(S.y, S.m, shifts).rows.map(r => ({jobId: r.job.id, key: r.srcKey, name: r.job.name, sub: `${r.pd.m}/${r.pd.d}振込`, est: r.est, conf: r.confirmed ? r.conf : ""}));
+}
+function openIncEditor(mode){
+  const rows = incRowsFor(mode).map(r => Object.assign(r, {v: r.conf === "" ? "" : String(r.conf)}));
+  if (!rows.length){ toast("金額を入れられる給料がありません。先に設定で勤務先を登録してください", "warn"); return; }
+  S.incEdit = {mode, rows, step: "edit"};
+  document.getElementById("sheet").hidden = true;
+  render();
+  setTimeout(() => { const el = document.getElementById("inc-0"); if (el) el.focus(); }, 30);
+}
+const incChanged = ed => ed.rows.filter(r => String(r.v).trim() !== String(r.conf).trim());
+function incSheetHtml(){
+  const ed = S.incEdit; if (!ed) return "";
+  const title = ed.mode === "work" ? `${mName()}に働いた分の給料` : ed.mode === "pay" ? "次の給料の金額" : `${mName()}に使うお金（給料）`;
+  let body;
+  if (ed.step === "edit"){
+    body = `<div class="evs-h"><h2>${title}</h2><button type="button" class="ghost" data-incs="close" aria-label="閉じる">✕</button></div>
+      <p class="small muted" style="margin:0">シフトを入れていない月も、給与明細や通帳で分かった金額（交通費込み）をここに入れればOKです。入れた金額はシフトからの見込みより優先されます。</p>
+      <div class="inc-list">${ed.rows.map((r, i) => `<label class="inc-row"><span class="inc-n"><b>${esc(r.name)}</b><span class="small muted">${r.sub}${r.est ? ` ・ 見込み ${yen(r.est)}` : " ・ シフト未入力"}</span></span>
+        <input type="text" inputmode="decimal" id="inc-${i}" data-incf="${i}" value="${esc(r.v)}" placeholder="${r.est ? esc(String(r.est)) : "円"}" aria-label="${esc(r.name)}の金額"></label>`).join("")}</div>
+      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-incs="close">キャンセル</button><button type="button" class="primary" data-incs="review">確認へ</button></div>`;
+  } else if (ed.step === "review"){
+    const ch = incChanged(ed);
+    body = `<div class="evs-h"><h2>この金額で保存しますか？</h2></div>
+      <div class="evs-review">${ch.map(r => `<div class="evs-r"><span>${esc(r.name)}<br><small>${r.sub}</small></span><b>${r.conf === "" ? "" : `<s>${yen(num(r.conf))}</s> → `}${String(r.v).trim() === "" ? "見込みに戻す" : yen(num(r.v))}</b></div>`).join("") || `<p class="small muted" style="padding:12px">変更はありません。</p>`}</div>
+      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-incs="back">戻って直す</button><button type="button" class="primary" data-incs="save" ${ch.length ? "" : "disabled"}>保存する</button></div>`;
+  } else {
+    body = `<div class="evs-h"><h2>保存せずに閉じますか？</h2></div><p class="small muted">入力した金額は保存されません。</p>
+      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-incs="back">入力に戻る</button><button type="button" class="primary danger-bg" data-incs="discard">保存せずに閉じる</button></div>`;
+  }
+  return `<div class="evsheet" data-incs="backdrop"><div class="evpanel" role="dialog" aria-modal="true" aria-label="${title}">${body}</div></div>`;
+}
+document.addEventListener("input", e => {
+  const t = e.target; if (!t.dataset || t.dataset.incf === undefined || !S.incEdit) return;
+  e.stopPropagation(); S.incEdit.rows[Number(t.dataset.incf)].v = t.value;
+}, true);
+document.addEventListener("click", e => {
+  const o = e.target.closest("[data-incopen]");
+  if (o){ e.stopPropagation(); openIncEditor(o.dataset.incopen); return; }
+  const b = e.target.closest("[data-incs]"); if (!b || !S.incEdit) return;
+  const a = b.dataset.incs, ed = S.incEdit;
+  if (a === "backdrop" && e.target !== b) return;
+  e.stopPropagation();
+  if (a === "close" || a === "backdrop"){ if (ed.step === "edit" && incChanged(ed).length) ed.step = "discard"; else S.incEdit = null; render(); return; }
+  if (a === "discard"){ S.incEdit = null; render(); toast("保存せずに閉じました"); return; }
+  if (a === "back"){ ed.step = "edit"; render(); return; }
+  if (a === "review"){ if (ed.rows.some(r => badNum(r.v))){ toast("金額は数字で入力してください", "warn"); return; } ed.step = "review"; render(); return; }
+  if (a === "save"){
+    const ch = incChanged(ed); S.incEdit = null;
+    ch.forEach((r, i) => {
+      const d = clone(S.income[r.key] || {}); d.jobs = d.jobs || {};
+      if (String(r.v).trim() === "") delete d.jobs[r.jobId]; else d.jobs[r.jobId] = num(r.v);
+      putDoc("income", r.key, d, i === ch.length - 1 ? `${ch.length}件の給料の金額を保存しました` : false);
+    });
+  }
+}, true);
+/* a regular job whose pay for this month has no amount yet (no shifts, not confirmed) */
+function missingPay(x){
+  const used = new Set([...Object.values(S.shifts).map(r => r.job), ...Object.values(S.income).flatMap(d => Object.keys(d.jobs || {}))]);
+  return x.mi.rows.filter(r => !r.used && r.freq === "monthly" && r.job.payType !== "salary" && used.has(r.job.id));
+}
+
 /* ---------- event editor sheet: edit freely, then confirm before anything is saved ---------- */
 const EV_FIELDS = [["title", "行事名"], ["ymd", "日付"], ["budget", "予算"], ["actual", "実際に使った額"], ["group", "まとめる名前"], ["memo", "メモ"]];
 function openEvEditor(id){
@@ -1917,7 +2008,7 @@ function viewEvents(){
     ${excludedRecurring(S.y, S.m).map(r => `<div class="small muted">毎月の「${esc(r.title)}」を${mName()}は外しています <button data-act="restoreRec" data-id="rc_${esc(r.id)}_${r.key}">戻す</button></div>`).join("")}
   </div>
 
-  ${evSheetHtml()}`;
+  ${evSheetHtml()}${incSheetHtml()}`;
 }
 
 function jobLive(i){
@@ -2063,7 +2154,7 @@ ${lines}
 function setMonth(dm){
   let m = S.m + dm, y = S.y; if (m < 1){ m = 12; y--; } if (m > 12){ m = 1; y++; }
   S.y = y; S.m = m;
-  S.sel = null; S.evEdit = null; if (S.calYear !== y && mcp) fetchCalendar(y, false); else render();
+  S.sel = null; S.evEdit = null; S.incEdit = null; if (S.calYear !== y && mcp) fetchCalendar(y, false); else render();
 }
 document.getElementById("prevM").onclick = () => setMonth(-1);
 document.getElementById("nextM").onclick = () => setMonth(1);
@@ -2110,6 +2201,7 @@ document.addEventListener("click", e => {
   else if (act === "fab"){ document.getElementById("sheet").hidden = false; const o = document.querySelector("#sheet .opt"); if (o) o.focus(); }
   else if (act === "openSaving"){ S.openMore = "saving"; render(); const el = document.getElementById("hGb"); if (el){ el.scrollIntoView({block: "center"}); el.focus(); } }
   else if (act === "closeSheet"){ document.getElementById("sheet").hidden = true; }
+  else if (act === "quickIncome"){ document.getElementById("sheet").hidden = true; S.tab = "home"; [S.y, S.m] = refreshToday(); openIncEditor("budget"); }
   else if (act === "quickShift" || act === "quickEvent"){
     document.getElementById("sheet").hidden = true;
     [S.y, S.m] = refreshToday();
@@ -2535,6 +2627,7 @@ function viewOnboarding(){
         ${custom ? cycleEditor(j, i, "onb") : ""}`}
       </div>`; }).join("")}
       <button type="button" class="ghost" style="align-self:flex-start;color:var(--accent);font-weight:900" data-onb="addjob">＋ ${jobWord()}をもう1つ追加</button>
+      ${onbMonthStart()}
       ${cta("つぎへ", true)}`;
   }
   if (step === 2) body = `<div class="ostep-h"><h2 class="oh">貯金の目標は？</h2><p class="osub">今の残高と目標から、毎月貯める額と「自由に使えるお金」を出します。</p></div>
@@ -2575,6 +2668,27 @@ function viewOnboarding(){
   }
   return `<div class="onb">${top}<div class="ostep">${body}</div></div>`;
 }
+/* onboarding: which day the household "month" starts — suggested from the payday just entered */
+function onbMonthStart(){
+  const st = S.settings, D = startDay();
+  const pj = st.jobs.find(j => freqOf(j) === "monthly" && num(j.payDay) >= 2 && num(j.payDay) <= 28);
+  const pd = pj ? num(pj.payDay) : 25;
+  const custom = S.onbMs || (D !== 1 && D !== pd);
+  return `<div class="ocard">
+    <div class="ocard-h"><b>家計の「1か月」はいつから？</b></div>
+    <p class="small muted" style="margin:0">給料日から次の給料日の前日までを1か月にすると、「今月使えるお金」が実際のお財布に近くなります。あとで設定から変えられます。</p>
+    <div class="opay">
+      <button type="button" data-onb="mstart" data-v="1" aria-pressed="${!custom && D === 1}">1日〜末日（ふつう）</button>
+      <button type="button" data-onb="mstart" data-v="${pd}" aria-pressed="${!custom && D === pd}">給料日から（${pd}日〜翌月${pd - 1}日）</button>
+      <button type="button" data-onb="mstart" data-v="custom" aria-pressed="${custom}">ほかの日</button>
+    </div>
+    ${custom ? `<label class="f">1か月の始まりの日<select id="onbMs" data-onb-ms="1">${Array.from({length: 28}, (_, k) => k + 1).map(v => `<option value="${v}" ${D === v ? "selected" : ""}>${v === 1 ? "1日（ふつうの月）" : `${v}日〜翌月${v - 1}日`}</option>`).join("")}</select></label>` : ""}
+  </div>`;
+}
+document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || !t.dataset.onbMs) return;
+  e.stopPropagation(); S.settings.monthStart = num(t.value); persist(); render();
+}, true);
 function setPath(path, val){
   const parts = path.split(".");
   if (parts[0] === "card"){ const c = (S.settings.recurring || []).find(r => r.id === "card"); if (c) c[parts[1]] = parts[1] === "day" ? num(val) : val; return; }
@@ -2609,12 +2723,17 @@ document.addEventListener("click", e => {
     if (S.onbStep === 1) st.jobs = st.jobs.filter(j => String(j.name).trim());
     if (S.onbStep === 2){ if (b.classList.contains("skip")) S.goalDraft = null; else if (goalDirty()) commitGoal(false); }
     if (S.onbStep === 3) st.fixedItems = (st.fixedItems || []).filter(f => String(f.name).trim() || num(f.amount));
-    if (S.onbStep >= ONB_STEPS.length - 1){ st.onboarded = true; S.tab = "home"; persist(); render(); toast("ようこそ、シフポケへ！"); window.scrollTo(0, 0); return; }
+    if (S.onbStep >= ONB_STEPS.length - 1){
+      // with a payday-based month, each pay is spent in the period it arrives in
+      if (startDay() > 1) st.jobs.forEach(j => { if (freqOf(j) === "monthly") j.useLag = 0; });
+      [S.y, S.m] = refreshToday();
+      st.onboarded = true; S.tab = "home"; persist(); render(); toast("ようこそ、シフポケへ！"); window.scrollTo(0, 0); return; }
     S.onbStep = (S.onbStep || 0) + 1;
   }
   else if (a === "back") S.onbStep = Math.max(0, (S.onbStep || 0) - 1);
   else if (a === "addjob") st.jobs.push(newJob());
   else if (a === "ptype"){ const j = st.jobs[Number(b.dataset.i)]; j.payType = b.dataset.v; if (j.payType === "salary") toSalary(j); }
+  else if (a === "mstart"){ if (b.dataset.v === "custom") S.onbMs = true; else { S.onbMs = false; st.monthStart = num(b.dataset.v); } }
   else if (a === "persona"){
     st.persona = b.dataset.v; st.walls = WALL_DEF[st.persona].slice();
     // jobs not filled in yet follow the new choice
