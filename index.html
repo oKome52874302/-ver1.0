@@ -436,6 +436,22 @@ details.more section.block{padding:0;background:none}
 .hrow .hfrom{font-weight:900;font-size:14px;padding-left:4px}
 .hrow .hto{white-space:nowrap}
 .hrow.now{background:color-mix(in srgb,var(--accent) 8%,transparent);border-radius:10px}
+.stabs{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;padding:4px;margin-bottom:12px;background:var(--surface);border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+.stabs button{min-height:40px;border:none;border-radius:10px;background:transparent;font:inherit;font-size:13px;font-weight:700;color:var(--muted);padding:0 2px}
+.stabs button[aria-selected="true"]{background:var(--accent);color:#fff;font-weight:900}
+.joblist{display:flex;flex-direction:column;gap:8px}
+.jobfold{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
+.jf-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.jtags{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px}.jtag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--bg);color:var(--muted)}
+.jobfold .chev{color:var(--muted);font-size:22px}
+.moret{border:none;background:none;font:inherit;font-size:13px;font-weight:900;color:var(--accent);text-align:left;padding:6px 0;cursor:pointer}
+.morebox{display:flex;flex-direction:column;gap:12px;padding-top:4px;border-top:1px dashed var(--line)}
+#tut{position:fixed;inset:0;z-index:200}
+.tut-spot{position:fixed;border-radius:22px;box-shadow:0 0 0 9999px rgba(15,25,20,.62);pointer-events:none;transition:all .2s}
+.tut-card{position:fixed;left:16px;right:16px;max-width:520px;margin:0 auto;background:var(--surface);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.tut-card b{font-size:17px}.tut-card p{margin:0;font-size:14px;color:var(--muted);line-height:1.6}
+.tut-dots{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}.tut-dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}.tut-dots i.on{background:var(--accent)}.tut-dots span{margin-left:auto}
+.tut-foot{display:flex;justify-content:space-between;gap:8px;margin-top:6px}.tut-foot button{min-height:44px;padding:0 18px}
 .odetail-t{border:none;background:none;font:inherit;font-size:13px;font-weight:900;color:var(--accent);text-align:left;padding:4px 0;cursor:pointer}
 .odetail{display:flex;flex-direction:column;gap:10px}
 .alwtr{flex:1 1 100%;order:3;display:flex;align-items:center;gap:8px}
@@ -1549,6 +1565,7 @@ function render(){
   const fval = fid ? act.value : null, fsel = fid ? (() => { try { return act.selectionStart; } catch(_){ return null; } })() : null;
   v.innerHTML = html;
   if (!onb) setTimeout(checkAchievements, 0);
+  setTimeout(drawTutorial, 0);
   if (fid){
     const el = document.getElementById(fid);
     if (el){
@@ -1647,6 +1664,7 @@ function viewHome(){
   return `
   ${warn.map(w => `<div class="notice warn"><div>${w}</div></div>`).join("")}
   ${hero}
+  ${x.left < 0 && rj && num(rj.wage) ? `<div class="notice warn"><div>${yen(-x.left)} 足りません。${esc(rj.name)}であと<b>約${Math.ceil(-x.left / num(rj.wage))}時間</b>働くか、行事の予算を見直しましょう。</div></div>` : ""}
   ${(() => { const ms = missingPay(x); return ms.length ? `<button type="button" class="notice warn incnote" data-incopen="budget"><div><b>${mName()}に使う給料の金額が入っていません</b><br><span class="small">${ms.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}。シフトを入れていなくても、金額だけ入れられます。</span></div><span class="incgo">入力する ›</span></button>` : ""; })()}
   <div class="duo">${npHtml}${svHtml}</div>
   <div class="sec">
@@ -1662,7 +1680,6 @@ function viewHome(){
 
   <details class="more" ${S.openMore === "saving" ? "open" : ""} data-more="saving"><summary>貯金の計画<span class="sv">${p ? `毎月 ${yen(p.perMonth)}` : "未設定"}</span></summary><div class="inner">${savingHtml(x)}</div></details>
 
-  <details class="more" ${S.openMore === "tips" ? "open" : ""} data-more="tips"><summary>やりくりのヒント</summary><div class="inner">${tipsHtml(x, rj)}</div></details>
 
   ${walls.length ? `<details class="more" ${S.openMore === "wall" ? "open" : ""} data-more="wall"><summary>${S.y}年の収入と「年収の壁」<span class="sv">${nextWall ? `次まで ${yen(nextWall.amount - wallVal(nextWall, x))}` : "すべて超過"}</span></summary><div class="inner">
     <div class="blockhead"><span class="num">${yen(x.yearPay)}</span><span class="small muted">交通費込み ${yen(x.yearPayAll)}</span></div>
@@ -2081,99 +2098,173 @@ function jobLive(i){
   const pay = xs.reduce((a, s) => a + s.pay, 0), tr = xs.reduce((a, s) => a + s.transport, 0);
   return `${mName()}の勤務 ${xs.length}回 → ${yen(pay)}（給与 ${yen(pay - tr)} ＋ 交通費 ${yen(tr)}）`;
 }
-function viewSettings(){
-  const s = S.settings;
-  const jobs = s.jobs.map((j, i) => {
-    const n = Object.values(S.shifts).filter(r => r.job === j.id).length;
-    const confirming = S.confirmDel === "j:" + j.id;
-    return `
-    <div class="job">
-      <div class="jhead"><span class="jdot" style="--jc:${jColor(j.id)}"></span><input type="text" id="jn-${i}" data-job="${i}" data-field="name" value="${esc(j.name)}" aria-label="勤務先名">
-        <button class="ghost" data-act="deljob" data-id="${esc(j.id)}">${confirming ? (n ? `シフト${n}件ごと削除する` : "本当に削除する") : "削除"}</button>
-        ${confirming ? `<button data-act="cancelDel">やめる</button>` : ""}</div>
-      <div class="grid2">
-        <label class="f">カレンダーでの色<select id="jcol-${i}" data-job="${i}" data-field="calColor">${GCOLORS.map(([v, n]) => `<option value="${v}" ${String(j.calColor || "6") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-        <label class="f">給与の形<select id="jt-${i}" data-job="${i}" data-field="payType"><option value="hourly" ${j.payType === "hourly" ? "selected" : ""}>時給</option><option value="fixed" ${j.payType === "fixed" ? "selected" : ""}>1回あたり固定</option><option value="salary" ${j.payType === "salary" ? "selected" : ""}>月給</option></select></label>
-        ${j.payType === "hourly"
-          ? `<label class="f">時給（円）<input type="text" inputmode="decimal" min="0" step="10" id="jw-${i}" data-job="${i}" data-field="wage" value="${esc(j.wage || "")}" placeholder="未設定"></label>
-`
-          : j.payType === "salary"
-          ? `<label class="f">月給（額面・円）<input type="text" inputmode="decimal" id="js-${i}" data-job="${i}" data-field="salary" value="${esc(j.salary || "")}" placeholder="未設定"></label>
-             <label class="f">手取りの目安（額面の％）<input type="text" inputmode="decimal" id="jn2-${i}" data-job="${i}" data-field="netRate" value="${esc(netRateOf(j))}" placeholder="80"></label>
-             <label class="f">通勤手当（月・円）<input type="text" inputmode="decimal" id="jcm-${i}" data-job="${i}" data-field="commute" value="${esc(j.commute || "")}" placeholder="0"></label>
-             <label class="f">1日の定時（時間）<input type="text" inputmode="decimal" id="jdh-${i}" data-job="${i}" data-field="dayHours" value="${esc(j.dayHours || "")}" placeholder="8"></label>
-             <label class="f">月の所定労働時間（残業代の計算用）<input type="text" inputmode="decimal" id="jsh-${i}" data-job="${i}" data-field="stdHours" value="${esc(j.stdHours || "")}" placeholder="160"></label>
-             <label class="f">この月の給料から計算する<input type="month" id="jsi-${i}" data-job="${i}" data-field="since" value="${esc(j.since || "")}"></label>`
-          : `<label class="f">1回の金額（円）<input type="text" inputmode="decimal" min="0" step="100" id="jf-${i}" data-job="${i}" data-field="fixedPay" value="${esc(j.fixedPay || "")}" placeholder="未設定"></label>`}
-        <label class="f">振込日が土日祝のとき<select id="jh-${i}" data-job="${i}" data-field="holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(j.holidayShift || "prev") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-        ${freqOf(j) !== "monthly" ? "" : `<label class="f">この給料を使う月<select id="jl2-${i}" data-job="${i}" data-field="useLag"><option value="1" ${lagOf(j) === 1 ? "selected" : ""}>振り込まれた翌月</option><option value="0" ${lagOf(j) === 0 ? "selected" : ""}>振り込まれた月</option></select></label>`}
-        ${j.payType === "salary" ? "" : `<label class="f">交通費（1回・円／シフトごとに変更可）<input type="text" inputmode="decimal" min="0" step="10" id="jc-${i}" data-job="${i}" data-field="transport" value="${esc(j.transport || "")}" placeholder="0"></label>`}
-      </div>
-      ${histEditor(j, i)}
-      ${j.payType === "salary" ? "" : rateEditor(j, i) + allowanceEditor(j, i)}
-      ${j.payType === "salary" ? bonusEditor(j, i) : `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>`}
-      ${freqOf(j) === "monthly" ? `<div class="f">給料日${cycleEditor(j, i, "set")}</div>` : ""}
-      <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
-      ${j.payType === "hourly" ? `<label class="inline"><input type="checkbox" id="jg-${i}" data-job="${i}" data-field="night" ${j.night ? "checked" : ""}> 22時〜5時は25%増し（在宅など対象外ならオフ）</label>` : ""}
-    </div>`; }).join("");
-  const hourly = s.jobs.filter(j => j.payType === "hourly");
-  return `
-  <section class="block">
-    <div class="blockhead"><h2>あなたについて</h2></div>
-    <label class="f">働き方<select id="sPersona" data-set="persona">${PERSONAS.map(([v, n, d]) => `<option value="${v}" ${personaOf() === v ? "selected" : ""}>${n}（${d}）</option>`).join("")}</select></label>
-    <div class="small muted">変えると、表示する年収の壁がおすすめのものに切り替わります。</div>
-  </section>
-  <section class="block">
-    <div class="blockhead"><h2>勤務先</h2><button class="primary" data-act="addjob">＋ 勤務先を追加</button></div>
-    <div class="small muted">増やした勤務先はシフトの入力欄にすぐ出ます。削除するとその勤務先のシフトも消えます。</div>
-    ${jobs || `<div class="empty">勤務先がありません。「＋ 勤務先を追加」から登録してください。</div>`}
-  </section>
-  <section class="block">
-    <div class="blockhead"><h2>毎月の行事</h2><button data-act="addRec">＋ 追加</button></div>
-    <div class="small muted">毎月決まった日に出ていくお金です。土日祝や銀行の休業日（12/31〜1/3）に当たる月は、選んだ方向に日付をずらします（クレジットカードは翌営業日が一般的です）。毎月の「行事・予算」に自動で入ります。金額が月によって違うときは、ここを空欄にして各月の行事で入力してください。</div>
-    <div class="rows">${(s.recurring || []).map((r, i) => `
-      <div class="dayform" style="padding:6px 0;border-top:1px dashed var(--line)">
-        <label class="f" style="flex:2 1 12em">名前<input type="text" class="w-l" id="rt-${i}" data-rec="${i}" data-field="title" value="${esc(r.title)}" placeholder="例：サブスク、部費"></label>
-        <label class="f">毎月の日付<input type="text" inputmode="decimal" class="w-s" id="rd-${i}" data-rec="${i}" data-field="day" value="${esc(r.day)}"></label>
-        <label class="f">土日祝のとき<select id="rh-${i}" data-rec="${i}" data-field="holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(r.holidayShift || "next") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-        <label class="f">いつもの金額<input type="text" inputmode="decimal" id="rb-${i}" data-rec="${i}" data-field="budget" value="${esc(r.budget ?? "")}" placeholder="毎月入力"></label>
-        <button class="ghost" data-act="delRec" data-id="${esc(r.id)}">${S.confirmDel === "r:" + r.id ? "本当に削除する" : "削除"}</button>
-      </div>`).join("") || `<div class="empty">まだありません。</div>`}</div>
-  </section>
-  <section class="block">
-    <div class="blockhead"><h2>固定費</h2><span class="num">${yen(fixTotal())} / 月</span></div>
-    <div class="fixlist">${(s.fixedItems || []).map((f, i) => `<div class="fixrow">
-      <input type="text" id="sf-n-${i}" data-fix="${i}" data-field="name" value="${esc(f.name)}" placeholder="名前" aria-label="名前">
-      <input type="text" inputmode="decimal" id="sf-a-${i}" data-fix="${i}" data-field="amount" value="${esc(f.amount)}" placeholder="円" aria-label="金額">
-      <button type="button" class="ghost" data-act="delFix" data-i="${i}" aria-label="削除">×</button></div>`).join("")}
-      <button type="button" data-act="addFix">＋ 固定費を追加</button></div>
-  </section>
-  <section class="block">
-    <h2>毎月のお金</h2>
-    <div class="grid2">
-      <label class="f">毎月の貯金額（期限つきの目標がないとき）<input type="text" inputmode="decimal" min="0" step="1000" id="sSave" data-set="saving" value="${esc(s.saving || "")}" placeholder="0"></label>
-      <label class="f">月の区切り（1か月の始まりの日）<select id="sStart" data-set="monthStart">${Array.from({length: 28}, (_, k) => k + 1).map(v => `<option value="${v}" ${startDay() === v ? "selected" : ""}>${v === 1 ? "1日（ふつうの月）" : `${v}日〜翌月${v - 1}日`}</option>`).join("")}</select></label>
-      <label class="f">時間換算に使う勤務先<select id="sRate" data-set="rateJob"><option value="">自動</option>${hourly.map(j => `<option value="${esc(j.id)}" ${s.rateJob === j.id ? "selected" : ""}>${esc(j.name)}</option>`).join("")}</select></label>
-    </div>
-  </section>
-  <section class="block">
-    <h2>年収の壁</h2>
-    <div class="small muted">ホームに表示する壁を選んでください（2026年分の目安）。社会保険の「106万円の壁」は2026年10月に賃金要件がなくなり、勤務先の社会保険に入るかどうかは主に週20時間以上かで決まります。</div>
-    <div class="wallpick">${WALLS.map(w => `<label class="inline"><input type="checkbox" data-wall="${w.id}" ${(s.walls || []).includes(w.id) ? "checked" : ""}> <b>${yen(w.amount)}</b> ${esc(w.name)}</label>`).join("")}</div>
-    <div class="grid2">
-      <label class="f">自分で決めた上限（円・任意）<input type="text" inputmode="decimal" min="0" step="10000" id="sWall" data-set="wallCustom" value="${esc(s.wallCustom || "")}" placeholder="なし"></label>
-      <label class="f">アプリ外の今年の収入<input type="text" inputmode="decimal" min="0" step="1000" id="sOther" data-set="otherIncome" value="${esc(s.otherIncome || "")}" placeholder="0"></label>
-    </div>
-    ${num(s.wallCustom) ? `<label class="inline"><input type="checkbox" id="sWallTr" data-set="wallTransport" ${s.wallTransport ? "checked" : ""}> 自分で決めた上限には交通費も含める</label>` : ""}
-    <div><button type="button" class="ghost" data-act="wallReset">${PERSONAS.find(p => p[0] === personaOf())[1]}向けのおすすめに戻す</button></div>
-  </section>
-  <section class="block">
-    <h2>データ</h2>
-    <div class="small muted">データはこの端末のブラウザにだけ保存されています。ブラウザの履歴やサイトデータを消すと、入力内容も消えます。</div>
-    <div class="dayform"><button type="button" data-onb="restart">${S.confirmDel === "restart" ? "本当にやり直す" : "初期設定をやり直す"}</button>
-      <button type="button" class="ghost" data-onb="wipe">${S.confirmDel === "wipe" ? "本当にすべて消す" : "すべてのデータを消す"}</button></div>
-  </section>`;
+/* one line that says how a job pays, for the folded card */
+function jobSummary(j){
+  const f = payFieldOf(j), amt = num(j[f]);
+  const pay = j.payType === "salary" ? `月給 ${amt ? yen(amt) : "未設定"}` : j.payType === "fixed" ? `1回 ${amt ? yen(amt) : "未設定"}` : `時給 ${amt ? yen(amt) : "未設定"}`;
+  const fq = freqOf(j);
+  let when = fq === "daily" ? "日払い" : fq === "weekly" ? `週払い（${WDAYS[hasVal(j.payWeekday) ? num(j.payWeekday) : 5]}曜）` : "";
+  if (!when){
+    const pi = presetOf(j);
+    when = pi >= 0 ? PAY_PRESETS[pi].l : cyclesOf(j).map(c => `${c.cutoff ? c.cutoff + "日" : "月末"}締め・${["当月", "翌月", "翌々月"][c.payOffset] || ""}${c.payDay ? c.payDay + "日" : "末日"}`).join("／");
+  }
+  const tags = [rulesOf(j).length ? "特別時給" : "", alwOf(j).length ? "手当" : "", histOf(j, f).length ? "昇給あり" : "", (j.bonuses || []).length ? "ボーナス" : ""].filter(Boolean);
+  return {pay, when, tags};
 }
+const SET_TABS = [["jobs", "勤務先"], ["spend", "毎月の出費"], ["wall", "年収の壁"], ["other", "その他"]];
+function viewSettings(){
+  const s = S.settings, tab = SET_TABS.some(t => t[0] === S.setTab) ? S.setTab : "jobs";
+  const tabs = `<div class="stabs" role="tablist">${SET_TABS.map(([k, l]) => `<button type="button" role="tab" data-settab="${k}" aria-selected="${tab === k}">${l}</button>`).join("")}</div>`;
+  let body = "";
+  if (tab === "jobs"){
+    const jobs = s.jobs.map((j, i) => {
+      const n = Object.values(S.shifts).filter(r => r.job === j.id).length;
+      const confirming = S.confirmDel === "j:" + j.id;
+      const open = S.jobOpen === j.id, more = !!(S.jobMore || {})[j.id], sm = jobSummary(j);
+      if (!open) return `<button type="button" class="job jobfold" data-jobopen="${esc(j.id)}">
+        <span class="jdot" style="--jc:${jColor(j.id)}"></span>
+        <span class="jf-main"><b>${esc(j.name || "（名前なし）")}</b><span class="small muted">${sm.pay} ・ ${esc(sm.when)}</span>${sm.tags.length ? `<span class="jtags">${sm.tags.map(t => `<span class="jtag">${t}</span>`).join("")}</span>` : ""}</span>
+        <span class="chev" aria-hidden="true">›</span></button>`;
+      const amountFields = j.payType === "hourly"
+        ? `<label class="f">時給（円）<input type="text" inputmode="decimal" id="jw-${i}" data-job="${i}" data-field="wage" value="${esc(j.wage || "")}" placeholder="未設定"></label>`
+        : j.payType === "salary"
+        ? `<label class="f">月給（額面・円）<input type="text" inputmode="decimal" id="js-${i}" data-job="${i}" data-field="salary" value="${esc(j.salary || "")}" placeholder="未設定"></label>
+           <label class="f">通勤手当（月・円）<input type="text" inputmode="decimal" id="jcm-${i}" data-job="${i}" data-field="commute" value="${esc(j.commute || "")}" placeholder="0"></label>`
+        : `<label class="f">1回の金額（円）<input type="text" inputmode="decimal" id="jf-${i}" data-job="${i}" data-field="fixedPay" value="${esc(j.fixedPay || "")}" placeholder="未設定"></label>`;
+      const advanced = `
+        <div class="grid2">
+          ${j.payType === "salary" ? `<label class="f">手取りの目安（額面の％）<input type="text" inputmode="decimal" id="jn2-${i}" data-job="${i}" data-field="netRate" value="${esc(netRateOf(j))}" placeholder="80"></label>
+             <label class="f">1日の定時（時間）<input type="text" inputmode="decimal" id="jdh-${i}" data-job="${i}" data-field="dayHours" value="${esc(j.dayHours || "")}" placeholder="8"></label>
+             <label class="f">月の所定労働時間（残業代用）<input type="text" inputmode="decimal" id="jsh-${i}" data-job="${i}" data-field="stdHours" value="${esc(j.stdHours || "")}" placeholder="160"></label>
+             <label class="f">この月の給料から計算する<input type="month" id="jsi-${i}" data-job="${i}" data-field="since" value="${esc(j.since || "")}"></label>` : ""}
+          <label class="f">振込日が土日祝のとき<select id="jh-${i}" data-job="${i}" data-field="holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(j.holidayShift || "prev") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+          ${freqOf(j) !== "monthly" ? "" : `<label class="f">この給料を使う月<select id="jl2-${i}" data-job="${i}" data-field="useLag"><option value="1" ${lagOf(j) === 1 ? "selected" : ""}>振り込まれた翌月</option><option value="0" ${lagOf(j) === 0 ? "selected" : ""}>振り込まれた月</option></select></label>`}
+        </div>
+        ${j.payType === "hourly" ? `<label class="inline"><input type="checkbox" id="jg-${i}" data-job="${i}" data-field="night" ${j.night ? "checked" : ""}> 22時〜5時は25%増し（在宅など対象外ならオフ）</label>` : ""}
+        ${j.payType === "salary" ? bonusEditor(j, i) : freqOf(j) === "monthly" ? `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>` : ""}
+        ${histEditor(j, i)}
+        ${j.payType === "salary" ? "" : rateEditor(j, i) + allowanceEditor(j, i)}
+        <div class="dayform"><button class="ghost danger" data-act="deljob" data-id="${esc(j.id)}">${confirming ? (n ? `シフト${n}件ごと削除する` : "本当に削除する") : "この勤務先を削除"}</button>${confirming ? `<button data-act="cancelDel">やめる</button>` : ""}</div>`;
+      return `
+      <div class="job jobopen">
+        <div class="jhead"><span class="jdot" style="--jc:${jColor(j.id)}"></span><input type="text" id="jn-${i}" data-job="${i}" data-field="name" value="${esc(j.name)}" aria-label="勤務先名">
+          <button type="button" class="ghost" data-jobopen="" aria-label="閉じる">閉じる</button></div>
+        <div class="grid2">
+          <label class="f">給与の形<select id="jt-${i}" data-job="${i}" data-field="payType"><option value="hourly" ${j.payType === "hourly" ? "selected" : ""}>時給</option><option value="fixed" ${j.payType === "fixed" ? "selected" : ""}>1回あたり固定</option><option value="salary" ${j.payType === "salary" ? "selected" : ""}>月給</option></select></label>
+          ${amountFields}
+          ${j.payType === "salary" ? "" : `<label class="f">交通費（1回・円）<input type="text" inputmode="decimal" id="jc-${i}" data-job="${i}" data-field="transport" value="${esc(j.transport || "")}" placeholder="0"></label>`}
+        </div>
+        ${freqOf(j) === "monthly" ? `<div class="f">給料日${cycleEditor(j, i, "set")}</div>` : `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>`}
+        <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
+        <button type="button" class="moret" data-jobmore="${esc(j.id)}" aria-expanded="${more}">${more ? "▾" : "▸"} 詳しい設定（${j.payType === "salary" ? "手取り・残業・ボーナス・昇給" : "土日の時給・手当・昇給・振込日のずれ"}など）</button>
+        ${more ? `<div class="morebox">${advanced}</div>` : ""}
+      </div>`; }).join("");
+    body = `<section class="block">
+      <div class="blockhead"><h2>勤務先</h2><button class="primary" data-act="addjob">＋ 追加</button></div>
+      <div class="joblist">${jobs || `<div class="empty">勤務先がありません。「＋ 追加」から登録してください。</div>`}</div>
+      <div class="small muted">タップすると時給や給料日を変えられます。</div>
+    </section>`;
+  } else if (tab === "spend"){
+    body = `<section class="block">
+      <div class="blockhead"><h2>固定費</h2><span class="num">${yen(fixTotal())} / 月</span></div>
+      <div class="small muted">スマホ代・サブスクなど、毎月決まって出ていくお金です。</div>
+      <div class="fixlist">${(s.fixedItems || []).map((f, i) => `<div class="fixrow">
+        <input type="text" id="sf-n-${i}" data-fix="${i}" data-field="name" value="${esc(f.name)}" placeholder="名前" aria-label="名前">
+        <input type="text" inputmode="decimal" id="sf-a-${i}" data-fix="${i}" data-field="amount" value="${esc(f.amount)}" placeholder="円" aria-label="金額">
+        <button type="button" class="ghost" data-act="delFix" data-i="${i}" aria-label="削除">×</button></div>`).join("")}
+        <button type="button" data-act="addFix">＋ 固定費を追加</button></div>
+    </section>
+    <section class="block">
+      <div class="blockhead"><h2>毎月決まった日の出費</h2><button data-act="addRec">＋ 追加</button></div>
+      <div class="small muted">クレジットカードの引き落としなど、日付が決まっているものです。行事の画面に毎月自動で入ります。金額が毎月違うなら「いつもの金額」は空欄にしてください。</div>
+      <div class="rows">${(s.recurring || []).map((r, i) => `
+        <div class="dayform" style="padding:6px 0;border-top:1px dashed var(--line)">
+          <label class="f" style="flex:2 1 12em">名前<input type="text" class="w-l" id="rt-${i}" data-rec="${i}" data-field="title" value="${esc(r.title)}" placeholder="例：カード引き落とし"></label>
+          <label class="f">毎月の日付<input type="text" inputmode="decimal" class="w-s" id="rd-${i}" data-rec="${i}" data-field="day" value="${esc(r.day)}"></label>
+          <label class="f">土日祝のとき<select id="rh-${i}" data-rec="${i}" data-field="holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(r.holidayShift || "next") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+          <label class="f">いつもの金額<input type="text" inputmode="decimal" id="rb-${i}" data-rec="${i}" data-field="budget" value="${esc(r.budget ?? "")}" placeholder="毎月入力"></label>
+          <button class="ghost" data-act="delRec" data-id="${esc(r.id)}">${S.confirmDel === "r:" + r.id ? "本当に削除する" : "削除"}</button>
+        </div>`).join("") || `<div class="empty">まだありません。</div>`}</div>
+    </section>
+    <section class="block">
+      <h2>貯金と1か月の区切り</h2>
+      <div class="grid2">
+        <label class="f">毎月の貯金額（期限つきの目標がないとき）<input type="text" inputmode="decimal" id="sSave" data-set="saving" value="${esc(s.saving || "")}" placeholder="0"></label>
+        <label class="f">1か月の始まりの日<select id="sStart" data-set="monthStart">${Array.from({length: 28}, (_, k) => k + 1).map(v => `<option value="${v}" ${startDay() === v ? "selected" : ""}>${v === 1 ? "1日（ふつうの月）" : `${v}日〜翌月${v - 1}日`}</option>`).join("")}</select></label>
+      </div>
+      <div class="small muted">期限つきの貯金目標は、ホームの「貯金の計画」から決められます。</div>
+    </section>`;
+  } else if (tab === "wall"){
+    body = `<section class="block">
+      <h2>年収の壁</h2>
+      <div class="small muted">ホームに表示する壁を選んでください（2026年分の目安）。社会保険の「106万円の壁」は2026年10月に賃金要件がなくなり、勤務先の社会保険に入るかどうかは主に週20時間以上かで決まります。</div>
+      <div class="wallpick">${WALLS.map(w => `<label class="inline"><input type="checkbox" data-wall="${w.id}" ${(s.walls || []).includes(w.id) ? "checked" : ""}> <b>${yen(w.amount)}</b> ${esc(w.name)}</label>`).join("")}</div>
+      <div class="grid2">
+        <label class="f">自分で決めた上限（円・任意）<input type="text" inputmode="decimal" id="sWall" data-set="wallCustom" value="${esc(s.wallCustom || "")}" placeholder="なし"></label>
+        <label class="f">アプリ外の今年の収入<input type="text" inputmode="decimal" id="sOther" data-set="otherIncome" value="${esc(s.otherIncome || "")}" placeholder="0"></label>
+      </div>
+      ${num(s.wallCustom) ? `<label class="inline"><input type="checkbox" id="sWallTr" data-set="wallTransport" ${s.wallTransport ? "checked" : ""}> 自分で決めた上限には交通費も含める</label>` : ""}
+      <div><button type="button" class="ghost" data-act="wallReset">${PERSONAS.find(p => p[0] === personaOf())[1]}向けのおすすめに戻す</button></div>
+    </section>`;
+  } else {
+    body = `<section class="block">
+      <h2>あなたについて</h2>
+      <label class="f">働き方<select id="sPersona" data-set="persona">${PERSONAS.map(([v, n, d]) => `<option value="${v}" ${personaOf() === v ? "selected" : ""}>${n}（${d}）</option>`).join("")}</select></label>
+      <div class="small muted">変えると、表示する年収の壁がおすすめのものに切り替わります。</div>
+    </section>
+    <section class="block">
+      <h2>使い方</h2>
+      <div class="dayform"><button type="button" class="primary" data-act="tutorial">使い方をもう一度見る</button></div>
+    </section>
+    <section class="block">
+      <h2>データ</h2>
+      <div class="small muted">データはこの端末のブラウザにだけ保存されています。ブラウザの履歴やサイトデータを消すと、入力内容も消えます。</div>
+      <div class="dayform"><button type="button" data-onb="restart">${S.confirmDel === "restart" ? "本当にやり直す" : "初期設定をやり直す"}</button>
+        <button type="button" class="ghost" data-onb="wipe">${S.confirmDel === "wipe" ? "本当にすべて消す" : "すべてのデータを消す"}</button></div>
+    </section>`;
+  }
+  return tabs + body;
+}
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-settab],[data-jobopen],[data-jobmore]"); if (!t) return;
+  e.stopPropagation();
+  if (t.dataset.settab){ S.setTab = t.dataset.settab; S.confirmDel = null; render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.jobmore !== undefined){ S.jobMore = S.jobMore || {}; S.jobMore[t.dataset.jobmore] = !S.jobMore[t.dataset.jobmore]; render(); return; }
+  S.jobOpen = t.dataset.jobopen || null; S.confirmDel = null; render();
+}, true);
+
+/* ---------- tutorial: three coach marks after the first setup ---------- */
+const TUT_STEPS = [
+  {sel: ".hero", title: "これが今月自由に使えるお金", text: "給料から固定費・貯金・行事の予算を引いた残りです。シフトや予算を入れるほど正確になります。"},
+  {sel: "[data-act=fab]", title: "働いた日はここから", text: "＋を押して「シフトを入力」。時給・深夜・交通費まで自動で計算します。シフトなしで給料の金額だけ入れることもできます。"},
+  {sel: "nav [data-tab=events]", title: "旅行や飲み会の予算はここ", text: "行事ごとに予算を入れておくと、今月あといくら使えるかが分かります。使ったら金額を入れて精算しましょう。"}
+];
+function drawTutorial(){
+  const old = document.getElementById("tut"); if (old) old.remove();
+  if (S.tut == null || !S.settings.onboarded || S.tab !== "home") return;
+  const cel = document.getElementById("celebrate");
+  if (cel && !cel.hidden && getComputedStyle(cel).display !== "none"){ setTimeout(drawTutorial, 700); return; }
+  const st = TUT_STEPS[S.tut], el = document.querySelector(st.sel); if (!el) return;
+  if (S.tut === 0) window.scrollTo(0, 0);
+  const r = el.getBoundingClientRect(), pad = 8, below = r.top + r.height / 2 < window.innerHeight / 2;
+  const box = document.createElement("div"); box.id = "tut";
+  box.innerHTML = `<div class="tut-spot" style="top:${r.top - pad}px;left:${r.left - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px"></div>
+    <div class="tut-card" role="dialog" aria-modal="true" aria-label="使い方" style="${below ? `top:${Math.min(window.innerHeight - 220, r.bottom + pad + 12)}px` : `bottom:${Math.min(window.innerHeight - 220, window.innerHeight - r.top + pad + 12)}px`}">
+      <div class="tut-dots">${TUT_STEPS.map((_, k) => `<i class="${k === S.tut ? "on" : ""}"></i>`).join("")}<span>${S.tut + 1} / ${TUT_STEPS.length}</span></div>
+      <b>${st.title}</b><p>${st.text}</p>
+      <div class="tut-foot"><button type="button" class="ghost" data-tut="skip">スキップ</button><button type="button" class="primary" data-tut="next">${S.tut === TUT_STEPS.length - 1 ? "はじめる" : "次へ"}</button></div>
+    </div>`;
+  document.body.appendChild(box);
+  const nb = box.querySelector("[data-tut=next]"); if (nb) nb.focus();
+}
+function endTutorial(){ S.tut = null; S.settings.tutorialDone = true; persist(); drawTutorial(); }
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-tut]"); if (!b) return;
+  e.stopPropagation();
+  if (b.dataset.tut === "skip" || S.tut >= TUT_STEPS.length - 1){ endTutorial(); return; }
+  S.tut++; drawTutorial();
+}, true);
+window.addEventListener("resize", () => { if (S.tut != null) drawTutorial(); });
 
 /* ---------- AI ---------- */
 async function askAI(){
@@ -2271,6 +2362,7 @@ document.addEventListener("click", e => {
     const el = document.getElementById("fStart");
     if (el){ el.scrollIntoView({block: "center"}); el.focus(); }
   }
+  else if (act === "tutorial"){ S.tab = "home"; [S.y, S.m] = refreshToday(); S.tut = 0; render(); }
   else if (act === "addFix"){ (S.settings.fixedItems = S.settings.fixedItems || []).push({name: "", amount: ""}); S.settings.fixedCost = fixTotal(); putSettings("固定費の欄を追加しました"); setTimeout(() => { const el = document.getElementById("sf-n-" + (S.settings.fixedItems.length - 1)); if (el) el.focus(); }, 30); }
   else if (act === "delFix"){ S.settings.fixedItems.splice(Number(a.dataset.i), 1); S.settings.fixedCost = fixTotal(); putSettings("固定費を削除しました"); }
   else if (act === "syncshift") syncShift(id);
@@ -2285,6 +2377,7 @@ document.addEventListener("click", e => {
   }
   else if (act === "addjob"){
     S.settings.jobs.push(Object.assign(newJob(), {name: "新しい勤務先"}));
+    S.jobOpen = S.settings.jobs[S.settings.jobs.length - 1].id; S.setTab = "jobs";
     putSettings("勤務先を追加しました。名前と時給を入れてください");
     setTimeout(() => { const el = document.getElementById("jn-" + (S.settings.jobs.length - 1)); if (el){ el.focus(); el.select(); } }, 0);
   }
@@ -2893,7 +2986,8 @@ document.addEventListener("click", e => {
       // with a payday-based month, each pay is spent in the period it arrives in
       if (startDay() > 1) st.jobs.forEach(j => { if (freqOf(j) === "monthly") j.useLag = 0; });
       [S.y, S.m] = refreshToday();
-      st.onboarded = true; S.tab = "home"; persist(); render(); toast("ようこそ、シフポケへ！"); window.scrollTo(0, 0); return; }
+      st.onboarded = true;
+      if (!st.tutorialDone) S.tut = 0; S.tab = "home"; persist(); render(); toast("ようこそ、シフポケへ！"); window.scrollTo(0, 0); return; }
     S.onbStep = (S.onbStep || 0) + 1;
   }
   else if (a === "back") S.onbStep = Math.max(0, (S.onbStep || 0) - 1);
