@@ -532,6 +532,8 @@ html,body{overflow-x:hidden}
 .rwset{align-self:flex-start;border:1px dashed var(--accent);background:none;color:var(--accent);font:inherit;font-size:13px;font-weight:900;border-radius:99px;padding:4px 12px;cursor:pointer}
 .rwset.on{border-style:solid;background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
 .rwform{display:flex;flex-wrap:wrap;gap:6px}.rwform input{flex:1 1 8em;min-width:0;min-height:40px}
+.opt[hidden],nav.tabs button[hidden]{display:none!important}
+.simplerow{width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer}
 .persona{display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
 .persona .pk{font-size:13px;font-weight:900;color:var(--muted)}
 .persona button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border:2px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);text-align:left}
@@ -1686,7 +1688,12 @@ function applyImport(){
   S.settings.onboarded = true; S.settings.tutorialDone = true;
   migrateWalls(); migrateRates(); [S.y, S.m] = refreshToday(); S.tab = "home"; saveLocal(); render(); toast("バックアップを読み込みました");
 }
+/* かんたんモード: shifts live in another app (シフトボード etc.); the viewer types the monthly pay estimate instead */
+const isSimple = () => S.settings.mode === "simple";
 function render(){
+  { const st = document.querySelector('nav [data-tab=shifts]'), qs = document.querySelector('#sheet [data-act=quickShift]');
+    if (st) st.hidden = isSimple(); if (qs) qs.hidden = isSimple();
+    if (isSimple() && S.tab === "shifts") S.tab = "home"; }
   document.documentElement.dataset.font = ["l", "xl"].includes(S.settings.fontSize) ? S.settings.fontSize : "m";
   const ml = document.getElementById("monthLabel");
   ml.textContent = (S.y === now.y ? "" : startDay() === 1 ? `${S.y}年` : `${S.y}/`) + periodLabel(S.y, S.m);
@@ -1786,8 +1793,8 @@ function viewHome(){
   const hero = waiting ? `<div class="hero empty">
       <div class="hk"><span>${wkHero ? `${mName()}に働いた分（${wk.n}回）` : `${mName()}に自由に使えるお金`}</span></div>
       <div class="hv-msg">${wkHero ? `${wk.uses}に使える見込み ${yen(wk.total)}` : noIncome ? "給料を入れると計算します" : "あと少しで計算できます"}</div>
-      <p class="hmsg">${wkHero ? `${wk.pds}に振り込まれて、${wk.uses}に使えるお金になります。${mName()}に使う給料（前の月までに働いた分）を入れると、ここに${mName()}に自由に使えるお金が出ます。` : noIncome ? `${mName()}に使う給料（${S.settings.jobs.length ? "シフトか、振り込まれた金額" : `まずは${jobWord()}の登録`}）を入れると、ここに今月自由に使えるお金が出ます。` : `まだ入っていない給料があります：${missing.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}`}</p>
-      <div class="hbtns">${S.settings.jobs.length ? `<button type="button" class="hbtn" data-incopen="budget">給料の金額を入れる ›</button><button type="button" class="hbtn ghostb" data-act="quickShift">シフトを入れる</button>` : `<button type="button" class="hbtn" data-goto="settings">${jobWord()}を登録する ›</button>`}</div>
+      <p class="hmsg">${wkHero ? `${wk.pds}に振り込まれて、${wk.uses}に使えるお金になります。${mName()}に使う給料（前の月までに働いた分）を入れると、ここに${mName()}に自由に使えるお金が出ます。` : noIncome ? `${mName()}に使う給料（${S.settings.jobs.length ? (isSimple() ? "先月までに働いた分の、振り込まれた金額" : "シフトか、振り込まれた金額") : `まずは${jobWord()}の登録`}）を入れると、ここに今月自由に使えるお金が出ます。` : `まだ入っていない給料があります：${missing.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}`}</p>
+      <div class="hbtns">${S.settings.jobs.length ? `<button type="button" class="hbtn" data-incopen="budget">給料の金額を入れる ›</button>${isSimple() ? "" : `<button type="button" class="hbtn ghostb" data-act="quickShift">シフトを入れる</button>`}` : `<button type="button" class="hbtn" data-goto="settings">${jobWord()}を登録する ›</button>`}</div>
       ${!noIncome ? `<div class="hs">入力済みの分だけで計算すると ${yen(x.left)}</div>` : ""}
       ${x.fixed + x.save + x.evTotal ? `<div class="hs">出ていく予定：固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}・行事 ${yen(x.evTotal)}</div>` : ""}
     </div>` : `<div class="hero">
@@ -1827,6 +1834,11 @@ function viewHome(){
   ${backupDue() ? `<div class="notice backupnote"><div><b>${S.settings.lastBackup ? `最後のバックアップから${daysSince(S.settings.lastBackup)}日たちました` : "まだバックアップがありません"}</b><br><span class="small">機種変更やデータの消失に備えて、ファイルに書き出しておきましょう。</span></div><div class="dayform"><button type="button" class="primary small-btn" data-act="exportData" data-from="home">書き出す</button><button type="button" class="ghost small-btn" data-act="backupLater">あとで</button></div></div>` : ""}
   ${false ? `<div class="notice warn"><div>${yen(-x.left)} 足りません。${esc(rj.name)}であと<b>約${Math.ceil(-x.left / num(rj.wage))}時間</b>働くか、行事の予算を見直しましょう。</div></div>` : ""}
   ${(() => { const ms = waiting ? [] : missing; return ms.length ? `<button type="button" class="notice warn incnote" data-incopen="budget"><div><b>${mName()}に使う給料の金額が入っていません</b><br><span class="small">${ms.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}。シフトを入れていなくても、金額だけ入れられます。</span></div><span class="incgo">入力する ›</span></button>` : ""; })()}
+  ${isSimple() && S.settings.jobs.length ? (() => {
+    // the one thing to keep up in simple mode: this month's estimate from the shift app
+    const rows = incRowsFor("work"), filled = rows.filter(r => r.conf !== ""), total = filled.reduce((a, r) => a + num(r.conf), 0);
+    return `<button type="button" class="workedline simplerow" data-incopen="work"><span>${mName()}に働いた分の見込み <b>${filled.length ? yen(total) : "未入力"}</b></span><span class="small muted">${filled.length ? `${rows[0].sub.split("・").pop()} → 直す ›` : "シフトボードなどの見込みを入れる ›"}</span></button>`;
+  })() : ""}
   ${wk && !wkHero ? `<div class="workedline"><span>${mName()}に働いた分 <b>${yen(wk.total)}</b></span><span class="small muted">${wk.pds}振込 → ${wk.uses}に使える</span></div>` : ""}
   <div class="duo">${npHtml}${svHtml}</div>
   <div class="sec">
@@ -2079,8 +2091,8 @@ function incSheetHtml(){
   let body;
   if (ed.step === "edit"){
     body = `<div class="evs-h"><h2>${title}</h2><button type="button" class="ghost" data-incs="close" aria-label="閉じる">✕</button></div>
-      <p class="small muted" style="margin:0">シフトを入れていない月も、給与明細や通帳で分かった金額（交通費込み）をここに入れればOKです。入れた金額はシフトからの見込みより優先されます。</p>
-      <div class="inc-list">${ed.rows.map((r, i) => `<label class="inc-row"><span class="inc-n"><b>${esc(r.name)}</b><span class="small muted">${r.sub}${r.est ? ` ・ 見込み ${yen(r.est)}` : " ・ シフト未入力"}</span></span>
+      <p class="small muted" style="margin:0">${isSimple() ? "シフトボードなどに出ている給料の見込み（交通費込み）を入れてください。振り込まれたら、実際の金額に直すと正確になります。" : "シフトを入れていない月も、給与明細や通帳で分かった金額（交通費込み）をここに入れればOKです。入れた金額はシフトからの見込みより優先されます。"}</p>
+      <div class="inc-list">${ed.rows.map((r, i) => `<label class="inc-row"><span class="inc-n"><b>${esc(r.name)}</b><span class="small muted">${r.sub}${r.est ? ` ・ 見込み ${yen(r.est)}` : (isSimple() ? "" : " ・ シフト未入力")}</span></span>
         <input type="text" inputmode="decimal" id="inc-${i}" data-incf="${i}" value="${esc(r.v)}" placeholder="${r.est ? esc(String(r.est)) : "円"}" aria-label="${esc(r.name)}の金額"></label>`).join("")}</div>
       <div class="evs-foot"><span style="flex:1"></span><button type="button" data-incs="close">キャンセル</button><button type="button" class="primary" data-incs="review">確認へ</button></div>`;
   } else if (ed.step === "review"){
@@ -2415,6 +2427,11 @@ function viewSettings(){
       <div class="small muted">変えると、表示する年収の壁がおすすめのものに切り替わります。</div>
     </section>
     <section class="block">
+      <h2>給料の入れ方</h2>
+      <div class="seg" role="group" aria-label="給料の入れ方"><button type="button" data-act="setmode" data-v="" aria-pressed="${!isSimple()}">シフトから計算</button><button type="button" data-act="setmode" data-v="simple" aria-pressed="${isSimple()}">見込みを入れるだけ</button></div>
+      <div class="small muted">${isSimple() ? "シフトはシフトボードなど別のアプリで管理し、ここには月1回、給料の見込みを入れます。" : "シフポケにシフトを入れて、時給から給料を計算します。"}</div>
+    </section>
+    <section class="block">
       <h2>見え方</h2>
       <label class="f">文字の大きさ<select id="sFont" data-set="fontSize">${[["m", "標準"], ["l", "大"], ["xl", "特大"]].map(([v, n]) => `<option value="${v}" ${(s.fontSize || "m") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
     </section>
@@ -2475,12 +2492,13 @@ const TUT_STEPS = [
   {sel: "[data-act=fab]", title: "働いた日はここから", text: "＋を押して「シフトを追加」。時給・深夜・交通費まで自動で計算します。シフトなしで給料の金額だけ入れることもできます。"},
   {sel: "nav [data-tab=events]", title: "旅行や飲み会の予算はここ", text: "行事ごとに予算を入れておくと、今月あといくら使えるかが分かります。使ったら金額を入れて精算しましょう。"}
 ];
+const tutSteps = () => isSimple() ? TUT_STEPS.map((t, i) => i === 1 ? Object.assign({}, t, {title: "給料の見込みはここから", text: "＋の「給料の金額を入力」から、シフトボードなどの見込みを月1回入れるだけ。振り込まれたら実際の金額に直します。"}) : t) : TUT_STEPS;
 function drawTutorial(){
   const old = document.getElementById("tut"); if (old) old.remove();
   if (S.tut == null || !S.settings.onboarded || S.tab !== "home") return;
   const cel = document.getElementById("celebrate");
   if (cel && !cel.hidden && getComputedStyle(cel).display !== "none"){ setTimeout(drawTutorial, 700); return; }
-  const st = TUT_STEPS[S.tut], el = document.querySelector(st.sel); if (!el) return;
+  const st = tutSteps()[S.tut], el = document.querySelector(st.sel); if (!el) return;
   if (S.tut === 0) window.scrollTo(0, 0);
   const r = el.getBoundingClientRect(), pad = 8, below = r.top + r.height / 2 < window.innerHeight / 2;
   const box = document.createElement("div"); box.id = "tut";
@@ -2618,6 +2636,7 @@ document.addEventListener("click", e => {
     S.settings.rewards = Object.assign({}, S.settings.rewards, {[id]: {title: t.trim(), amount: num(amt)}});
     S.rewardEdit = null; putSettings(`ご褒美「${esc(t.trim())}」を決めました`);
   }
+  else if (act === "setmode"){ S.settings.mode = a.dataset.v; putSettings(a.dataset.v ? "見込みを入れるだけのモードにしました" : "シフトから計算するモードにしました"); }
   else if (act === "backupLater"){ const d = new Date(Date.UTC(now.y, now.m - 1, now.d + 14)); S.settings.backupSnooze = d.toISOString().slice(0, 10); persist(); render(); toast("2週間後にもう一度お知らせします"); }
   else if (act === "importOk"){ applyImport(); }
   else if (false){
@@ -3139,17 +3158,31 @@ function viewOnboarding(){
   if (step === 0) body = `
     <div class="ohero">
       <div class="logo">シフポケ</div>
-      <p class="olead">シフトを入れるだけで、バイト代を自動で計算。<br>今月いくら使えて、いくら貯まるかがひと目でわかります。</p>
+      <p class="olead">バイト代の「使い道」がわかるアプリ。<br>今月いくら使えて、いくら貯まるかがひと目でわかります。</p>
       <ul class="ofeat"><li><b>給料を自動計算</b>深夜割増・交通費・休日の振込ずれまで</li><li><b>行事ごとに予算</b>旅行やライブの出費を先回りで</li><li><b>貯金目標から逆算</b>毎月自由に使えるお金がわかる</li><li><b>実績を集める</b>月5万・年間100万…メダルで記録</li></ul>
       <div class="persona" role="group" aria-label="あなたの働き方"><span class="pk">あなたは？</span>${PERSONAS.map(([v, n, d]) => `<button type="button" data-onb="persona" data-v="${v}" aria-pressed="${personaOf() === v}"><b>${n}</b><span>${d}</span></button>`).join("")}</div>
+      <div class="persona" role="group" aria-label="シフトの管理"><span class="pk">シフトは何で管理してる？</span>
+        <button type="button" data-onb="mode" data-v="" aria-pressed="${!isSimple()}"><b>シフポケで入力する</b><span>時給から給料を自動で計算</span></button>
+        <button type="button" data-onb="mode" data-v="simple" aria-pressed="${isSimple()}"><b>シフトボードなど別のアプリ</b><span>そのアプリの給料見込みを月1回入れるだけ</span></button></div>
       <p class="small muted">ログイン不要。入力したデータはこの端末のブラウザにだけ保存されます。設定は1分ほどで終わります。</p>
       <label class="restore">前のスマホのデータがある人：<b>バックアップから戻す</b><input type="file" id="importFileOnb" accept="application/json,.json" hidden></label>
     </div>${cta("はじめる")}`;
   if (step === 1){
     const jobs = st.jobs.length ? st.jobs : (st.jobs = [newJob()]);
     body = `<div class="ostep-h"><h2 class="oh">どこで<br>${personaOf() === "worker" ? "働いてる？" : "バイトしてる？"}</h2><p class="osub">給料の計算に使います。${personaOf() === "worker" ? "副業があれば2つ目に追加してください。" : "深夜割増や「土曜は時給が高い」などの細かい設定は、あとで設定画面から追加できます。"}</p></div>
+      ${isSimple() ? `<p class="small muted" style="margin:0">給料の金額は、シフトボードなどに出ている見込みを月に1回入れるだけでOKです。ここでは給料日だけ教えてください。</p>` : ""}
       ${jobs.map((j, i) => {
         const pi = presetOf(j), custom = S.onbCustom[i] || pi < 0;
+        if (isSimple()) return `<div class="ocard">
+        <div class="ocard-h"><span class="jdot" style="--jc:var(--j${i % 5})"></span><b>${jobs.length > 1 ? `${jobWord()} ${i + 1}` : jobWord()}</b>${jobs.length > 1 ? `<button type="button" class="ghost" data-onb="deljob" data-i="${i}">削除</button>` : ""}</div>
+        <label class="f">名前<input type="text" id="oj-n-${i}" data-o="jobs.${i}.name" value="${esc(j.name)}" placeholder="例：カフェ、塾講師、コンビニ"></label>
+        <label class="f">時給（任意・「何時間ぶん」の計算に使います）<input type="text" inputmode="decimal" id="oj-w-${i}" data-o="jobs.${i}.wage" value="${esc(j.wage)}" placeholder="例：1100"></label>
+        <div class="f">給料日
+          <div class="opay">${PAY_PRESETS.map((p, k) => `<button type="button" data-onb="paypreset" data-i="${i}" data-p="${k}" aria-pressed="${!custom && pi === k}">${p.l}</button>`).join("")}
+            <button type="button" data-onb="paycustom" data-i="${i}" aria-pressed="${custom}">ほかの日にち</button></div>
+        </div>
+        ${custom ? cycleEditor(j, i, "onb") : ""}
+      </div>`;
         return `<div class="ocard">
         <div class="ocard-h"><span class="jdot" style="--jc:var(--j${i % 5})"></span><b>${jobs.length > 1 ? `${jobWord()} ${i + 1}` : jobWord()}</b>${jobs.length > 1 ? `<button type="button" class="ghost" data-onb="deljob" data-i="${i}">削除</button>` : ""}</div>
         <label class="f">名前<input type="text" id="oj-n-${i}" data-o="jobs.${i}.name" value="${esc(j.name)}" placeholder="例：カフェ、塾講師、コンビニ"></label>
@@ -3290,6 +3323,7 @@ document.addEventListener("click", e => {
   else if (a === "addjob") st.jobs.push(newJob());
   else if (a === "ptype"){ const j = st.jobs[Number(b.dataset.i)]; j.payType = b.dataset.v; if (j.payType === "salary") toSalary(j); }
   else if (a === "detail"){ const i = b.dataset.i, j = st.jobs[Number(i)]; S.onbDetail = S.onbDetail || {}; const cur = S.onbDetail[i] !== undefined ? S.onbDetail[i] : (alwOf(j).length > 0 || rulesOf(j).length > 0); S.onbDetail[i] = !cur; }
+  else if (a === "mode"){ st.mode = b.dataset.v; }
   else if (a === "mstart"){ if (b.dataset.v === "custom") S.onbMs = true; else { S.onbMs = false; st.monthStart = num(b.dataset.v); } }
   else if (a === "persona"){
     st.persona = b.dataset.v; st.walls = WALL_DEF[st.persona].slice();
