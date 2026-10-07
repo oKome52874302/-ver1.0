@@ -527,6 +527,15 @@ html,body{overflow-x:hidden}
 .restore{display:block;margin-top:10px;font-size:13px;color:var(--accent);cursor:pointer;text-decoration:underline}
 .cel-tip{font-size:13px;line-height:1.6;opacity:.9;margin:4px 0 2px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--surface) 70%,transparent);text-align:left}
 .cel-reward{font-size:13.5px;font-weight:900;margin-top:6px}
+.evseg{margin-bottom:2px}
+.wishcard{display:flex;flex-direction:column;gap:8px}.wishcard .gh{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.wishcard .gt{font-weight:900;white-space:nowrap}.wishcard.reached .gt{color:var(--good)}
+.wishline{margin:0;font-size:14px;line-height:1.7}
+.wpresets{display:flex;flex-wrap:wrap;gap:6px}
+.wchip{border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:6px 12px;font:inherit;font-size:13px;color:inherit;cursor:pointer}
+.wchip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:700}
+.offer{display:flex;flex-direction:column;gap:8px;border:1px dashed var(--accent)}
+button.wishhome{width:100%;font:inherit;color:inherit;cursor:pointer;text-align:left}
 .rwrow{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;align-items:start;padding:10px 0;border-top:1px dashed var(--line)}
 .rwb{display:flex;flex-direction:column;gap:4px;min-width:0}
 .rwset{align-self:flex-start;border:1px dashed var(--accent);background:none;color:var(--accent);font:inherit;font-size:13px;font-weight:900;border-radius:99px;padding:4px 12px;cursor:pointer}
@@ -586,7 +595,7 @@ div.f{display:flex;flex-direction:column;gap:6px;font-size:.76rem;color:var(--mu
     <button role="tab" data-tab="home" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>ホーム</button>
     <button role="tab" data-tab="shifts" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>シフト</button>
     <button type="button" class="fab" data-act="fab" aria-label="シフトや出費を追加"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
-    <button role="tab" data-tab="events" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/></svg>行事</button>
+    <button role="tab" data-tab="events" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/></svg>予定・目標</button>
     <button role="tab" data-tab="ach" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="6"/><path d="M8.5 14L7 22l5-3 5 3-1.5-8"/></svg>実績</button>
   </nav>
   <div id="sheet" hidden><div class="panel" role="dialog" aria-modal="true" aria-label="追加する">
@@ -1355,7 +1364,7 @@ function stats(){
     night: done.filter(s => s.night > 0).length, longest: done.reduce((a, s) => Math.max(a, s.paid), 0),
     doubleDays: Object.values(byDay).filter(x => x.size >= 2).length,
     maxJobs: Math.max(0, ...Object.values(jobsByMonth).map(x => x.size)),
-    evDone, saved, exact, black, bestStreak: best, perfect, onTrack, overCount, workStreak, wallFinish, entered: Object.keys(S.shifts).length,
+    evDone, saved, exact, black, bestStreak: best, perfect, onTrack, overCount, workStreak, wallFinish, entered: Object.keys(S.shifts).length, wishDone: wishes().filter(w => num(w.price) > 0 && num(w.saved) >= num(w.price)).length,
     othersDone: others.filter(a => S.ach[a.id]).length, othersTotal: others.length, recMonths: Object.values(S.income).filter(d => d.jobs && Object.keys(d.jobs).length).length,
     balance: num(S.settings.balance), goal: num(S.settings.goalAmount)
   };
@@ -1382,6 +1391,7 @@ const ACH = [
   {cat:"work", id:"night",  g:"夜", tier:1, t:"夜の住人",          d:"22時以降の深夜帯に働く",          v:s => s.night,       goal:1, fmt:"回"},
   {cat:"work", id:"double", g:"双", tier:2, t:"ダブルヘッダー",    d:"1日に2つのバイトをこなす",        v:s => s.doubleDays,  goal:1, fmt:"日"},
   {cat:"work", id:"multi",  g:"掛", tier:2, t:"掛け持ちの達人",    d:"1か月に3つのバイト先で働く",        v:s => s.maxJobs,     goal:3, fmt:"か所"},
+  {cat:"save", id:"wish1",  g:"夢", tier:2, t:"夢をかなえた",      d:"「ほしいもの」の目標額まで貯める",   v:s => s.wishDone,    goal:1, fmt:"回"},
   {cat:"save", id:"budget", g:"算", tier:2, t:"やりくり上手",      d:"予算内で精算した行事が5件",       v:s => s.evDone,      goal:5, fmt:"件"},
   {cat:"save", id:"save1k",  g:"浮", tier:1, t:"浮かせ上手",       d:"予算より安く済ませて合計1,000円浮かせる", v:s => s.saved, goal:1000, fmt:"yen"},
   {cat:"save", id:"save10k", g:"浮", tier:2, t:"1万円浮いた",      d:"浮かせたお金の合計が1万円",          v:s => s.saved,      goal:10000, fmt:"yen"},
@@ -1490,7 +1500,7 @@ function confetti(tier){
     if (++f < 130) requestAnimationFrame(tick); else ctx.clearRect(0, 0, W, H);
   })();
 }
-const busyEntering = () => S.tab === "shifts" || !!S.evEdit || !!S.incEdit;
+const busyEntering = () => S.tab === "shifts" || !!S.evEdit || !!S.incEdit || !!S.wishEdit;
 function flushCelebrations(){ if (S.celePending && S.celePending.length && !busyEntering()){ const l = S.celePending; S.celePending = []; celebrate(l); } }
 /* 役立つ一言: what this medal means for the next step, from the viewer's own numbers */
 function achTip(a){
@@ -1700,7 +1710,7 @@ function render(){
   ml.classList.toggle("range", startDay() !== 1);
   document.querySelectorAll("nav.tabs button[data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === S.tab)));
   const tt = document.getElementById("screenTitle");
-  tt.textContent = {home: "シフポケ", shifts: "シフト", events: "行事・出費", ach: "実績", settings: "設定"}[S.tab] || "シフポケ";
+  tt.textContent = {home: "シフポケ", shifts: "シフト", events: S.evView === "wish" ? "ほしいもの" : "行事・出費", ach: "実績", settings: "設定"}[S.tab] || "シフポケ";
   tt.className = S.tab === "home" ? "brand" : "screen";
   const st = document.getElementById("syncState");
 
@@ -1841,6 +1851,11 @@ function viewHome(){
   })() : ""}
   ${wk && !wkHero ? `<div class="workedline"><span>${mName()}に働いた分 <b>${yen(wk.total)}</b></span><span class="small muted">${wk.pds}振込 → ${wk.uses}に使える</span></div>` : ""}
   <div class="duo">${npHtml}${svHtml}</div>
+  ${(() => {
+    const w = wishActive()[0]; if (!w) return "";
+    const i = wishInfo(w), off = wishOffer();
+    return `<button type="button" class="workedline wishhome" data-act="gowish"><span>${esc(w.title)} <b>${i.left ? `あと ${yen(i.left)}` : "達成！"}</b></span><span class="small muted">${off ? `先月の余り ${yen(off.amount)} を入れられます ›` : i.left && i.hours ? `${wishHoursText(i)} ›` : "ほしいもの ›"}</span></button>`;
+  })()}
   <div class="sec">
     <div class="sec-h"><h2>${isCur ? "もうすぐ出ていくお金" : `${mName()}に出ていくお金`}</h2><button type="button" class="link" data-goto="events">すべて</button></div>
     <div class="list">${upRows || `<div class="li"><span class="lm"><b>予定している出費はありません</b><span>旅行や飲み会の予算を入れておくと、使えるお金が正確になります</span></span></div>`}</div>
@@ -2249,7 +2264,167 @@ document.addEventListener("click", e => {
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && S.evEdit){ const b = document.querySelector("[data-evs=close]") || document.querySelector("[data-evs=back]"); if (b) b.click(); }
 });
+/* ほしいもの: a dream or a thing to buy, how much is saved toward it, and how much work is left */
+const WISH_PRESETS = [
+  {id: "license", t: "自動車の免許", lo: 250000, hi: 350000, note: "教習所に通う場合。合宿だと安くなることがあります"},
+  {id: "trip", t: "国内旅行（1泊2日）", lo: 20000, hi: 50000, note: "交通・宿・食事込み"},
+  {id: "abroad", t: "海外旅行（アジア4〜5日）", lo: 100000, hi: 200000, note: "時期と円相場で大きく変わります"},
+  {id: "live", t: "ライブ遠征", lo: 20000, hi: 50000, note: "チケット・交通・宿込み"},
+  {id: "pc", t: "ノートパソコン", lo: 100000, hi: 200000, note: ""},
+  {id: "phone", t: "スマホの買い替え", lo: 50000, hi: 200000, note: ""},
+  {id: "game", t: "ゲーム機", lo: 30000, hi: 70000, note: ""},
+  {id: "alone", t: "一人暮らしの初期費用", lo: 300000, hi: 500000, note: "敷金・礼金・家具家電など"}
+];
+const wishes = () => Array.isArray(S.settings.wishes) ? S.settings.wishes : [];
+const wishActive = () => wishes().filter(w => !w.done);
+/* what one hour (and one shift) of the viewer's own work is worth, from recent shifts; falls back to the hourly wage */
+function workRate(){
+  const from = keyAdd(todayKey, -3);
+  const done = allShifts().filter(t => t.ev.ymd <= todayYmd && t.ev.ymd.slice(0, 7) >= from && t.paid > 0 && t.job.payType !== "salary");
+  const h = done.reduce((a, t) => a + t.paid, 0);
+  if (h >= 4) return {perH: done.reduce((a, t) => a + t.pay - t.transport, 0) / h, perShift: h / done.length};
+  const rj = rateJob(); return rj ? {perH: num(rj.wage), perShift: 0} : null;
+}
+function wishInfo(w){
+  const price = num(w.price), saved = Math.min(num(w.saved), price || Infinity), left = Math.max(0, price - num(w.saved));
+  const r = workRate(), hours = r && r.perH > 0 ? left / r.perH : 0;
+  const out = {price, saved, left, pct: price ? Math.min(100, num(w.saved) / price * 100) : 0, hours, shifts: r && r.perShift ? Math.ceil(hours / r.perShift) : 0};
+  if (w.due && /^\d{4}-\d{2}$/.test(w.due)){
+    const months = (Number(w.due.slice(0, 4)) - now.y) * 12 + Number(w.due.slice(5)) - now.m + 1;
+    out.months = Math.max(1, months); out.late = months < 1;
+    out.perMonth = Math.ceil(left / out.months / 100) * 100;
+    out.hoursMonth = r && r.perH > 0 ? out.perMonth / r.perH : 0;
+  }
+  // earning the rest this year on top of the usual pace could cross the next "wall"
+  const x = summary(...todayKey.split("-").map(Number)), wl = wallList().find(v => wallVal(v, x) < v.amount);
+  if (wl && left && (!w.due || w.due.slice(0, 4) === String(now.y)) && left > wl.amount - wallVal(wl, x)) out.wall = wl;
+  return out;
+}
+const wishHoursText = i => i.hours ? `あと約${Math.ceil(i.hours)}時間${i.shifts ? `（シフト約${i.shifts}回）` : ""}` : "";
+/* last month's money left over, offered once to the first goal */
+function wishOffer(){
+  const w = wishActive().find(v => num(v.price) > num(v.saved)); if (!w) return null;
+  const pk = keyAdd(todayKey, -1); if ((S.settings.wishOffered || {})[pk]) return null;
+  const x = summary(...pk.split("-").map(Number));
+  return x.income > 0 && x.left >= 100 ? {w, k: pk, amount: Math.floor(x.left / 100) * 100} : null;
+}
+function openWishEditor(id, step){
+  const w = wishes().find(v => v.id === id);
+  const v = w ? {title: w.title || "", price: w.price ?? "", saved: w.saved ?? "", due: w.due || "", preset: w.preset || ""} : {title: "", price: "", saved: "", due: "", preset: ""};
+  S.wishEdit = {id: w ? w.id : null, v, step: step || "edit", add: ""}; render();
+  setTimeout(() => { const el = document.getElementById(step === "add" ? "wf-add" : w ? "wf-price" : "wf-title"); if (el) el.focus(); }, 30);
+}
+function wishSheetHtml(){
+  const ed = S.wishEdit; if (!ed) return "";
+  const v = ed.v, isNew = !ed.id, w = wishes().find(x => x.id === ed.id);
+  let body;
+  if (ed.step === "add"){
+    const i = wishInfo(w);
+    body = `<div class="evs-h"><h2>「${esc(w.title)}」に貯めた</h2><button type="button" class="ghost" data-wish="close" aria-label="閉じる">✕</button></div>
+      <p class="small muted">いま ${yen(i.saved)} / ${yen(i.price)}。貯めた分（口座に残しておく分）を足します。減らすときはマイナスで入れてください。</p>
+      <div class="evs-grid"><label class="f wide">貯めた金額<input id="wf-add" data-wf="add" type="text" inputmode="decimal" placeholder="例：5000" value="${esc(ed.add)}"></label></div>
+      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-wish="close">キャンセル</button><button type="button" class="primary" data-wish="addsave">足す</button></div>`;
+  } else {
+    const ps = WISH_PRESETS.find(p => p.id === v.preset);
+    const fld = (k, label, attrs, wide) => `<label class="f ${wide ? "wide" : ""}">${label}<input id="wf-${k}" data-wf="${k}" value="${esc(v[k] ?? "")}" ${attrs}></label>`;
+    body = `<div class="evs-h"><h2>${isNew ? "ほしいものを追加" : "ほしいものを編集"}</h2><button type="button" class="ghost" data-wish="close" aria-label="閉じる">✕</button></div>
+      ${isNew ? `<div class="wpresets">${WISH_PRESETS.map(p => `<button type="button" class="wchip" data-wpreset="${p.id}" aria-pressed="${v.preset === p.id}">${esc(p.t)}</button>`).join("")}</div>` : ""}
+      ${ps ? `<p class="small muted">目安 ${yen(ps.lo)}〜${yen(ps.hi)}${ps.note ? `（${esc(ps.note)}）` : ""}。2026年時点の大まかな目安なので、実際の値段を調べて直してください。</p>` : ""}
+      <div class="evs-grid">
+        ${fld("title", "なにがほしい？", `type="text" placeholder="例：合宿免許、新しいキーボード" autocomplete="off"`, true)}
+        ${fld("price", "必要な金額", `type="text" inputmode="decimal" placeholder="円"`)}
+        ${fld("saved", "もう貯めた分", `type="text" inputmode="decimal" placeholder="0"`)}
+        ${fld("due", "いつまでに（任意）", `type="month"`, true)}
+      </div>
+      <div class="evs-foot">
+        ${isNew ? "" : `<button type="button" class="ghost danger" data-wish="del">${S.confirmDel === "w:" + ed.id ? "本当に削除する" : "削除"}</button>`}
+        <span style="flex:1"></span><button type="button" data-wish="close">キャンセル</button><button type="button" class="primary" data-wish="save">保存する</button></div>`;
+  }
+  return `<div class="evsheet" data-wish="backdrop"><div class="evpanel" role="dialog" aria-modal="true" aria-label="ほしいもの">${body}</div></div>`;
+}
+function saveWishes(list, msg){ S.settings.wishes = list; putSettings(msg); }
+document.addEventListener("input", e => {
+  const t = e.target; if (!t.dataset || !t.dataset.wf || !S.wishEdit) return;
+  e.stopPropagation(); if (t.dataset.wf === "add") S.wishEdit.add = t.value; else S.wishEdit.v[t.dataset.wf] = t.value;
+}, true);
+document.addEventListener("click", e => {
+  const o = e.target.closest("[data-wishopen]");
+  if (o){ e.stopPropagation(); openWishEditor(o.dataset.wishopen || null, o.dataset.step); return; }
+  const p = e.target.closest("[data-wpreset]");
+  if (p && S.wishEdit){
+    e.stopPropagation(); const ps = WISH_PRESETS.find(x => x.id === p.dataset.wpreset), v = S.wishEdit.v;
+    v.preset = ps.id; v.title = ps.t; v.price = String(Math.round((ps.lo + ps.hi) / 2 / 10000) * 10000); render(); return;
+  }
+  const b = e.target.closest("[data-wish]"); if (!b) return;
+  const a = b.dataset.wish, ed = S.wishEdit;
+  if (a === "backdrop" && e.target !== b) return;
+  e.stopPropagation();
+  if (a === "close" || a === "backdrop"){ S.wishEdit = null; S.confirmDel = null; render(); return; }
+  if (a === "offer" || a === "offerskip"){
+    const off = wishOffer(); if (!off) return;
+    S.settings.wishOffered = Object.assign({}, S.settings.wishOffered, {[off.k]: a === "offer" ? off.amount : 0});
+    if (a === "offer") saveWishes(wishes().map(w => w.id === off.w.id ? Object.assign({}, w, {saved: num(w.saved) + off.amount}) : w), `「${esc(off.w.title)}」に ${yen(off.amount)} 入れました`);
+    else putSettings("今回は入れませんでした");
+    return;
+  }
+  if (a === "done"){ saveWishes(wishes().map(w => w.id === b.dataset.id ? Object.assign({}, w, {done: todayYmd}) : w), "おめでとう！ かなえたリストに入れました"); return; }
+  if (!ed) return;
+  if (a === "del"){
+    if (S.confirmDel !== "w:" + ed.id){ S.confirmDel = "w:" + ed.id; render(); return; }
+    S.confirmDel = null; const t = ed.v.title; S.wishEdit = null; saveWishes(wishes().filter(w => w.id !== ed.id), `「${esc(t)}」を削除しました`); return;
+  }
+  if (a === "addsave"){
+    if (badNum(ed.add) || !num(ed.add)){ toast("金額を数字で入れてください", "warn"); return; }
+    const d = num(ed.add); S.wishEdit = null;
+    saveWishes(wishes().map(w => w.id === ed.id ? Object.assign({}, w, {saved: Math.max(0, num(w.saved) + d)}) : w), `${d > 0 ? "+" : "−"}${yen(Math.abs(d)).replace("−", "")} しました`); return;
+  }
+  if (a === "save"){
+    const v = ed.v;
+    if (!String(v.title).trim()){ toast("ほしいものの名前を入れてください", "warn"); return; }
+    if (badNum(v.price) || !num(v.price)){ toast("必要な金額を数字で入れてください", "warn"); return; }
+    if (badNum(v.saved)){ toast("貯めた分は数字で入れてください", "warn"); return; }
+    const rec = {title: String(v.title).trim(), price: num(v.price), saved: num(v.saved), due: v.due || "", preset: v.preset || ""};
+    S.wishEdit = null;
+    if (ed.id) saveWishes(wishes().map(w => w.id === ed.id ? Object.assign({}, w, rec) : w), `「${esc(rec.title)}」を保存しました`);
+    else saveWishes(wishes().concat([Object.assign({id: "w" + Date.now().toString(36)}, rec)]), `「${esc(rec.title)}」を追加しました`);
+  }
+}, true);
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && S.wishEdit){ S.wishEdit = null; render(); }
+});
+function viewWishes(){
+  const act = wishActive(), done = wishes().filter(w => w.done), off = wishOffer(), r = workRate();
+  const card = w => {
+    const i = wishInfo(w), reached = i.left <= 0;
+    return `<section class="block wishcard ${reached ? "reached" : ""}">
+      <div class="gh"><span style="display:flex;flex-direction:column;min-width:0"><b>${esc(w.title)}</b><span class="small muted">${yen(i.saved)} / ${yen(i.price)}${w.due ? `・${w.due.slice(0, 4) !== String(now.y) ? `${w.due.slice(0, 4)}年` : ""}${Number(w.due.slice(5))}月までに` : ""}</span></span>
+        <span class="gt">${reached ? "達成！" : `あと ${yen(i.left)}`}</span></div>
+      <div class="meter"><span style="width:${i.pct.toFixed(1)}%"></span></div>
+      ${reached ? `<p class="small">目標額まで貯まりました。買ったら「かなえた」を押してください。</p>`
+        : `<p class="wishline">${i.hours ? `<b>${wishHoursText(i)}</b>働けば届きます。` : r ? "" : "時給を設定すると、あと何時間働けばいいかも出します。"}
+          ${i.perMonth ? `<br>${i.late ? "期限を過ぎています。" : `${i.months}か月なので`}<b>毎月 ${yen(i.perMonth)}</b>${i.hoursMonth ? `（月 約${Math.ceil(i.hoursMonth)}時間）` : ""}ずつ貯めれば間に合います。` : ""}</p>
+          ${i.wall ? `<p class="small warn">残りを全部今年の追加バイトでかせぐと「${esc(i.wall.name)}」を超えそうです。今ある貯金や来年の分と分けて考えましょう。</p>` : ""}`}
+      <div class="dayform">${reached ? `<button type="button" class="primary small-btn" data-wish="done" data-id="${esc(w.id)}">かなえた</button>` : `<button type="button" class="primary small-btn" data-wishopen="${esc(w.id)}" data-step="add">＋ 貯めた</button>`}<button type="button" class="ghost small-btn" data-wishopen="${esc(w.id)}">編集</button></div>
+    </section>`;
+  };
+  return `
+  ${off ? `<section class="block offer"><div><b>${mName(...off.k.split("-").map(Number))}は ${yen(off.amount)} 余る予定でした</b><br><span class="small muted">「${esc(off.w.title)}」に入れますか？ 実際に口座に残っている分だけ入れてください。</span></div>
+    <div class="dayform"><button type="button" class="primary small-btn" data-wish="offer">${yen(off.amount)} 入れる</button><button type="button" class="ghost small-btn" data-wish="offerskip">今回はいい</button></div></section>` : ""}
+  ${act.map(card).join("")}
+  <div class="sec">
+    ${act.length ? "" : `<div class="list"><div class="li"><span class="lm"><b>夢や買いたい物を入れてみよう</b><span>免許、旅行、新しいスマホ…。金額を入れると、あと何円・何時間働けば届くかを出します。</span></span></div></div>`}
+    <button type="button" class="primary" data-wishopen="">＋ ほしいものを追加</button>
+    ${r ? `<p class="small muted">「何時間」は${r.perShift ? "最近3か月のシフトの平均（1時間あたり " + yen(Math.round(r.perH)) + "・交通費を除く）" : "時給 " + yen(r.perH)}で計算しています。貯めた額は自分で記録するメモで、口座のお金は動きません。</p>` : ""}
+    ${done.length ? `<details class="more donebox" data-more="wdone" ${S.openMore === "wdone" ? "open" : ""}><summary>かなえたもの ${done.length}個</summary><div class="list">${done.map(w => `<div class="li"><span class="lm"><b>${esc(w.title)}</b><span>${md(w.done)} ・ ${yen(num(w.price))}</span></span></div>`).join("")}</div></details>` : ""}
+  </div>
+  ${wishSheetHtml()}`;
+}
 function viewEvents(){
+  const segHtml = `<div class="seg evseg" role="group" aria-label="表示"><button type="button" data-act="evview" data-v="" aria-pressed="${S.evView !== "wish"}">行事・出費</button><button type="button" data-act="evview" data-v="wish" aria-pressed="${S.evView === "wish"}">ほしいもの${wishActive().length ? ` ${wishActive().length}` : ""}</button></div>`;
+  if (S.evView === "wish") return segHtml + viewWishes();
+  return segHtml + viewEventsSpend();
+}
+function viewEventsSpend(){
   const x = summary(S.y, S.m), evs = x.evs, rj = rateJob();
   // budget overview
   const room = x.income - x.fixed - x.save, used = x.evTotal, pct = room > 0 ? Math.min(100, used / room * 100) : (used ? 100 : 0);
@@ -2490,7 +2665,7 @@ document.addEventListener("change", e => {
 const TUT_STEPS = [
   {sel: ".hero", title: "これが今月自由に使えるお金", text: "給料から固定費・貯金・行事の予算を引いた残りです。シフトや予算を入れるほど正確になります。"},
   {sel: "[data-act=fab]", title: "働いた日はここから", text: "＋を押して「シフトを追加」。時給・深夜・交通費まで自動で計算します。シフトなしで給料の金額だけ入れることもできます。"},
-  {sel: "nav [data-tab=events]", title: "旅行や飲み会の予算はここ", text: "行事ごとに予算を入れておくと、今月あといくら使えるかが分かります。使ったら金額を入れて精算しましょう。"}
+  {sel: "nav [data-tab=events]", title: "旅行の予算と、ほしいものはここ", text: "行事ごとに予算を入れると、今月あといくら使えるかが分かります。「ほしいもの」に夢や買いたい物を入れると、あと何円・何時間働けば届くかを出します。"}
 ];
 const tutSteps = () => isSimple() ? TUT_STEPS.map((t, i) => i === 1 ? Object.assign({}, t, {title: "給料の見込みはここから", text: "＋の「給料の金額を入力」から、シフトボードなどの見込みを月1回入れるだけ。振り込まれたら実際の金額に直します。"}) : t) : TUT_STEPS;
 function drawTutorial(){
@@ -2604,6 +2779,8 @@ document.addEventListener("click", e => {
     S.confirmDel = null; S.settings.recurring = (S.settings.recurring || []).filter(r => r.id !== id); putSettings("毎月の行事を削除しました");
   }
   else if (act === "fab"){ document.getElementById("sheet").hidden = false; const o = document.querySelector("#sheet .opt"); if (o) o.focus(); }
+  else if (act === "gowish"){ S.tab = "events"; S.evView = "wish"; render(); window.scrollTo(0, 0); }
+  else if (act === "evview"){ S.evView = a.dataset.v; render(); window.scrollTo(0, 0); }
   else if (act === "openSaving"){ S.openMore = "saving"; render(); const el = document.getElementById("hGb"); if (el){ el.scrollIntoView({block: "center"}); el.focus(); } }
   else if (act === "closeSheet"){ document.getElementById("sheet").hidden = true; }
   else if (act === "quickIncome"){ document.getElementById("sheet").hidden = true; S.tab = "home"; [S.y, S.m] = refreshToday(); openIncEditor("budget"); }
@@ -2611,7 +2788,7 @@ document.addEventListener("click", e => {
     document.getElementById("sheet").hidden = true;
     [S.y, S.m] = refreshToday();
     if (act === "quickShift"){ S.tab = "shifts"; S.sel = todayYmd; if (S.form && S.form.editId) S.form = null; }
-    else { S.tab = "events"; S.evDraft = {group: ""}; render(); openEvEditor(null); return; }
+    else { S.tab = "events"; S.evView = ""; S.evDraft = {group: ""}; render(); openEvEditor(null); return; }
     render();
     const el = document.getElementById("fStart");
     if (el){ el.scrollIntoView({block: "center"}); el.focus(); }
