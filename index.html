@@ -342,7 +342,7 @@ input:focus,select:focus{border-color:var(--ink)}
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:15;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:end;gap:0;
   background:var(--surface);border-top:1px solid var(--line);border-bottom:none;overflow:visible;
   padding:6px max(10px, calc((100vw - 540px) / 2)) calc(10px + env(safe-area-inset-bottom, 0px))}
-nav.tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:50px;padding:4px 0;border:none;border-radius:12px;background:none;color:var(--muted);font-size:.66rem;font-weight:700}
+nav.tabs button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:50px;padding:4px 0;border:none;border-radius:12px;background:none;color:var(--muted);font-size:.75rem;font-weight:700}
 nav.tabs button[aria-selected="true"]{color:var(--accent);font-weight:900;border:none}
 nav.tabs button svg{width:24px;height:24px}
 nav.tabs .fab{justify-self:center;width:58px;height:58px;min-height:58px;margin-top:-28px;border-radius:20px;background:var(--pop);color:#FFFFFF;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:0;display:grid;place-items:center}
@@ -1337,7 +1337,7 @@ function stats(){
     night: done.filter(s => s.night > 0).length, longest: done.reduce((a, s) => Math.max(a, s.paid), 0),
     doubleDays: Object.values(byDay).filter(x => x.size >= 2).length,
     maxJobs: Math.max(0, ...Object.values(jobsByMonth).map(x => x.size)),
-    evDone, saved, exact, black, bestStreak: best, perfect, onTrack, overCount, workStreak, wallFinish,
+    evDone, saved, exact, black, bestStreak: best, perfect, onTrack, overCount, workStreak, wallFinish, entered: Object.keys(S.shifts).length,
     othersDone: others.filter(a => S.ach[a.id]).length, othersTotal: others.length, recMonths: Object.values(S.income).filter(d => d.jobs && Object.keys(d.jobs).length).length,
     balance: num(S.settings.balance), goal: num(S.settings.goalAmount)
   };
@@ -1352,6 +1352,8 @@ const ACH = [
   {cat:"earn", id:"y30",    g:"年", tier:2, t:"年間30万円",        d:"今年の収入が30万円",              v:s => s.year,        goal:300000, fmt:"yen"},
   {cat:"earn", id:"y50",    g:"年", tier:2, t:"年間50万円",        d:"今年の収入が50万円",              v:s => s.year,        goal:500000, fmt:"yen"},
   {cat:"earn", id:"y100",   g:"年", tier:3, t:"ミリオン達成",      d:"今年の収入が100万円",             v:s => s.year,        goal:1000000, fmt:"yen"},
+  {cat:"work", id:"s1",     g:"歩", tier:1, t:"はじめの一歩",      d:"シフトを1回入れる",                v:s => s.entered,     goal:1, fmt:"回"},
+  {cat:"work", id:"s5",     g:"五", tier:1, t:"シフト入力5回",      d:"シフトを5回入れる",                v:s => s.entered,     goal:5, fmt:"回"},
   {cat:"work", id:"c10",    g:"回", tier:1, t:"シフト10回",        d:"アプリでシフトを10回こなす",       v:s => s.count,       goal:10, fmt:"回"},
   {cat:"work", id:"c50",    g:"回", tier:2, t:"シフト50回",        d:"アプリでシフトを50回こなす",       v:s => s.count,       goal:50, fmt:"回"},
   {cat:"work", id:"c100",   g:"百", tier:3, t:"百戦錬磨",          d:"アプリでシフトを100回こなす",      v:s => s.count,       goal:100, fmt:"回"},
@@ -1361,7 +1363,7 @@ const ACH = [
   {cat:"work", id:"long",   g:"長", tier:1, t:"ロングラン",        d:"1回で実働8時間以上",              v:s => s.longest,     goal:8, fmt:"h"},
   {cat:"work", id:"night",  g:"夜", tier:1, t:"夜の住人",          d:"22時以降の深夜帯に働く",          v:s => s.night,       goal:1, fmt:"回"},
   {cat:"work", id:"double", g:"双", tier:2, t:"ダブルヘッダー",    d:"1日に2つのバイトをこなす",        v:s => s.doubleDays,  goal:1, fmt:"日"},
-  {cat:"work", id:"multi",  g:"掛", tier:2, t:"掛け持ちの達人",    d:"1か月に3つの勤務先で働く",        v:s => s.maxJobs,     goal:3, fmt:"か所"},
+  {cat:"work", id:"multi",  g:"掛", tier:2, t:"掛け持ちの達人",    d:"1か月に3つのバイト先で働く",        v:s => s.maxJobs,     goal:3, fmt:"か所"},
   {cat:"save", id:"budget", g:"算", tier:2, t:"やりくり上手",      d:"予算内で精算した行事が5件",       v:s => s.evDone,      goal:5, fmt:"件"},
   {cat:"save", id:"save1k",  g:"浮", tier:1, t:"浮かせ上手",       d:"予算より安く済ませて合計1,000円浮かせる", v:s => s.saved, goal:1000, fmt:"yen"},
   {cat:"save", id:"save10k", g:"浮", tier:2, t:"1万円浮いた",      d:"浮かせたお金の合計が1万円",          v:s => s.saved,      goal:10000, fmt:"yen"},
@@ -1394,7 +1396,7 @@ const fmtV = (v, f) => f === "yen" ? yen(v) : `${hrs(v)}${f}`;
 S.ach = {}; S.ready = {settings:false, shifts:false, income:false, events:false, ach:false};
 let achWriting = false;
 const TIER = {1: "ブロンズ", 2: "シルバー", 3: "ゴールド", 4: "レジェンド"};
-const TIER_EN = {1: "BRONZE", 2: "SILVER", 3: "GOLD", 4: "LEGEND"};
+const TIER_EN = {1: "ブロンズ", 2: "シルバー", 3: "ゴールド", 4: "レジェンド"};
 let medalSeq = 0;
 function medal(a, on, size){
   const t = on ? a.tier : 0, gid = "lg" + (++medalSeq);
@@ -1425,7 +1427,7 @@ function showNextCelebration(){
   const idx = celebrateTotal - celebrateQ.length;
   box.querySelector(".cel-card").innerHTML = `
     <div class="cel-rays" aria-hidden="true"></div>
-    <div class="cel-en">${a.tier === 4 ? "LEGENDARY ACHIEVEMENT" : "ACHIEVEMENT UNLOCKED"}</div>
+    <div class="cel-en">${a.tier === 4 ? "伝説の実績" : "実績をGET"}</div>
     <div class="cel-kicker">${a.tier === 4 ? "伝説解除" : "実績解除"}</div>
     <div class="cel-medal">${medal(a, true, 112)}</div>
     <div class="cel-tier t${a.tier}">${TIER_EN[a.tier]}</div>
@@ -2299,7 +2301,7 @@ function viewSettings(){
   } else if (tab === "wall"){
     body = `<section class="block">
       <h2>年収の壁</h2>
-      <div class="small muted">ホームに表示する壁を選んでください（2026年分の目安）。社会保険の「106万円の壁」（勤務先の社会保険に入る基準）は、賃金要件（月8.8万円）をなくすことが決まっていて、なくなった後は主に週20時間以上働くかどうかで決まります。いつからかは勤務先や厚生労働省の案内で確かめてください。</div>
+      <div class="small muted">ホームに表示する壁を選んでください（2026年分の目安）。社会保険の「106万円の壁」（勤務先の社会保険に入る基準）は、2026年10月1日に賃金要件（月8.8万円）がなくなり、今は主に週20時間以上働くかどうかで決まります（日本年金機構の案内より）。</div>
       <div class="wallpick">${WALLS.map(w => `<label class="inline"><input type="checkbox" data-wall="${w.id}" ${(s.walls || []).includes(w.id) ? "checked" : ""}> <b>${yen(w.amount)}</b> ${esc(w.name)}</label>`).join("")}</div>
       <div class="grid2">
         <label class="f">自分で決めた上限（円・任意）<input type="text" inputmode="decimal" id="sWall" data-set="wallCustom" value="${esc(s.wallCustom || "")}" placeholder="なし"></label>
