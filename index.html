@@ -151,6 +151,7 @@ details summary{cursor:pointer;color:var(--accent);font-size:.88rem}
   display:flex;align-items:center;gap:10px;padding:11px 16px;border-radius:12px;background:var(--ink);color:var(--surface);font-size:.92rem;font-weight:500;
   box-shadow:0 6px 24px rgba(0,0,0,.18);opacity:0;pointer-events:none}
 #toast.show{opacity:1;transform:translate(-50%,0)}
+#toast .undo{pointer-events:auto;margin-left:8px;min-height:36px;padding:0 12px;border-radius:10px;border:1px solid currentColor;background:transparent;color:inherit;font:inherit;font-weight:900;cursor:pointer}
 #toast .mark{flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;font-weight:700;background:var(--good);color:var(--surface)}
 #toast.warn .mark{background:var(--warn)} #toast.bad .mark{background:var(--bad)}
 #toast.saving .mark{background:var(--muted)}
@@ -594,6 +595,8 @@ const CAL = "Google Calendar";
 const JST = 9 * 3600e3;
 const JP = new Intl.NumberFormat("ja-JP");
 const yen = n => (Math.round(n || 0) < 0 ? "−¥" : "¥") + JP.format(Math.abs(Math.round(n || 0)));
+/* 8.1666… hours → "8時間10分" */
+const dur = h => { const m = Math.round((h || 0) * 60), H = Math.floor(m / 60), M = m % 60; return H && M ? `${H}時間${M}分` : H ? `${H}時間` : `${M}分`; };
 const hrs = n => (Math.round((n || 0) * 100) / 100).toString();
 const pad = n => String(n).padStart(2, "0");
 const toHalf = v => String(v ?? "").replace(/[０-９．－]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[,，、円¥￥\s]/g, "");
@@ -1031,7 +1034,7 @@ function calTimes(r){
 }
 function calDesc(c){
   const lines = [];
-  if (c.span) lines.push(`勤務 ${hrs(c.span)}h / 休憩 ${hrs(c.brk * 60)}分 / 実働 ${hrs(c.paid)}h`);
+  if (c.span) lines.push(`勤務 ${dur(c.span)} / 休憩 ${hrs(c.brk * 60)}分 / 実働 ${dur(c.paid)}`);
   if (!c.needsRate) lines.push(`見込み ${yen(c.pay)}（支給 ${c.pd.m}/${c.pd.d}）`);
   if (c.transport) lines.push(`交通費 ${yen(c.transport)}`);
   if (c.rec.note) lines.push(c.rec.note);
@@ -1392,7 +1395,7 @@ const ACH = [
 ];
 const RANKS = [[0, "見習い"], [50000, "一人前"], [200000, "ベテラン"], [500000, "店長候補"], [1000000, "稼ぎ頭"], [1500000, "伝説のバイト"]];
 const achGoal = (a, s) => typeof a.goal === "function" ? a.goal(s) : a.goal;
-const fmtV = (v, f) => f === "yen" ? yen(v) : `${hrs(v)}${f}`;
+const fmtV = (v, f) => f === "yen" ? yen(v) : f === "h" ? dur(v) : `${hrs(v)}${f}`;
 S.ach = {}; S.ready = {settings:false, shifts:false, income:false, events:false, ach:false};
 let achWriting = false;
 const TIER = {1: "ブロンズ", 2: "シルバー", 3: "ゴールド", 4: "レジェンド"};
@@ -1501,7 +1504,7 @@ function viewAch(){
       <div class="btier">${TIER_EN[a.tier]}</div>
       <div class="bt">${!on && a.secret ? "？？？" : esc(a.t)}</div><div class="bd">${!on && a.secret ? `ヒント：${esc(a.secret)}` : esc(a.d)}</div>
       ${on ? `<div class="bdate">${Number(S.ach[a.id].slice(5, 7))}/${Number(S.ach[a.id].slice(8))} GET!</div>`
-           : a.secret && a.id !== "lg_all" ? `<div class="bdate">？？？</div>` : isFinite(g) ? `<div class="meter mini"><span style="width:${pct.toFixed(1)}%"></span></div><div class="bdate">${fmtV(Math.min(v, g), a.fmt)} / ${fmtV(g, a.fmt)}</div>` : `<div class="bdate">貯金目標を決めると挑戦できます</div>`}
+           : a.secret && a.id !== "lg_all" ? `<div class="bdate">？？？</div>` : g === 1 ? `<div class="bdate">まだ</div>` : isFinite(g) ? `<div class="meter mini"><span style="width:${pct.toFixed(1)}%"></span></div><div class="bdate">${fmtV(Math.min(v, g), a.fmt)} / ${fmtV(g, a.fmt)}</div>` : `<div class="bdate">貯金目標を決めると挑戦できます</div>`}
     </${on ? "button" : "div"}>`;
   };
   const CATS = [["earn", "稼ぐ"], ["work", "働く"], ["save", "節約"], ["bank", "貯金"], ["rec", "記録"], ["legend", "伝説 — LEGEND"]];
@@ -1524,7 +1527,7 @@ function viewAch(){
   <div class="tiles four">
     <div class="tile"><div class="k">今月かせいだ</div><div class="v">${yen(s.thisMonth)}</div></div>
     <div class="tile"><div class="k">${now.y}年かせいだ</div><div class="v">${yen(s.year)}</div></div>
-    <div class="tile"><div class="k">実働の合計</div><div class="v">${hrs(s.hours)}h</div></div>
+    <div class="tile"><div class="k">実働の合計</div><div class="v">${dur(s.hours)}</div></div>
     <div class="tile"><div class="k">こなしたシフト</div><div class="v">${s.count}回</div></div>
     <div class="tile"><div class="k">予算より浮かせた</div><div class="v">${yen(s.saved)}</div></div>
     <div class="tile"><div class="k">黒字の月</div><div class="v">${s.black}か月</div></div>
@@ -1579,7 +1582,7 @@ function toast(html, kind){
   t.querySelector(".mark").textContent = kind === "bad" ? "!" : kind === "warn" ? "!" : kind === "saving" ? "…" : kind === "trophy" ? "★" : "✓";
   t.querySelector(".msg").innerHTML = html;
   clearTimeout(toastTimer);
-  if (kind !== "saving") toastTimer = setTimeout(() => { t.className = kind || ""; }, kind === "bad" ? 6000 : kind === "warn" || kind === "trophy" ? 4000 : 2400);
+  if (kind !== "saving") toastTimer = setTimeout(() => { t.className = kind || ""; }, kind === "bad" || kind === "undo" ? 6000 : kind === "warn" || kind === "trophy" ? 4000 : 2400);
 }
 function addNotice(kind, html){ toast(html, kind); }
 function renderNotices(){
@@ -1654,7 +1657,7 @@ function viewHome(){
       <div class="main"><div class="title"><span class="jdot" style="--jc:${jColor(r.job.id)}"></span>${esc(r.job.name)}</div>${r.pd.moved ? `<div class="sub">振込日 ${r.pd.m}/${r.pd.d}${movedNote(r.pd)}</div>` : ""}
         <div class="sub"><span class="chip">${r.lag ? `${r.srcM}月振込分` : "今月振込分"}</span> ${r.confirmed ? `<span class="chip good">確定</span>` : r.est ? `<span class="chip">見込み</span>` : `<span class="chip warn">未入力</span>`}
           ${r.job.payType === "salary" ? (r.sal || r.ot || r.bonus ? [r.sal ? `月給 ${yen(r.sal)}` : "", r.ot ? `残業 ${yen(r.ot)}` : "", r.bonus ? `ボーナス ${yen(r.bonus)}` : "", r.tr ? `通勤手当 ${yen(r.tr)}` : ""].filter(Boolean).join("＋") + ` → 手取り目安 ${yen(r.est)}（額面の${netRateOf(r.job)}%）` : "この月の振込なし")
-            : r.n ? `シフト${r.n}回・実働 ${hrs(r.hours)}h → 見込み ${yen(r.est)}${r.tr ? `（交通費 ${yen(r.tr)} 含む）` : ""}${r.fee ? `・手数料 −${yen(r.fee)}` : ""}${r.alw ? `・手当 +${yen(r.alw)}（${r.alwHitM.map(a => esc(a.name || "手当")).join("・")}）` : ""}` : "シフト入力なし"}
+            : r.n ? `シフト${r.n}回・実働 ${dur(r.hours)} → 見込み ${yen(r.est)}${r.tr ? `（交通費 ${yen(r.tr)} 含む）` : ""}${r.fee ? `・手数料 −${yen(r.fee)}` : ""}${r.alw ? `・手当 +${yen(r.alw)}（${r.alwHitM.map(a => esc(a.name || "手当")).join("・")}）` : ""}` : "シフト入力なし"}
           ${r.confirmed && r.n && r.conf !== r.est ? `・差 ${r.conf - r.est > 0 ? "+" : "−"}${yen(Math.abs(r.conf - r.est))}` : ""}</div></div>
       <div class="amt">${yen(r.used)}</div>
       <div class="edit"><label class="inline">確定額 <input type="text" inputmode="decimal" id="ij-${esc(r.job.id)}-${r.srcKey}" data-inc-job="${esc(r.job.id)}" data-inc-key="${r.srcKey}" value="${r.confirmed ? esc(r.conf) : ""}" placeholder="${r.est ? esc(r.est) : "円"}"></label>
@@ -1713,7 +1716,7 @@ function viewHome(){
   const evs = x.evs.filter(e => !isCur || e.ymd >= todayYmd);
   const upRows = evs.slice(0, 4).map(e => {
     const c = evCost(e.doc), [k] = evStatus(e.doc);
-    const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>` : e.moved && e.moved.moved ? `<span>${movedNote(e.moved).replace(/[（）]/g, "")}</span>` : rj && c ? `<span>${esc(rj.name.replace(/（.*）/, ""))} ${hrs(c / num(rj.wage))}時間分</span>` : "";
+    const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>` : e.moved && e.moved.moved ? `<span>${movedNote(e.moved).replace(/[（）]/g, "")}</span>` : rj && c ? `<span>${esc(rj.name.replace(/（.*）/, ""))} ${dur(c / num(rj.wage))}ぶん</span>` : "";
     return `<div class="li"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span></div>`;
   }).join("");
 
@@ -1802,7 +1805,7 @@ function tipsHtml(x, rj){
   if (overs.length) tips.push(`予算オーバー：${overs.map(e => esc(e.title)).join("、")}。次回は同種の行事の予算を実績に合わせて見直しましょう。`);
   const unset = x.evs.filter(e => evStatus(e.doc)[0] === "warn");
   if (unset.length) tips.push(`予算が未設定の行事が ${unset.length}件 あります（${unset.slice(0,4).map(e => esc(e.title)).join("、")}${unset.length > 4 ? " ほか" : ""}）。金額を入れると残りが正確になります。`);
-  if (rj && evs[0]) tips.push(`一番大きい出費は「${esc(evs[0].title)}」の ${yen(evs[0].c)}。${esc(rj.name)}の約 ${hrs(evs[0].c / num(rj.wage))}時間分です。`);
+  if (rj && evs[0]) tips.push(`一番大きい出費は「${esc(evs[0].title)}」の ${yen(evs[0].c)}。${esc(rj.name)}の約 ${dur(evs[0].c / num(rj.wage))}ぶんです。`);
   if (!tips.length) return `<div class="empty">給与と行事の予算を入れると、足りない額と削り方をここに出します。</div>`;
   return `<ul class="tips">${tips.map(t => `<li>${t}</li>`).join("")}</ul>`;
 }
@@ -1850,13 +1853,13 @@ function previewText(){
   if (job.payType === "salary"){
     if (c.needsRate) return "月給が未設定です（設定タブで入力してください）";
     if (!c.span) return "開始と終了の時刻を入れてください（定時を超えた分を残業代にします）";
-    return `実働 ${hrs(c.paid)}h − 定時 ${hrs(hasVal(job.dayHours) ? num(job.dayHours) : 8)}h = 残業 ${hrs(c.ot)}h → ${yen(Math.floor(hourBase(job)))} × 1.25 × ${hrs(c.ot)}h = ${yen(c.pay)}（月給とは別に${c.pd.m}/${c.pd.d}支給）`;
+    return `実働 ${dur(c.paid)} − 定時 ${dur(hasVal(job.dayHours) ? num(job.dayHours) : 8)} = 残業 ${dur(c.ot)} → ${yen(Math.floor(hourBase(job)))} × 1.25 × ${dur(c.ot)} = ${yen(c.pay)}（月給とは別に${c.pd.m}/${c.pd.d}支給）`;
   }
   const rn = (c.rateNote ? `［特別：${c.rateNote}］` : "") + (c.alwHit && c.alwHit.length ? `［手当：${c.alwHit.map(a => `${a.name || "手当"} ${yen(num(a.amount))}`).join("・")}］` : "");
   if (job.payType === "fixed") return c.needsRate ? `${c.rateLabel}（設定タブで入力するか、時給に切り替えてください）` : `1回 ${yen(c.wagePay)}${rn}${tr} = ${yen(c.pay)}（支給 ${c.pd.m}/${c.pd.d}）`;
   if (!c.span) return "開始と終了の時刻を入れてください";
-  if (c.brk && c.brk >= c.span / 2) return `休憩 ${hrs(c.brk * 60)}分 は勤務時間 ${hrs(c.span)}h に対して長すぎませんか？ 合っていればこのまま保存できます。`;
-  return `勤務時間 ${hrs(c.span)}h − 休憩 ${hrs(c.brk * 60)}分 = 実働 ${hrs(c.paid)}h${c.night ? `（深夜 ${hrs(c.night)}h）` : ""} → ${c.needsRate ? c.rateLabel : `${yen(c.wagePay)}${rn}${tr} = ${yen(c.pay)}`}（支給 ${c.pd.m}/${c.pd.d}）`;
+  if (c.brk && c.brk >= c.span / 2) return `休憩 ${hrs(c.brk * 60)}分 は勤務時間 ${dur(c.span)} に対して長すぎませんか？ 合っていればこのまま保存できます。`;
+  return `勤務時間 ${dur(c.span)} − 休憩 ${hrs(c.brk * 60)}分 = 実働 ${dur(c.paid)}${c.night ? `（深夜 ${dur(c.night)}）` : ""} → ${c.needsRate ? c.rateLabel : `${yen(c.wagePay)}${rn}${tr} = ${yen(c.pay)}`}（支給 ${c.pd.m}/${c.pd.d}）`;
 }
 function syncChip(s){
   if (!S.settings.calSync && !s.rec.calEventId) return "";
@@ -1892,7 +1895,7 @@ function viewShifts(){
     <div class="row">
       <div class="date"><span class="jdot" style="--jc:${jColor(s.job.id)}"></span></div>
       <div class="main"><div class="title">${esc(s.job.name)}</div>
-        <div class="sub">${s.time ? `${s.time}・勤務 ${hrs(s.span)}h・休憩 ${hrs(s.brk * 60)}分・実働 ${hrs(s.paid)}h` : "時刻なし"}${s.night ? `・深夜 ${hrs(s.night)}h` : ""}${s.rec.note ? "・" + esc(s.rec.note) : ""}</div>
+        <div class="sub">${s.time ? `${s.time}・勤務 ${dur(s.span)}・休憩 ${hrs(s.brk * 60)}分・実働 ${dur(s.paid)}` : "時刻なし"}${s.night ? `・深夜 ${dur(s.night)}` : ""}${s.rec.note ? "・" + esc(s.rec.note) : ""}</div>
         <div class="sub">支給 ${s.pd.m}/${s.pd.d}${s.pd.moved ? "（休日のためずれ）" : ""}${s.transport ? `・給与 ${yen(s.wagePay)} ＋ 交通費 ${yen(s.transport)}` : ""} ${s.needsRate ? `<span class="chip warn">${s.rateLabel}</span> <button data-goto="settings">設定</button>` : ""}</div></div>
       <div class="amt">${yen(s.pay)}</div>
       <div class="edit">${syncChip(s)}<button data-act="editshift" data-id="${esc(s.id)}">編集</button><button class="ghost" data-act="delshift" data-id="${esc(s.id)}">${S.confirmDel === "s:" + s.id ? "本当に削除する" : "削除"}</button></div>
@@ -1920,7 +1923,7 @@ function viewShifts(){
   const perJob = jobs.map(j => { const xs = list.filter(s => s.job.id === j.id); return `<span><span class="jdot" style="--jc:${jColor(j.id)}"></span>${esc(j.name)}${xs.length ? ` ${xs.length}回・${yen(xs.reduce((a, s) => a + s.pay, 0))}` : ""}</span>`; }).join("");
   const isToday = S.sel === todayYmd;
   return `
-  <div class="pills"><span class="pill">${list.length}回 ・ ${hrs(h)}h</span><span class="pill">見込み ${yen(total)}</span><button type="button" class="pill pillbtn" data-incopen="work">シフトなしで金額だけ入れる ›</button></div>
+  <div class="pills"><span class="pill">${list.length}回 ・ ${dur(h)}</span><span class="pill">見込み ${yen(total)}</span><button type="button" class="pill pillbtn" data-incopen="work">シフトなしで金額だけ入れる ›</button></div>
   <section class="block">
     ${(() => { const pend = list.filter(x => needsSync(x.rec) && !syncing.has(x.id)); return S.settings.calSync && pend.length && mcp ? `<div class="notice warn"><div>Google カレンダーに未反映のシフトが ${pend.length}件 あります。</div><button data-act="syncmonth">まとめて反映</button></div>` : ""; })()}
     <div class="cal">${cells}</div>
@@ -1939,7 +1942,7 @@ function evRow(e, rj){
   const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>`
     : hasVal(e.doc.actual) && hasVal(e.doc.budget)
       ? `<span>予算 ${yen(num(e.doc.budget))} ・ ${k === "bad" ? `<b class="bad">${yen(num(e.doc.actual) - num(e.doc.budget))} オーバー</b>` : num(e.doc.budget) > num(e.doc.actual) ? `${yen(num(e.doc.budget) - num(e.doc.actual))} 浮いた` : "ぴったり"}</span>`
-    : `<span>${e.rec ? "毎月 ・ " : ""}${l}${e.moved && e.moved.moved ? " ・ " + movedNote(e.moved).replace(/[（）]/g, "") : rj && c && !hasVal(e.doc.actual) ? ` ・ ${esc(rj.name.replace(/（.*）/, ""))} ${hrs(c / num(rj.wage))}時間分` : ""}</span>`;
+    : `<span>${e.rec ? "毎月 ・ " : ""}${l}${e.moved && e.moved.moved ? " ・ " + movedNote(e.moved).replace(/[（）]/g, "") : rj && c && !hasVal(e.doc.actual) ? ` ・ ${esc(rj.name.replace(/（.*）/, ""))} ${dur(c / num(rj.wage))}ぶん` : ""}</span>`;
   return `<button type="button" class="li evbtn" data-evedit="${esc(e.id)}" aria-label="${esc(e.title)}を編集">
     <span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span><span class="chev" aria-hidden="true">›</span></button>`;
 }
@@ -2301,7 +2304,7 @@ function viewSettings(){
   } else if (tab === "wall"){
     body = `<section class="block">
       <h2>年収の壁</h2>
-      <div class="small muted">ホームに表示する壁を選んでください（2026年分の目安）。社会保険の「106万円の壁」（勤務先の社会保険に入る基準）は、2026年10月1日に賃金要件（月8.8万円）がなくなり、今は主に週20時間以上働くかどうかで決まります（日本年金機構の案内より）。</div>
+      <div class="small muted">ホームに表示する壁を選んでください（2026年分の目安）。社会保険の「106万円の壁」（勤務先の社会保険に入る基準）は、2026年10月1日に賃金要件（月8.8万円）がなくなり、今は主に週20時間以上働くかどうかで決まります（日本年金機構の案内より）。ただし昼間の学生は、原則この「勤務先の社会保険」の対象外です（夜間・通信・定時制の学生や休学中の人は対象）。学生が気にするのは、主に家族の扶養の壁（130万円・150万円など）です。</div>
       <div class="wallpick">${WALLS.map(w => `<label class="inline"><input type="checkbox" data-wall="${w.id}" ${(s.walls || []).includes(w.id) ? "checked" : ""}> <b>${yen(w.amount)}</b> ${esc(w.name)}</label>`).join("")}</div>
       <div class="grid2">
         <label class="f">自分で決めた上限（円・任意）<input type="text" inputmode="decimal" id="sWall" data-set="wallCustom" value="${esc(s.wallCustom || "")}" placeholder="なし"></label>
@@ -2528,11 +2531,16 @@ document.addEventListener("click", e => {
     if (act === "addbrk") rows.push(rows.length ? {over: 8, min: 60} : {over: 6, min: 45}); else rows.splice(Number(a.dataset.k), 1);
     j.brkRules = rows; putSettings(`「${esc(j.name)}」のいつもの休憩を保存しました`);
   }
+  else if (act === "undoShift"){
+    const r = S.shifts[id]; if (!r) return;
+    putDoc("shifts", id, null, `${r.ymd.slice(5).replace("-", "/")} のシフトを取り消しました`); unsyncShift(r);
+  }
   else if (act === "quickpat"){
     // one tap: add the same hours as a recent shift on the selected day
     const pt = recentPatterns()[Number(a.dataset.k)]; if (!pt || !S.sel) return;
     if (Object.values(S.shifts).some(r => r.ymd === S.sel && r.job === pt.job && r.start === pt.start && r.end === pt.end)){ toast("この日には同じシフトがもうあります", "warn"); return; }
     S.form = {editId: null, job: pt.job, start: pt.start, end: pt.end, breakMin: String(pt.breakMin), transport: pt.transport, note: ""};
+    S.quickAdd = true;
     const fm = document.getElementById("shiftForm"); if (fm) fm.requestSubmit();
   }
   else if (act === "cancelDel"){ render(); }
@@ -2675,6 +2683,7 @@ document.addEventListener("submit", e => {
     if (prev.calAdopted && prev.job !== f.job){ rec.calEventId = ""; rec.calAdopted = false; }
     const msg = (f.editId ? `${S.sel.slice(5).replace("-", "/")} の ${esc(job.name)} を更新しました` : `${S.sel.slice(5).replace("-", "/")} に ${esc(job.name)} を保存しました`) + (S.settings.calSync && mcp ? "。カレンダーに反映しています…" : "");
     putDoc("shifts", id, rec, msg);
+    if (S.quickAdd){ S.quickAdd = false; toast(`${S.sel.slice(5).replace("-", "/")} に ${esc(job.name)}（${rec.start}–${rec.end}）を追加しました <button type="button" class="undo" data-act="undoShift" data-id="${id}">取り消す</button>`, "undo"); }
     S.form = formFor(f.job);   // after saving, so "前回" is the shift just entered
     if (S.settings.calSync && mcp) syncShift(id, false);
     return;
