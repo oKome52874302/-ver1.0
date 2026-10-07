@@ -519,6 +519,12 @@ html,body{overflow-x:hidden}
 .workedtile .wk{font-size:12px;font-weight:700;color:var(--muted)}.workedtile .wv{font-size:22px;font-weight:900}.workedtile .ws{font-size:12.5px;color:var(--muted)}.workedtile .ws b{color:var(--accent)}
 .copied{margin-top:-4px}
 .btnlike{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-weight:700;cursor:pointer}
+.workedline{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;padding:10px 16px;border-radius:14px;background:var(--surface);border:1px dashed var(--accent);font-size:14px}
+.backupnote{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line)}
+.moveguide summary{cursor:pointer;font-weight:900;color:var(--accent);padding:6px 0}
+.moveguide .steps{margin:6px 0;padding-left:1.4em;display:flex;flex-direction:column;gap:8px}
+.moveguide .steps li span{display:block}
+.restore{display:block;margin-top:10px;font-size:13px;color:var(--accent);cursor:pointer;text-decoration:underline}
 .persona{display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
 .persona .pk{font-size:13px;font-weight:900;color:var(--muted)}
 .persona button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border:2px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);text-align:left}
@@ -1144,7 +1150,7 @@ function evStatus(doc){
   if (!hasB && !hasA) return ["warn", "予算未設定"];
   if (hasA && hasB && num(doc.actual) > num(doc.budget)) return ["bad", "超過 " + yen(num(doc.actual) - num(doc.budget))];
   if (hasA) return ["good", "精算済"];
-  return ["", "予算あり"];
+  return ["", ""];
 }
 
 /* ---------- 年収の壁（2026年分の目安） ---------- */
@@ -1592,6 +1598,19 @@ function renderNotices(){
 }
 
 /* ---------- render ---------- */
+const daysSince = ymd => Math.round((Date.UTC(now.y, now.m - 1, now.d) - Date.parse(ymd + "T00:00:00Z")) / 864e5);
+function backupDue(){
+  const st = S.settings;
+  if (Object.keys(S.shifts).length < 5) return false;
+  if (st.backupSnooze && st.backupSnooze > todayYmd) return false;
+  return !st.lastBackup || daysSince(st.lastBackup) >= 30;
+}
+function applyImport(){
+  const d = S.importPending && S.importPending.data; S.importPending = null; if (!d) return;
+  S.settings = Object.assign(clone(DEFAULTS), d.settings || {}); S.shifts = d.shifts || {}; S.events = d.events || {}; S.income = d.income || {}; S.ach = d.ach || {};
+  S.settings.onboarded = true; S.settings.tutorialDone = true;
+  migrateWalls(); migrateRates(); [S.y, S.m] = refreshToday(); S.tab = "home"; saveLocal(); render(); toast("バックアップを読み込みました");
+}
 function render(){
   document.documentElement.dataset.font = ["l", "xl"].includes(S.settings.fontSize) ? S.settings.fontSize : "m";
   const ml = document.getElementById("monthLabel");
@@ -1701,7 +1720,7 @@ function viewHome(){
       <div class="hv">${x.left < 0 ? "−" : ""}${yen(Math.abs(x.left)).replace("−", "")}</div>
       <div class="hbar" aria-hidden="true">${seg(x.fixed, "color-mix(in srgb, var(--on-accent) 45%, transparent)")}${seg(x.save, "color-mix(in srgb, var(--on-accent) 70%, transparent)")}${seg(x.evTotal, "var(--gold)")}</div>
       <div class="hs">入る ${yen(x.income)} − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}・行事 ${yen(x.evTotal)}</div>
-      ${partial ? `<div class="hs">まだ入っていない給料があるので、仮の金額です。</div>` : ""}
+      ${partial ? `<div class="hs">まだ入っていない給料があるので、仮の金額です。</div>` : x.left < 0 && rj && num(rj.wage) ? `<div class="hs">${esc(rj.name)}であと約${Math.ceil(-x.left / num(rj.wage))}時間働くか、行事の予算を見直すと足ります。</div>` : ""}
     </div>`;
 
   // next payday + savings
@@ -1730,9 +1749,10 @@ function viewHome(){
   return `
   ${warn.map(w => `<div class="notice warn"><div>${w}</div></div>`).join("")}
   ${hero}
-  ${!noIncome && !partial && x.left < 0 && rj && num(rj.wage) ? `<div class="notice warn"><div>${yen(-x.left)} 足りません。${esc(rj.name)}であと<b>約${Math.ceil(-x.left / num(rj.wage))}時間</b>働くか、行事の予算を見直しましょう。</div></div>` : ""}
+  ${backupDue() ? `<div class="notice backupnote"><div><b>${S.settings.lastBackup ? `最後のバックアップから${daysSince(S.settings.lastBackup)}日たちました` : "まだバックアップがありません"}</b><br><span class="small">機種変更やデータの消失に備えて、ファイルに書き出しておきましょう。</span></div><div class="dayform"><button type="button" class="primary small-btn" data-act="exportData" data-from="home">書き出す</button><button type="button" class="ghost small-btn" data-act="backupLater">あとで</button></div></div>` : ""}
+  ${false ? `<div class="notice warn"><div>${yen(-x.left)} 足りません。${esc(rj.name)}であと<b>約${Math.ceil(-x.left / num(rj.wage))}時間</b>働くか、行事の予算を見直しましょう。</div></div>` : ""}
   ${(() => { const ms = waiting ? [] : missing; return ms.length ? `<button type="button" class="notice warn incnote" data-incopen="budget"><div><b>${mName()}に使う給料の金額が入っていません</b><br><span class="small">${ms.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}。シフトを入れていなくても、金額だけ入れられます。</span></div><span class="incgo">入力する ›</span></button>` : ""; })()}
-  ${wk && !wkHero ? `<div class="workedtile"><span class="wk">${mName()}に働いた分（${wk.n}回）</span><span class="wv">${yen(wk.total)}</span><span class="ws">${wk.pds}に振込 → <b>${wk.uses}に使えるお金</b>になります</span></div>` : ""}
+  ${wk && !wkHero ? `<div class="workedline"><span>${mName()}に働いた分 <b>${yen(wk.total)}</b></span><span class="small muted">${wk.pds}振込 → ${wk.uses}に使える</span></div>` : ""}
   <div class="duo">${npHtml}${svHtml}</div>
   <div class="sec">
     <div class="sec-h"><h2>${isCur ? "もうすぐ出ていくお金" : `${mName()}に出ていくお金`}</h2><button type="button" class="link" data-goto="events">すべて</button></div>
@@ -1902,7 +1922,7 @@ function viewShifts(){
     </div>`).join("");
   const f = S.form, fj = jobById(f.job);
   const pats = f.editId ? [] : recentPatterns();
-  const patHtml = pats.length ? `<div class="pats"><div class="small muted">最近の勤務をタップすると、この日にそのまま追加します</div>
+  const patHtml = pats.length ? `<div class="pats"><div class="small muted">前と同じ勤務をワンタップで追加</div>
     ${pats.map((pt, k) => `<button type="button" class="pat" data-act="quickpat" data-k="${k}"><span class="num">${esc(pt.start)}–${esc(pt.end)}</span><span class="pj"><span class="jdot" style="--jc:${jColor(pt.job)}"></span>${esc(jobById(pt.job).name)}</span><span class="small muted">${pt.breakMin ? `休憩${pt.breakMin}分` : "休憩なし"}</span></button>`).join("")}</div>` : "";
   const form = jobs.length ? `${patHtml}
     <form id="shiftForm" class="dayform" autocomplete="off">
@@ -1914,8 +1934,8 @@ function viewShifts(){
       <label class="f" style="flex:1 1 10em">メモ<input type="text" id="fNote" data-form="note" class="w-l" value="${esc(f.note)}" placeholder="任意"></label>
       <div style="display:flex;gap:6px;flex:1 1 100%"><button class="primary" type="submit" style="flex:1;min-height:46px;font-weight:900">${f.editId ? "更新する" : "＋ この日にシフトを追加"}</button>${f.editId ? `<button type="button" data-act="cancelEdit">やめる</button>` : ""}</div>
     </form>
-    ${f.copied && !f.editId ? `<div class="small muted copied">開始・終了は前回と同じ時刻を入れています。${hasBrkRule(fj) ? `休憩は空欄なら、いつもの休憩（${brkRuleText(fj)}）で計算します。` : "休憩は毎回入れてください。"}</div>` : ""}
-    ${!hasBrkRule(fj) && fj && fj.payType !== "fixed" ? `<div class="small muted">休憩がいつも同じなら、設定の${jobWord()}で「いつもの休憩」を決めておくと自動で入ります。</div>` : ""}
+    ${f.copied && !f.editId ? `<div class="small muted copied">時刻は前回と同じです。${hasBrkRule(fj) ? `休憩は空欄ならいつもの休憩（${brkRuleText(fj)}）。` : "休憩は毎回入れてください（設定で自動にもできます）。"}</div>` : ""}
+
     <div class="preview" id="preview">${esc(previewText())}</div>
     ${fj && fj.payType === "fixed" ? `<div class="small muted">1回あたり固定の${jobWord()}は、時刻を入れなくても金額に反映されます。</div>` : ""}
     ${fj && fj.payType === "salary" ? `<div class="small muted">月給の${jobWord()}は、残業した日だけ入れればOKです。月給そのものは毎月自動で入ります。</div>` : ""}` :
@@ -1927,12 +1947,12 @@ function viewShifts(){
   <section class="block">
     ${(() => { const pend = list.filter(x => needsSync(x.rec) && !syncing.has(x.id)); return S.settings.calSync && pend.length && mcp ? `<div class="notice warn"><div>Google カレンダーに未反映のシフトが ${pend.length}件 あります。</div><button data-act="syncmonth">まとめて反映</button></div>` : ""; })()}
     <div class="cal">${cells}</div>
-    ${jobs.length ? `<div class="legend" style="justify-content:center">${perJob}</div>` : ""}
+    ${jobs.length > 1 ? `<div class="legend" style="justify-content:center">${perJob}</div>` : ""}
   </section>
   ${incSheetHtml()}
   <section class="block focus" id="dayPanel">
     <div class="blockhead"><h2>${sm}月${sd}日（${DOW[sdow]}）</h2>${isToday ? `<span class="small" style="color:var(--pop);font-weight:900">今日</span>` : ""}</div>
-    <div class="rows">${dayList || `<div class="empty">この日の勤務はまだありません。</div>`}</div>
+    <div class="rows">${dayList || ""}</div>
     ${form}
   </section>`;
 }
@@ -2184,7 +2204,7 @@ function viewEvents(){
     <div class="sec-h"><h2>${gList.length ? "そのほかの出費" : "これからの出費"}</h2><button type="button" class="primary small-btn" data-evadd="1">＋ 行事を追加</button></div>
     <div class="list">${ahead.map(e => evRow(e, rj)).join("") || `<div class="li"><span class="lm"><b>${done.length ? "これからの出費はありません" : `${mName()}の行事はまだありません`}</b><span>「＋ 行事を追加」から、旅行や飲み会の予算を入れてください</span></span></div>`}</div>
     ${done.length ? `<details class="more donebox" data-more="done" ${S.openMore === "done" ? "open" : ""}><summary>精算済み ${done.length}件<span class="sv">${yen(doneTotal)}</span></summary><div class="list">${done.map(e => evRow(e, rj)).join("")}</div></details>` : ""}
-    <p class="small muted">行をタップすると編集できます。使った額を入れると「精算済み」に移ります。毎月の引き落としなどは <button type="button" class="link" data-goto="settings">設定</button> から。</p>
+    <p class="small muted">タップで編集。使った額を入れると精算済みに移ります。</p>
     ${excludedRecurring(S.y, S.m).map(r => `<div class="small muted">毎月の「${esc(r.title)}」を${mName()}は外しています <button data-act="restoreRec" data-id="rc_${esc(r.id)}_${r.key}">戻す</button></div>`).join("")}
   </div>
 
@@ -2329,10 +2349,18 @@ function viewSettings(){
     </section>
     <section class="block">
       <h2>バックアップ</h2>
-      <div class="small muted">データはこのスマホのブラウザの中にだけ保存されています。機種変更のときや、念のための保存に「書き出す」を使ってください。書き出したファイルを「読み込む」と元に戻せます。</div>
+      <div class="small muted">データはこのスマホのブラウザの中にだけ保存されています。${S.settings.lastBackup ? `最後に書き出した日：${md(S.settings.lastBackup)}` : "まだ書き出したことはありません。"}</div>
       ${/iPhone|iPad|iPod/.test(navigator.userAgent) && !(navigator.standalone || matchMedia("(display-mode: standalone)").matches) ? `<p class="notice warn" style="margin:0"><span>iPhoneのSafariは、ホーム画面に追加していないサイトのデータを、しばらく開かないと消すことがあります。共有ボタンの「ホーム画面に追加」から開くのがおすすめです。</span></p>` : ""}
       <div class="dayform"><button type="button" class="primary" data-act="exportData">書き出す（ファイルに保存）</button>
         <label class="btnlike">読み込む<input type="file" id="importFile" accept="application/json,.json" hidden></label></div>
+      <details class="moveguide" id="moveGuide" ${S.justExported ? "open" : ""}><summary>${S.justExported ? "書き出しました。機種変更のときはこの手順で引き継げます" : "機種変更のときの引き継ぎ方"}</summary>
+        <ol class="steps">
+          <li><b>古いスマホで「書き出す」</b>を押す。<span class="small muted">「shipoke-backup-日付.json」というファイルができます（iPhoneはファイルアプリの「ダウンロード」、Androidは「ダウンロード」フォルダ）。</span></li>
+          <li><b>そのファイルを新しいスマホに送る。</b><span class="small muted">LINEのKeepメモ、Googleドライブ、AirDrop、自分宛てのメールなど。</span></li>
+          <li><b>新しいスマホでシフポケを開き、最初の画面の「バックアップから戻す」</b>でファイルを選ぶ。<span class="small muted">設定 → その他 →「読み込む」からでも戻せます。</span></li>
+        </ol>
+        <p class="small muted">読み込むと、そのスマホにあったデータは置き換わります。ファイルには給料や予定が入っているので、人に送らないでください。</p>
+      </details>
       ${S.importPending ? `<div class="notice warn"><div>「${esc(S.importPending.name)}」（${S.importPending.summary}）を読み込むと、今のデータは置き換わります。</div><div class="dayform"><button type="button" class="primary" data-act="importOk">置き換える</button><button type="button" data-act="importNo">やめる</button></div></div>` : ""}
     </section>
     <section class="block">
@@ -2353,12 +2381,13 @@ document.addEventListener("click", e => {
 }, true);
 
 document.addEventListener("change", e => {
-  const t = e.target; if (!t || t.id !== "importFile" || !t.files || !t.files[0]) return;
+  const t = e.target; if (!t || (t.id !== "importFile" && t.id !== "importFileOnb") || !t.files || !t.files[0]) return;
   const file = t.files[0], rd = new FileReader();
   rd.onload = () => {
     try {
       const d = JSON.parse(rd.result);
       if (!d || d.app !== "shipoke" || typeof d.settings !== "object") throw 0;
+      if (t.id === "importFileOnb"){ S.importPending = {data: d}; document.querySelector("[data-act=importOk]") || null; applyImport(); toast("バックアップから戻しました"); return; }
       S.importPending = {name: file.name, data: d, summary: `${(d.settings.jobs || []).length}件の${jobWord()}・シフト${Object.keys(d.shifts || {}).length}件・${String(d.at || "").slice(0, 10)}に保存`};
       render();
     } catch(_){ toast("シフポケのバックアップファイルではないようです", "warn"); }
@@ -2499,10 +2528,15 @@ document.addEventListener("click", e => {
     const blob = new Blob([JSON.stringify({app: "shipoke", v: 1, at: todayYmd, settings: S.settings, shifts: S.shifts, events: S.events, income: S.income, ach: S.ach}, null, 1)], {type: "application/json"});
     const a2 = document.createElement("a"); a2.href = URL.createObjectURL(blob); a2.download = `shipoke-backup-${todayYmd}.json`;
     document.body.appendChild(a2); a2.click(); setTimeout(() => { URL.revokeObjectURL(a2.href); a2.remove(); }, 1000);
-    toast("バックアップを書き出しました。ファイルを大事に保存してください");
+    S.settings.lastBackup = todayYmd; S.settings.backupSnooze = ""; persist();
+    S.justExported = true; S.tab = "settings"; S.setTab = "other"; render();
+    setTimeout(() => { const g = document.getElementById("moveGuide"); if (g) g.scrollIntoView({block: "start"}); }, 30);
+    toast("バックアップを書き出しました");
   }
-  else if (act === "importOk"){
-    const d = S.importPending && S.importPending.data; S.importPending = null; if (!d) return;
+  else if (act === "backupLater"){ const d = new Date(Date.UTC(now.y, now.m - 1, now.d + 14)); S.settings.backupSnooze = d.toISOString().slice(0, 10); persist(); render(); toast("2週間後にもう一度お知らせします"); }
+  else if (act === "importOk"){ applyImport(); }
+  else if (false){
+    const d = null; if (!d) return;
     S.settings = Object.assign(clone(DEFAULTS), d.settings || {}); S.shifts = d.shifts || {}; S.events = d.events || {}; S.income = d.income || {}; S.ach = d.ach || {};
     migrateWalls(); migrateRates(); [S.y, S.m] = refreshToday(); saveLocal(); render(); toast("バックアップを読み込みました");
   }
@@ -3024,6 +3058,7 @@ function viewOnboarding(){
       <ul class="ofeat"><li><b>給料を自動計算</b>深夜割増・交通費・休日の振込ずれまで</li><li><b>行事ごとに予算</b>旅行やライブの出費を先回りで</li><li><b>貯金目標から逆算</b>毎月自由に使えるお金がわかる</li><li><b>実績を集める</b>月5万・年間100万…メダルで記録</li></ul>
       <div class="persona" role="group" aria-label="あなたの働き方"><span class="pk">あなたは？</span>${PERSONAS.map(([v, n, d]) => `<button type="button" data-onb="persona" data-v="${v}" aria-pressed="${personaOf() === v}"><b>${n}</b><span>${d}</span></button>`).join("")}</div>
       <p class="small muted">ログイン不要。入力したデータはこの端末のブラウザにだけ保存されます。設定は1分ほどで終わります。</p>
+      <label class="restore">前のスマホのデータがある人：<b>バックアップから戻す</b><input type="file" id="importFileOnb" accept="application/json,.json" hidden></label>
     </div>${cta("はじめる")}`;
   if (step === 1){
     const jobs = st.jobs.length ? st.jobs : (st.jobs = [newJob()]);
