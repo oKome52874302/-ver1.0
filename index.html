@@ -528,6 +528,10 @@ html,body{overflow-x:hidden}
 .cel-tip{font-size:13px;line-height:1.6;opacity:.9;margin:4px 0 2px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--surface) 70%,transparent);text-align:left}
 .cel-reward{font-size:13.5px;font-weight:900;margin-top:6px}
 .evseg{margin-bottom:2px}
+.wauto{font-size:14px}
+.jobbar{position:sticky;bottom:calc(84px + env(safe-area-inset-bottom, 0px));z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px -6px -6px;padding:10px;border-radius:14px;background:var(--surface);border:1px solid var(--line);box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.jobbar{justify-content:flex-end}.jobbar [data-jobdirty]{flex:1 1 auto;color:var(--pop);font-weight:900}
+.jobbar button{min-height:42px}
 .wishcard{display:flex;flex-direction:column;gap:8px}.wishcard .gh{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .wishcard .gt{font-weight:900;white-space:nowrap}.wishcard.reached .gt{color:var(--good)}
 .wishline{margin:0;font-size:14px;line-height:1.7}
@@ -682,7 +686,20 @@ try { const t = (location.hash || "").slice(1); if (["home","shifts","events","a
 
 /* ---------- storage ---------- */
 const LS = "shipoke-v1";
-function saveLocal(){ if (db) return; try { localStorage.setItem(LS, JSON.stringify({settings:S.settings, shifts:S.shifts, events:S.events, income:S.income, ach:S.ach})); } catch(e){} }
+function saveLocal(){ if (db) return; try { localStorage.setItem(LS, JSON.stringify({settings:settingsToStore(), shifts:S.shifts, events:S.events, income:S.income, ach:S.ach})); } catch(e){} }
+/* JOB settings are edited on screen first and stored with 「保存する」 */
+const holdJob = () => !!(S.settings.onboarded && S.tab === "settings" && (S.setTab || "jobs") === "jobs" && S.jobSnap && S.jobOpen === S.jobSnap.id && S.settings.jobs.some(j => j.id === S.jobSnap.id));
+function settingsToStore(){
+  if (!S.jobDirty || !S.jobSnap) return S.settings;
+  const st = Object.assign({}, S.settings);
+  st.jobs = S.settings.jobs.map(j => j.id === S.jobSnap.id ? S.jobSnap.before : j);
+  return st;
+}
+function markJobDirty(){
+  S.jobDirty = true;
+  const bar = document.querySelector("[data-jobbar]");
+  if (bar){ bar.querySelector("[data-jobdirty]").hidden = false; bar.querySelectorAll("button").forEach(b => b.disabled = false); }
+}
 function loadLocal(){ try { const o = JSON.parse(localStorage.getItem(LS) || "null"); if (o){ S.settings = Object.assign(clone(DEFAULTS), o.settings||{}); S.shifts = o.shifts||{}; S.events = o.events||{}; S.income = o.income||{}; S.ach = o.ach||{}; } } catch(e){} migrateWalls(); migrateRates(); }
 function migrateRates(){
   for (const j of S.settings.jobs || []){
@@ -712,8 +729,8 @@ function saved(p, msg){
 // so render() can keep that field focused instead of replacing it mid-tap.
 let renderQueued = false;
 function renderSoon(){ if (renderQueued) return; renderQueued = true; setTimeout(() => { renderQueued = false; render(); }, 0); }
-function persistSettings(msg){ if (db) saved(db.doc("app/settings").set(S.settings), msg); else { saveLocal(); saved(null, msg); } }
-function putSettings(msg){ renderSoon(); if (db) saved(db.doc("app/settings").set(S.settings), msg); else { saveLocal(); saved(null, msg); } }
+function persistSettings(msg){ if (holdJob()){ markJobDirty(); return; } if (db) saved(db.doc("app/settings").set(S.settings), msg); else { saveLocal(); saved(null, msg); } }
+function putSettings(msg){ renderSoon(); if (holdJob()){ S.jobDirty = true; return; } if (db) saved(db.doc("app/settings").set(S.settings), msg); else { saveLocal(); saved(null, msg); } }
 function putDoc(col, id, data, msg){
   if (data === null) delete S[col][id]; else S[col][id] = data;
   renderSoon();
@@ -1364,7 +1381,7 @@ function stats(){
     night: done.filter(s => s.night > 0).length, longest: done.reduce((a, s) => Math.max(a, s.paid), 0),
     doubleDays: Object.values(byDay).filter(x => x.size >= 2).length,
     maxJobs: Math.max(0, ...Object.values(jobsByMonth).map(x => x.size)),
-    evDone, saved, exact, black, bestStreak: best, perfect, onTrack, overCount, workStreak, wallFinish, entered: Object.keys(S.shifts).length, wishDone: wishes().filter(w => num(w.price) > 0 && num(w.saved) >= num(w.price)).length,
+    evDone, saved, exact, black, bestStreak: best, perfect, onTrack, overCount, workStreak, wallFinish, entered: Object.keys(S.shifts).length, wishDone: wishes().filter(w => num(w.price) > 0 && wishSaved(w) >= num(w.price)).length,
     othersDone: others.filter(a => S.ach[a.id]).length, othersTotal: others.length, recMonths: Object.values(S.income).filter(d => d.jobs && Object.keys(d.jobs).length).length,
     balance: num(S.settings.balance), goal: num(S.settings.goalAmount)
   };
@@ -1647,8 +1664,8 @@ function summary(y, m){
   const trIn = mi.estTr;
   const evs = eventList(y, m);
   const evTotal = evs.reduce((a, e) => a + evCost(e.doc), 0);
-  const fixed = num(S.settings.fixedCost), save = savingFor(y, m);
-  const free = income - fixed - save;
+  const fixed = num(S.settings.fixedCost), save = savingFor(y, m), wish = wishMonthTotal(key);
+  const free = income - fixed - save - wish;
   const left = free - evTotal;
   let yearTr = 0, yearSum = 0;
   // 年収 = pay that actually arrives Jan 1 – Dec 31 (periods can straddle the new year), plus other income that is 所得
@@ -1663,7 +1680,7 @@ function summary(y, m){
   const workedPay = worked.reduce((a, s) => a + s.pay, 0);
   const pds = [...new Set(worked.map(s => `${s.pd.m}/${s.pd.d}`))];
   const workedPd = pds.length === 1 ? `${pds[0]}支給` : pds.length ? `${pds.join("・")}支給` : "";
-  return {key, mi, payIn, income, trIn, yearTr, workedPay, workedPd, byJob, evs, evTotal, fixed, save, free, left, yearPay, yearPayAll, missingRate};
+  return {key, mi, payIn, income, trIn, yearTr, workedPay, workedPd, byJob, evs, evTotal, fixed, save, wish, free, left, yearPay, yearPayAll, missingRate};
 }
 
 /* ---------- notices ---------- */
@@ -1784,7 +1801,8 @@ function viewHome(){
     </div>`).join("");
 
   // hero: what is left to spend freely this month
-  const out = x.fixed + x.save + x.evTotal, base = Math.max(x.income, out, 1);
+  const out = x.fixed + x.save + x.wish + x.evTotal, base = Math.max(x.income, out, 1);
+  const wishTxt = x.wish ? `・ほしいもの ${yen(x.wish)}` : "";
   const seg = (v, c) => `<span style="width:${(Math.max(0, v) / base * 100).toFixed(2)}%;background:${c}"></span>`;
   const isCur = `${S.y}-${pad(S.m)}` === todayKey;
   const pend = periodRange(S.y, S.m).end;
@@ -1806,12 +1824,12 @@ function viewHome(){
       <p class="hmsg">${wkHero ? `${wk.pds}に振り込まれて、${wk.uses}に使えるお金になります。${mName()}に使う給料（前の月までに働いた分）を入れると、ここに${mName()}に自由に使えるお金が出ます。` : noIncome ? `${mName()}に使う給料（${S.settings.jobs.length ? (isSimple() ? "先月までに働いた分の、振り込まれた金額" : "シフトか、振り込まれた金額") : `まずは${jobWord()}の登録`}）を入れると、ここに今月自由に使えるお金が出ます。` : `まだ入っていない給料があります：${missing.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}`}</p>
       <div class="hbtns">${S.settings.jobs.length ? `<button type="button" class="hbtn" data-incopen="budget">給料の金額を入れる ›</button>${isSimple() ? "" : `<button type="button" class="hbtn ghostb" data-act="quickShift">シフトを入れる</button>`}` : `<button type="button" class="hbtn" data-goto="settings">${jobWord()}を登録する ›</button>`}</div>
       ${!noIncome ? `<div class="hs">入力済みの分だけで計算すると ${yen(x.left)}</div>` : ""}
-      ${x.fixed + x.save + x.evTotal ? `<div class="hs">出ていく予定：固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}・行事 ${yen(x.evTotal)}</div>` : ""}
+      ${out ? `<div class="hs">出ていく予定：固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}${wishTxt}・行事 ${yen(x.evTotal)}</div>` : ""}
     </div>` : `<div class="hero">
       <div class="hk"><span>${partial ? `${mName()}に自由に使えるお金（仮）` : x.left < 0 ? `${mName()}は足りません` : `${mName()}に自由に使えるお金`}</span>${isCur && x.left > 0 && daysLeft ? `<span>1日あたり ${yen(Math.floor(x.left / daysLeft))}</span>` : ""}</div>
       <div class="hv">${x.left < 0 ? "−" : ""}${yen(Math.abs(x.left)).replace("−", "")}</div>
-      <div class="hbar" aria-hidden="true">${seg(x.fixed, "color-mix(in srgb, var(--on-accent) 45%, transparent)")}${seg(x.save, "color-mix(in srgb, var(--on-accent) 70%, transparent)")}${seg(x.evTotal, "var(--gold)")}</div>
-      <div class="hs">入る ${yen(x.income)} − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}・行事 ${yen(x.evTotal)}</div>
+      <div class="hbar" aria-hidden="true">${seg(x.fixed, "color-mix(in srgb, var(--on-accent) 45%, transparent)")}${seg(x.save + x.wish, "color-mix(in srgb, var(--on-accent) 70%, transparent)")}${seg(x.evTotal, "var(--gold)")}</div>
+      <div class="hs">入る ${yen(x.income)} − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}${wishTxt}・行事 ${yen(x.evTotal)}</div>
       ${partial ? `<div class="hs">まだ入っていない給料があるので、仮の金額です。</div>` : x.left < 0 && rj && num(rj.wage) ? `<div class="hs">${esc(rj.name)}であと約${Math.ceil(-x.left / num(rj.wage))}時間働くか、行事の予算を見直すと足ります。</div>` : ""}
     </div>`;
 
@@ -1894,7 +1912,7 @@ function savingHtml(x){
   if (!p) return `<section class="block savebox">
     <div class="small muted">今の口座残高と、いつまでにいくら貯めたいかを入れると、毎月貯めるべき額と自由に使えるお金を計算します。</div>${inputs}</section>`;
   const k = `${S.y}-${pad(S.m)}`, inPlan = k >= todayKey && k <= p.gm;
-  const free = x.income - x.fixed - x.save;
+  const free = x.income - x.fixed - x.save - x.wish;
   const proj = projection(), endRow = proj.find(r => r.k === p.gm) || proj[proj.length - 1];
   const gap = endRow ? endRow.bal - p.goal : 0;
   const pct = Math.min(100, p.bal / p.goal * 100);
@@ -1902,7 +1920,7 @@ function savingHtml(x){
     <div class="blockhead"><span class="small muted">残高 / 目標</span><span class="num">${yen(p.bal)} / ${yen(p.goal)}</span></div>
     <div class="meter ${p.bal >= p.goal ? "" : ""}"><span style="width:${pct.toFixed(1)}%"></span></div>
     <div class="plan">${p.need ? `目標まであと <b>${yen(p.need)}</b>。${Number(p.gm.slice(5))}月まで${p.left}か月なので、<b>毎月 ${yen(p.perMonth)}</b> 貯めれば届きます。` : `目標額に届いています。`}
-      ${inPlan ? `<br>${mName()}に自由に使えるお金は 使えるお金 ${yen(x.income)} − 固定費 ${yen(x.fixed)} − 貯金 ${yen(x.save)} = <b>${yen(free)}</b>。行事 ${yen(x.evTotal)} を引くと <b style="color:var(${x.left < 0 ? "--bad" : "--good"})">${yen(x.left)}</b> です。` : ""}
+      ${inPlan ? `<br>${mName()}に自由に使えるお金は 使えるお金 ${yen(x.income)} − 固定費 ${yen(x.fixed)} − 貯金 ${yen(x.save)}${x.wish ? ` − ほしいもの ${yen(x.wish)}` : ""} = <b>${yen(free)}</b>。行事 ${yen(x.evTotal)} を引くと <b style="color:var(${x.left < 0 ? "--bad" : "--good"})">${yen(x.left)}</b> です。` : ""}
       ${endRow ? `<br>今の予定どおりだと、${Number(endRow.k.slice(5))}月末の残高は約 <b>${yen(endRow.bal)}</b>（目標まで${gap >= 0 ? `<b style="color:var(--good)">${yen(gap)} 余裕</b>` : `<b style="color:var(--bad)">${yen(-gap)} 足りない</b>`}）。` : ""}</div>
     <div class="tablewrap"><table class="proj"><thead><tr><th>月</th><th>入る</th><th>出る</th><th>月末の残高</th></tr></thead><tbody>
       ${proj.map(r => `<tr><td>${r.y !== now.y ? r.y + "/" : ""}${mName(r.y, r.m)}${r.k === todayKey ? "（今日以降）" : ""}</td><td>+${yen(r.inflow)}${r.assumed ? "*" : ""}</td><td>−${yen(r.outEv + r.fixed)}</td><td class="${r.bal < 0 ? "neg" : ""}">${yen(r.bal)}</td></tr>`).join("")}
@@ -2277,6 +2295,28 @@ const WISH_PRESETS = [
 ];
 const wishes = () => Array.isArray(S.settings.wishes) ? S.settings.wishes : [];
 const wishActive = () => wishes().filter(w => !w.done);
+/* 毎月取り分ける: w.auto + w.monthly from period w.autoFrom; each month that has begun counts as saved */
+const monthsFrom = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7)) + 1;
+function wishSaved(w, upto){
+  let v = num(w.saved);
+  if (w.auto && w.autoFrom && num(w.monthly) && !w.done) v += Math.max(0, monthsFrom(w.autoFrom, upto || todayKey)) * num(w.monthly);
+  return num(w.price) ? Math.min(v, num(w.price)) : v;
+}
+function wishDeduct(w, key){
+  if (!w.auto || w.done || !num(w.monthly) || !w.autoFrom || key < w.autoFrom) return 0;
+  return Math.max(0, Math.min(num(w.monthly), num(w.price) - wishSaved(w, keyAdd(key, -1))));
+}
+const wishMonthTotal = key => wishes().reduce((a, w) => a + wishDeduct(w, key), 0);
+/* before the auto amount changes or stops: keep what past months already set aside, restart from this month */
+function foldWish(w){
+  const done = w.auto && w.autoFrom ? wishSaved(w, keyAdd(todayKey, -1)) : num(w.saved);
+  return Object.assign({}, w, {saved: done, autoFrom: w.auto ? todayKey : ""});
+}
+function wishSuggest(w){
+  const left = Math.max(0, num(w.price) - wishSaved(w));
+  if (w.due && /^\d{4}-\d{2}$/.test(w.due)) return Math.ceil(left / Math.max(1, monthsFrom(todayKey, w.due)) / 100) * 100;
+  return Math.max(1000, Math.ceil(left / 12 / 1000) * 1000);
+}
 /* what one hour (and one shift) of the viewer's own work is worth, from recent shifts; falls back to the hourly wage */
 function workRate(){
   const from = keyAdd(todayKey, -3);
@@ -2286,9 +2326,9 @@ function workRate(){
   const rj = rateJob(); return rj ? {perH: num(rj.wage), perShift: 0} : null;
 }
 function wishInfo(w){
-  const price = num(w.price), saved = Math.min(num(w.saved), price || Infinity), left = Math.max(0, price - num(w.saved));
+  const price = num(w.price), saved = wishSaved(w), left = Math.max(0, price - saved);
   const r = workRate(), hours = r && r.perH > 0 ? left / r.perH : 0;
-  const out = {price, saved, left, pct: price ? Math.min(100, num(w.saved) / price * 100) : 0, hours, shifts: r && r.perShift ? Math.ceil(hours / r.perShift) : 0};
+  const out = {price, saved, left, pct: price ? Math.min(100, saved / price * 100) : 0, hours, shifts: r && r.perShift ? Math.ceil(hours / r.perShift) : 0};
   if (w.due && /^\d{4}-\d{2}$/.test(w.due)){
     const months = (Number(w.due.slice(0, 4)) - now.y) * 12 + Number(w.due.slice(5)) - now.m + 1;
     out.months = Math.max(1, months); out.late = months < 1;
@@ -2310,7 +2350,7 @@ function wishOffer(){
 }
 function openWishEditor(id, step){
   const w = wishes().find(v => v.id === id);
-  const v = w ? {title: w.title || "", price: w.price ?? "", saved: w.saved ?? "", due: w.due || "", preset: w.preset || ""} : {title: "", price: "", saved: "", due: "", preset: ""};
+  const v = w ? {title: w.title || "", price: w.price ?? "", saved: wishSaved(w), due: w.due || "", preset: w.preset || "", monthly: w.monthly ?? "", auto: !!w.auto} : {title: "", price: "", saved: "", due: "", preset: "", monthly: "", auto: false};
   S.wishEdit = {id: w ? w.id : null, v, step: step || "edit", add: ""}; render();
   setTimeout(() => { const el = document.getElementById(step === "add" ? "wf-add" : w ? "wf-price" : "wf-title"); if (el) el.focus(); }, 30);
 }
@@ -2334,8 +2374,10 @@ function wishSheetHtml(){
         ${fld("title", "なにがほしい？", `type="text" placeholder="例：合宿免許、新しいキーボード" autocomplete="off"`, true)}
         ${fld("price", "必要な金額", `type="text" inputmode="decimal" placeholder="円"`)}
         ${fld("saved", "もう貯めた分", `type="text" inputmode="decimal" placeholder="0"`)}
-        ${fld("due", "いつまでに（任意）", `type="month"`, true)}
+        ${fld("due", "いつまでに（任意）", `type="month"`)}
+        ${fld("monthly", "毎月取り分ける額", `type="text" inputmode="decimal" placeholder="${w ? wishSuggest(w) : "例：10000"}"`)}
       </div>
+      <label class="inline"><input type="checkbox" id="wf-auto" data-wf="auto" ${v.auto ? "checked" : ""}> 毎月の額を固定費のように、自由に使えるお金から引く</label>
       <div class="evs-foot">
         ${isNew ? "" : `<button type="button" class="ghost danger" data-wish="del">${S.confirmDel === "w:" + ed.id ? "本当に削除する" : "削除"}</button>`}
         <span style="flex:1"></span><button type="button" data-wish="close">キャンセル</button><button type="button" class="primary" data-wish="save">保存する</button></div>`;
@@ -2345,7 +2387,7 @@ function wishSheetHtml(){
 function saveWishes(list, msg){ S.settings.wishes = list; putSettings(msg); }
 document.addEventListener("input", e => {
   const t = e.target; if (!t.dataset || !t.dataset.wf || !S.wishEdit) return;
-  e.stopPropagation(); if (t.dataset.wf === "add") S.wishEdit.add = t.value; else S.wishEdit.v[t.dataset.wf] = t.value;
+  e.stopPropagation(); if (t.dataset.wf === "add") S.wishEdit.add = t.value; else S.wishEdit.v[t.dataset.wf] = t.type === "checkbox" ? t.checked : t.value;
 }, true);
 document.addEventListener("click", e => {
   const o = e.target.closest("[data-wishopen]");
@@ -2363,11 +2405,11 @@ document.addEventListener("click", e => {
   if (a === "offer" || a === "offerskip"){
     const off = wishOffer(); if (!off) return;
     S.settings.wishOffered = Object.assign({}, S.settings.wishOffered, {[off.k]: a === "offer" ? off.amount : 0});
-    if (a === "offer") saveWishes(wishes().map(w => w.id === off.w.id ? Object.assign({}, w, {saved: num(w.saved) + off.amount}) : w), `「${esc(off.w.title)}」に ${yen(off.amount)} 入れました`);
+    if (a === "offer") saveWishes(wishes().map(w => w.id === off.w.id ? Object.assign({}, w, {saved: num(w.saved) + Math.min(off.amount, num(w.price) - wishSaved(w))}) : w), `「${esc(off.w.title)}」に ${yen(off.amount)} 入れました`);
     else putSettings("今回は入れませんでした");
     return;
   }
-  if (a === "done"){ saveWishes(wishes().map(w => w.id === b.dataset.id ? Object.assign({}, w, {done: todayYmd}) : w), "おめでとう！ かなえたリストに入れました"); return; }
+  if (a === "done"){ saveWishes(wishes().map(w => w.id === b.dataset.id ? Object.assign({}, w, {saved: wishSaved(w), auto: false, autoFrom: "", done: todayYmd}) : w), "おめでとう！ かなえたリストに入れました"); return; }
   if (!ed) return;
   if (a === "del"){
     if (S.confirmDel !== "w:" + ed.id){ S.confirmDel = "w:" + ed.id; render(); return; }
@@ -2382,16 +2424,37 @@ document.addEventListener("click", e => {
     const v = ed.v;
     if (!String(v.title).trim()){ toast("ほしいものの名前を入れてください", "warn"); return; }
     if (badNum(v.price) || !num(v.price)){ toast("必要な金額を数字で入れてください", "warn"); return; }
-    if (badNum(v.saved)){ toast("貯めた分は数字で入れてください", "warn"); return; }
-    const rec = {title: String(v.title).trim(), price: num(v.price), saved: num(v.saved), due: v.due || "", preset: v.preset || ""};
+    if (badNum(v.saved) || badNum(v.monthly)){ toast("金額は数字で入れてください", "warn"); return; }
+    const rec = {title: String(v.title).trim(), price: num(v.price), due: v.due || "", preset: v.preset || "", monthly: v.monthly === "" ? "" : num(v.monthly), auto: !!v.auto};
+    if (rec.auto && !num(rec.monthly)) rec.monthly = wishSuggest(Object.assign({saved: num(v.saved)}, rec));
     S.wishEdit = null;
-    if (ed.id) saveWishes(wishes().map(w => w.id === ed.id ? Object.assign({}, w, rec) : w), `「${esc(rec.title)}」を保存しました`);
-    else saveWishes(wishes().concat([Object.assign({id: "w" + Date.now().toString(36)}, rec)]), `「${esc(rec.title)}」を追加しました`);
+    // "もう貯めた分" shows the total; from now on that total is the base and set-asides restart this month
+    const base = {saved: num(v.saved), autoFrom: rec.auto ? todayKey : ""};
+    if (ed.id){
+      const old = wishes().find(w => w.id === ed.id);
+      // a new total typed by hand already includes this month; otherwise past months stay and the new amount starts this month
+      const patch = num(v.saved) !== wishSaved(old) ? {saved: num(v.saved), autoFrom: rec.auto ? keyAdd(todayKey, 1) : ""}
+        : !!old.auto !== rec.auto || num(old.monthly) !== num(rec.monthly) ? {saved: foldWish(old).saved, autoFrom: rec.auto ? todayKey : ""} : {};
+      saveWishes(wishes().map(w => w.id === ed.id ? Object.assign({}, w, rec, patch) : w), `「${esc(rec.title)}」を保存しました`);
+    }
+    else saveWishes(wishes().concat([Object.assign({id: "w" + Date.now().toString(36)}, rec, base)]), `「${esc(rec.title)}」を追加しました`);
   }
 }, true);
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && S.wishEdit){ S.wishEdit = null; render(); }
 });
+document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || t.dataset.wishauto === undefined) return;
+  e.stopPropagation();
+  const id = t.dataset.wishauto, on = t.checked;
+  let msg = "";
+  saveWishes(wishes().map(w => {
+    if (w.id !== id) return w;
+    const f = foldWish(w), monthly = num(w.monthly) || wishSuggest(w);
+    msg = on ? `毎月 ${yen(monthly)} を「${esc(w.title)}」に取り分けます（${mName(...todayKey.split("-").map(Number))}から）` : `「${esc(w.title)}」の取り分けを止めました`;
+    return Object.assign(f, {auto: on, monthly, autoFrom: on ? todayKey : ""});
+  }), msg);
+}, true);
 function viewWishes(){
   const act = wishActive(), done = wishes().filter(w => w.done), off = wishOffer(), r = workRate();
   const card = w => {
@@ -2402,7 +2465,9 @@ function viewWishes(){
       <div class="meter"><span style="width:${i.pct.toFixed(1)}%"></span></div>
       ${reached ? `<p class="small">目標額まで貯まりました。買ったら「かなえた」を押してください。</p>`
         : `<p class="wishline">${i.hours ? `<b>${wishHoursText(i)}</b>働けば届きます。` : r ? "" : "時給を設定すると、あと何時間働けばいいかも出します。"}
-          ${i.perMonth ? `<br>${i.late ? "期限を過ぎています。" : `${i.months}か月なので`}<b>毎月 ${yen(i.perMonth)}</b>${i.hoursMonth ? `（月 約${Math.ceil(i.hoursMonth)}時間）` : ""}ずつ貯めれば間に合います。` : ""}</p>
+          ${w.auto && num(w.monthly) && i.left ? `<br>毎月 ${yen(num(w.monthly))} ずつ取り分けると、<b>${(k => `${k.slice(0, 4) !== String(now.y) ? k.slice(0, 4) + "年" : ""}${Number(k.slice(5))}月`)(keyAdd(todayKey, Math.ceil(i.left / num(w.monthly))))}</b>に届きます${i.perMonth && i.perMonth > num(w.monthly) && !i.late ? `（期限に間に合わせるには毎月 ${yen(i.perMonth)}）` : ""}。` : i.perMonth ? `<br>${i.late ? "期限を過ぎています。" : `${i.months}か月なので`}<b>毎月 ${yen(i.perMonth)}</b>${i.hoursMonth ? `（月 約${Math.ceil(i.hoursMonth)}時間）` : ""}ずつ貯めれば間に合います。` : ""}</p>
+          <label class="inline wauto"><input type="checkbox" data-wishauto="${esc(w.id)}" ${w.auto ? "checked" : ""}> 毎月 <b>${yen(num(w.monthly) || wishSuggest(w))}</b> を固定費のように取り分ける</label>
+          ${w.auto ? `<p class="small muted">${mName(...todayKey.split("-").map(Number))}の自由に使えるお金から ${yen(wishDeduct(w, todayKey))} 引いて、ここに足しています。額は「編集」で変えられます。</p>` : ""}
           ${i.wall ? `<p class="small warn">残りを全部今年の追加バイトでかせぐと「${esc(i.wall.name)}」を超えそうです。今ある貯金や来年の分と分けて考えましょう。</p>` : ""}`}
       <div class="dayform">${reached ? `<button type="button" class="primary small-btn" data-wish="done" data-id="${esc(w.id)}">かなえた</button>` : `<button type="button" class="primary small-btn" data-wishopen="${esc(w.id)}" data-step="add">＋ 貯めた</button>`}<button type="button" class="ghost small-btn" data-wishopen="${esc(w.id)}">編集</button></div>
     </section>`;
@@ -2427,7 +2492,7 @@ function viewEvents(){
 function viewEventsSpend(){
   const x = summary(S.y, S.m), evs = x.evs, rj = rateJob();
   // budget overview
-  const room = x.income - x.fixed - x.save, used = x.evTotal, pct = room > 0 ? Math.min(100, used / room * 100) : (used ? 100 : 0);
+  const room = x.income - x.fixed - x.save - x.wish, used = x.evTotal, pct = room > 0 ? Math.min(100, used / room * 100) : (used ? 100 : 0);
   const budgetCard = x.income <= 0 ? `<section class="block budgetcard">
       <div class="blockhead"><span class="small muted"><b>${mName()}の行事・出費</b></span><span class="small muted">使えるお金 給料未入力</span></div>
       <div class="bv">${yen(used)}</div>
@@ -2437,7 +2502,7 @@ function viewEventsSpend(){
       <div class="blockhead"><span class="small muted"><b>${mName()}の行事・出費</b></span><span class="small muted">使えるお金 ${yen(room)}</span></div>
       <div class="bv">${yen(used)}</div>
       <div class="meter ${used > room ? "over" : ""}"><span style="width:${pct.toFixed(1)}%"></span></div>
-      <span class="small muted">${used > room ? `<b style="color:var(--bad)">${yen(used - room)} 足りません</b>` : `あと <b style="color:var(--ink)">${yen(room - used)}</b> 余裕あり`}（固定費・貯金を引いたあと）</span>
+      <span class="small muted">${used > room ? `<b style="color:var(--bad)">${yen(used - room)} 足りません</b>` : `あと <b style="color:var(--ink)">${yen(room - used)}</b> 余裕あり`}（固定費・貯金${x.wish ? "・ほしいもの" : ""}を引いたあと）</span>
     </section>`;
   // groups (a trip split into items) vs single events
   const groups = {}, singles = [];
@@ -2503,10 +2568,12 @@ function viewSettings(){
   const tabs = `<div class="stabs" role="tablist">${SET_TABS.map(([k, l]) => `<button type="button" role="tab" data-settab="${k}" aria-selected="${tab === k}">${l === "JOB" ? jobWord() : l}</button>`).join("")}</div>`;
   let body = "";
   if (tab === "jobs"){
+    if (!S.jobOpen) { S.jobSnap = null; S.jobDirty = false; }
     const jobs = s.jobs.map((j, i) => {
       const n = Object.values(S.shifts).filter(r => r.job === j.id).length;
       const confirming = S.confirmDel === "j:" + j.id;
       const open = S.jobOpen === j.id, more = !!(S.jobMore || {})[j.id], sm = jobSummary(j);
+      if (open && (!S.jobSnap || S.jobSnap.id !== j.id)){ S.jobSnap = {id: j.id, before: clone(j)}; S.jobDirty = false; S.jobAmtTyped = false; }
       if (!open) return `<button type="button" class="job jobfold" data-jobopen="${esc(j.id)}">
         <span class="jdot" style="--jc:${jColor(j.id)}"></span>
         <span class="jf-main"><b>${esc(j.name || "（名前なし）")}</b><span class="small muted">${sm.pay} ・ ${esc(sm.when)}</span>${sm.tags.length ? `<span class="jtags">${sm.tags.map(t => `<span class="jtag">${t}</span>`).join("")}</span>` : ""}</span>
@@ -2543,16 +2610,19 @@ function viewSettings(){
         ${j.payType === "fixed" ? "" : `<div class="f brkbox"><span>いつもの休憩<span class="small muted">（シフトの休憩欄が空欄のとき自動で入ります）</span></span>
           ${brkRows(j).map((r, k) => `<div class="brkrow">実働<input type="text" inputmode="decimal" id="jbo-${i}-${k}" data-brkjob="${i}" data-brk="${k}" data-bf="over" value="${esc(num(r.over) ? r.over : "")}" placeholder="6" aria-label="実働何時間を超えたら">時間を超えたら<input type="text" inputmode="decimal" id="jbm-${i}-${k}" data-brkjob="${i}" data-brk="${k}" data-bf="min" value="${esc(num(r.min) ? r.min : "")}" placeholder="45" aria-label="休憩（分）">分<button type="button" class="ghost" data-act="delbrk" data-id="${esc(j.id)}" data-k="${k}" aria-label="この段を削除">×</button></div>`).join("")}
           <div><button type="button" class="link" data-act="addbrk" data-id="${esc(j.id)}">＋ ${brkRows(j).length ? "段を追加（例：8時間を超えたら60分）" : "いつもの休憩を決める"}</button></div></div>`}
+        ${j.payType === "salary" ? "" : `<div class="small muted">昇給したら、${j.payType === "fixed" ? "1回の金額" : "時給"}を新しい額に変えて「保存する」。いつからかを聞くので、前のシフトは前の額のまま計算されます。</div>`}
         ${freqOf(j) === "monthly" ? `<div class="f">給料日${cycleEditor(j, i, "set")}</div>` : `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>`}
         <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
         <button type="button" class="moret" data-jobmore="${esc(j.id)}" aria-expanded="${more}">${more ? "▾" : "▸"} 詳しい設定（${j.payType === "salary" ? "手取り・残業・ボーナス・昇給" : "土日の時給・手当・昇給・振込日のずれ"}など）</button>
         ${more ? `<div class="morebox">${advanced}</div>` : ""}
+        <div class="jobbar" data-jobbar><span class="small" data-jobdirty ${S.jobDirty ? "" : "hidden"}>まだ保存されていません</span>
+          <button type="button" class="ghost" data-jobsave="revert" ${S.jobDirty ? "" : "disabled"}>元に戻す</button><button type="button" class="primary" data-jobsave="save" ${S.jobDirty ? "" : "disabled"}>保存する</button></div>
       </div>`; }).join("");
     body = `<section class="block">
       <div class="blockhead"><h2>${jobWord()}</h2><button class="primary" data-act="addjob">＋ 追加</button></div>
       <div class="joblist">${jobs || `<div class="empty">${jobWord()}がありません。「＋ 追加」から登録してください。</div>`}</div>
-      <div class="small muted">タップすると時給や給料日を変えられます。</div>
-    </section>`;
+      <div class="small muted">タップすると時給や給料日を変えられます。変えたら「保存する」を押してください。</div>
+    </section>${jobAskHtml()}`;
   } else if (tab === "spend"){
     body = `<section class="block">
       <div class="blockhead"><h2>固定費</h2><span class="num">${yen(fixTotal())} / 月</span></div>
@@ -2639,6 +2709,85 @@ function viewSettings(){
   }
   return tabs + body;
 }
+function jobAskHtml(){
+  const q = S.jobAsk; if (!q) return "";
+  const j = S.settings.jobs.find(x => x.id === (S.jobSnap || {}).id);
+  let body;
+  if (q.kind === "raise"){
+    const unit = {wage: "時給", fixedPay: "1回の金額", salary: "月給"}[q.f];
+    body = `<div class="evs-h"><h2>${unit}が変わりました。いつからですか？</h2></div>
+      <div class="evs-review"><div class="evs-r"><span>${esc(j ? j.name : "")}</span><b><s>${yen(q.from)}</s> → ${yen(q.to)}</b></div></div>
+      <label class="f">新しい${unit}になった日<input type="date" id="ja-date" data-jadate value="${esc(q.date)}"></label>
+      <p class="small muted">この日より前のシフトは ${yen(q.from)} のまま計算します。</p>
+      <div class="evs-foot"><button type="button" data-jask="fix">前から間違っていた（全部 ${yen(q.to)} で計算）</button><span style="flex:1"></span>
+        <button type="button" class="primary" data-jask="raise">昇給として保存</button></div>`;
+  } else {
+    body = `<div class="evs-h"><h2>変更が保存されていません</h2></div>
+      <p class="small muted">「${esc(j ? j.name : "")}」の変更を保存しますか？</p>
+      <div class="evs-foot"><button type="button" class="ghost danger" data-jask="discard">保存しない</button><span style="flex:1"></span>
+        <button type="button" data-jask="cancel">戻る</button><button type="button" class="primary" data-jask="save">保存する</button></div>`;
+  }
+  return `<div class="evsheet" data-jask="backdrop"><div class="evpanel" role="dialog" aria-modal="true">${body}</div></div>`;
+}
+function commitJob(msg){
+  const j = S.settings.jobs.find(x => x.id === S.jobSnap.id);
+  S.jobDirty = false; S.jobAmtTyped = false; S.jobAsk = null; S.jobSnap = j ? {id: j.id, before: clone(j)} : null;
+  if (db) saved(db.doc("app/settings").set(S.settings), msg); else { saveLocal(); saved(null, msg); }
+  render();
+}
+function revertJob(){
+  const k = S.settings.jobs.findIndex(x => x.id === S.jobSnap.id);
+  if (k >= 0) S.settings.jobs[k] = clone(S.jobSnap.before);
+  S.jobDirty = false; S.jobAmtTyped = false; S.jobAsk = null; render();
+}
+function trySaveJob(then){
+  const j = S.settings.jobs.find(x => x.id === S.jobSnap.id), b = S.jobSnap.before; if (!j) return;
+  const f = payFieldOf(j), was = valAt(b, f, todayYmd), is = valAt(j, f, todayYmd);
+  // the pay amount changed and there are shifts before today: ask whether it is a raise or a correction
+  const past = Object.values(S.shifts).some(r => r.job === j.id && (r.ymd || "") < todayYmd);
+  if (S.jobAmtTyped && b.payType === j.payType && num(was) && num(is) && was !== is && past){
+    S.jobAsk = {kind: "raise", f, from: was, to: is, date: `${now.y}-${pad(now.m)}-01`, then}; render(); return;
+  }
+  commitJob(`「${esc(j.name)}」を保存しました`); if (then) then();
+}
+document.addEventListener("input", e => { if (e.target.dataset && e.target.dataset.jadate !== undefined && S.jobAsk) S.jobAsk.date = e.target.value; }, true);
+document.addEventListener("click", e => {
+  // leaving a job card with unsaved changes asks first
+  if (S.jobDirty && holdJob() && !S.jobAsk){
+    const leave = e.target.closest("[data-jobopen],[data-settab],nav [data-tab],[data-goto],[data-act=addjob],[data-act=fab]");
+    if (leave && !(leave.dataset.jobopen !== undefined && leave.dataset.jobopen === S.jobOpen)){
+      e.stopImmediatePropagation(); e.preventDefault(); S.jobAsk = {kind: "leave", el: leave}; render(); return;
+    }
+  }
+  const js = e.target.closest("[data-jobsave]");
+  if (js){ e.stopPropagation(); if (js.dataset.jobsave === "revert"){ revertJob(); toast("元に戻しました"); } else trySaveJob(); return; }
+  const q = e.target.closest("[data-jask]"); if (!q || !S.jobAsk) return;
+  const a = q.dataset.jask, ask = S.jobAsk;
+  if (a === "backdrop" && e.target !== q) return;
+  e.stopImmediatePropagation();
+  const elOf = () => ask.kind === "leave" ? ask.el : null;
+  if (a === "cancel" || a === "backdrop"){ S.jobAsk = null; render(); return; }
+  if (a === "discard"){ const el = elOf(); revertJob(); toast("変更を取り消しました"); if (el) setTimeout(() => clickAgain(el), 0); return; }
+  if (a === "save"){ const el = elOf(); S.jobAsk = null; trySaveJob(el ? () => setTimeout(() => clickAgain(el), 0) : null); return; }
+  const j = S.settings.jobs.find(x => x.id === S.jobSnap.id); if (!j) return;
+  if (a === "raise"){
+    const d = ask.date; if (!d){ toast("日付を選んでください", "warn"); return; }
+    const b = S.jobSnap.before, f = ask.f;
+    const h = histOf(b, f).length ? clone(histOf(b, f)) : [{from: "", v: ask.from}];
+    const keep = h.filter(x => String(x.from || "") < d || !x.from);
+    keep.push({from: d, v: ask.to});
+    j.hist = Object.assign({}, j.hist, {[f]: keep});
+    syncPayField(j, f);
+    commitJob(`${md(d)}から ${yen(ask.to)} にしました。それより前は ${yen(ask.from)} で計算します`);
+  } else if (a === "fix") commitJob(`「${esc(j.name)}」を保存しました（全部のシフトを ${yen(ask.to)} で計算）`);
+  if (ask.then) ask.then();
+}, true);
+/* the element that started a leave is re-rendered by then; find the same control again */
+function clickAgain(el){
+  const d = el.dataset, sel = d.tab ? `nav [data-tab="${d.tab}"]` : d.settab ? `[data-settab="${d.settab}"]` : d.goto ? `[data-goto="${d.goto}"]` : d.jobopen !== undefined ? `[data-jobopen="${d.jobopen}"]` : d.act ? `[data-act="${d.act}"]` : "";
+  const t = (el.isConnected && el) || (sel && document.querySelector(sel)); if (t) t.click();
+}
+window.addEventListener("beforeunload", e => { if (S.jobDirty){ e.preventDefault(); e.returnValue = ""; } });
 document.addEventListener("click", e => {
   const t = e.target.closest("[data-settab],[data-jobopen],[data-jobmore]"); if (!t) return;
   e.stopPropagation();
@@ -2739,7 +2888,7 @@ function setMonth(dm){
 document.getElementById("prevM").onclick = () => setMonth(-1);
 document.getElementById("nextM").onclick = () => setMonth(1);
 document.querySelector("nav.tabs").addEventListener("click", e => {
-  const b = e.target.closest("button[data-tab]"); if (!b) return;
+  const b = e.target.closest("button[data-tab]"); if (!b || S.jobAsk) return;
   S.tab = b.dataset.tab; try { history.replaceState(null, "", "#" + S.tab); } catch(_){}
   render();
 });
@@ -2861,7 +3010,7 @@ document.addEventListener("click", e => {
   else if (act === "cancelDel"){ render(); }
   else if (act === "deljob"){
     if (S.confirmDel !== "j:" + id){ S.confirmDel = "j:" + id; render(); return; }
-    S.confirmDel = null;
+    S.confirmDel = null; S.jobSnap = null; S.jobDirty = false; S.jobOpen = null;
     S.settings.jobs = S.settings.jobs.filter(j => j.id !== id);
     if (S.settings.rateJob === id) S.settings.rateJob = "";
     if (S.form && S.form.job === id) S.form = null;
@@ -2915,7 +3064,7 @@ document.addEventListener("change", e => {
     if (t.type !== "checkbox" && t.tagName !== "SELECT"){ clearTimeout(typingTimer); if (f !== "name" && f !== "since" && badNum(val)) return; }
     j[f] = (t.type === "checkbox" || ["name","payType","calColor","holidayShift","since"].includes(f)) ? val : num(val);
     if (f === "payType" && val === "salary") toSalary(j);
-    if (f === PAY_FIELD.hourly || f === PAY_FIELD.fixed || f === PAY_FIELD.salary) editTodayAmount(j, f);
+    if (f === PAY_FIELD.hourly || f === PAY_FIELD.fixed || f === PAY_FIELD.salary){ editTodayAmount(j, f); S.jobAmtTyped = true; }
     putSettings(`「${esc(j.name)}」を保存しました`);
   } else if (t.dataset.fix !== undefined){
     const f = (S.settings.fixedItems || [])[Number(t.dataset.fix)], fld = t.dataset.field; if (!f) return;
@@ -2962,7 +3111,7 @@ document.addEventListener("input", e => {
     if (!j) return;
     if (f !== "name" && badNum(t.value)){ toast("数字で入力してください（例：1400）", "warn"); return; }
     j[f] = f === "name" ? t.value : num(t.value);
-    if (["wage", "fixedPay", "salary"].includes(f)) editTodayAmount(j, f);
+    if (["wage", "fixedPay", "salary"].includes(f)){ editTodayAmount(j, f); S.jobAmtTyped = true; }
     const l = document.getElementById("jl-" + i); if (l) l.textContent = jobLive(i);   // recalculated as you type
     clearTimeout(typingTimer);
     typingTimer = setTimeout(() => persistSettings(`「${esc(j.name)}」を保存しました`), 600);
