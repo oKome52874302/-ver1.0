@@ -525,6 +525,13 @@ html,body{overflow-x:hidden}
 .moveguide .steps{margin:6px 0;padding-left:1.4em;display:flex;flex-direction:column;gap:8px}
 .moveguide .steps li span{display:block}
 .restore{display:block;margin-top:10px;font-size:13px;color:var(--accent);cursor:pointer;text-decoration:underline}
+.cel-tip{font-size:13px;line-height:1.6;opacity:.9;margin:4px 0 2px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--surface) 70%,transparent);text-align:left}
+.cel-reward{font-size:13.5px;font-weight:900;margin-top:6px}
+.rwrow{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;align-items:start;padding:10px 0;border-top:1px dashed var(--line)}
+.rwb{display:flex;flex-direction:column;gap:4px;min-width:0}
+.rwset{align-self:flex-start;border:1px dashed var(--accent);background:none;color:var(--accent);font:inherit;font-size:13px;font-weight:900;border-radius:99px;padding:4px 12px;cursor:pointer}
+.rwset.on{border-style:solid;background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.rwform{display:flex;flex-wrap:wrap;gap:6px}.rwform input{flex:1 1 8em;min-width:0;min-height:40px}
 .persona{display:flex;flex-direction:column;gap:8px;text-align:left;width:100%}
 .persona .pk{font-size:13px;font-weight:900;color:var(--muted)}
 .persona button{display:flex;flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px;border:2px solid var(--line);border-radius:14px;background:var(--surface);color:var(--ink);text-align:left}
@@ -1442,6 +1449,8 @@ function showNextCelebration(){
     <div class="cel-tier t${a.tier}">${TIER_EN[a.tier]}</div>
     <div class="cel-title">${esc(a.t)}</div>
     <div class="cel-desc">${esc(a.d)}</div>
+    ${(S.rewardMsg || {})[a.id] ? `<div class="cel-reward">🎁 ${esc(S.rewardMsg[a.id])}</div>` : ""}
+    ${achTip(a) ? `<div class="cel-tip">${esc(achTip(a))}</div>` : ""}
     <div class="cel-actions"><button class="primary cel-ok" data-cel="next">${celebrateQ.length ? `つぎへ（${idx}/${celebrateTotal}）` : "やったね！"}</button>
       ${celebrateQ.length ? `<button class="ghost" data-cel="skip">まとめて閉じる</button>` : ""}</div>`;
   box.hidden = false;
@@ -1481,6 +1490,48 @@ function confetti(tier){
 }
 const busyEntering = () => S.tab === "shifts" || !!S.evEdit || !!S.incEdit;
 function flushCelebrations(){ if (S.celePending && S.celePending.length && !busyEntering()){ const l = S.celePending; S.celePending = []; celebrate(l); } }
+/* 役立つ一言: what this medal means for the next step, from the viewer's own numbers */
+function achTip(a){
+  try {
+    const s = stats(), [cy, cm] = todayKey.split("-").map(Number), x = summary(cy, cm);
+    if (a.cat === "earn"){
+      const w = wallList().find(w => wallVal(w, x) < w.amount);
+      if (w){ const left = w.amount - wallVal(w, x), months = 13 - now.m; return `次の壁「${w.name}」まであと ${yen(left)}。12月まで月 ${yen(Math.floor(left / months))} 以内なら超えません。`; }
+      return `${now.y}年はここまで ${yen(s.year)}。この調子で記録を続けましょう。`;
+    }
+    if (a.cat === "work"){
+      if (a.id === "night") return "22時〜5時は時給が25%上がります。翌日の予定と体調に合わせて入れましょう。";
+      const done = allShifts().filter(t => t.ev.ymd <= todayYmd && t.paid > 0), h = done.reduce((t, r) => t + r.paid, 0);
+      if (h) return `これまでの平均は1時間あたり ${yen(Math.round(done.reduce((t, r) => t + r.pay, 0) / h))}（交通費込み）。シフトを選ぶときの目安にどうぞ。`;
+      return "シフトを入れておくと、給料日と金額が自動で出ます。";
+    }
+    if (a.cat === "save" || a.cat === "bank"){
+      const p = savingPlan();
+      if (p && p.need > 0) return `貯金目標まであと ${yen(p.need)}。浮かせた ${yen(s.saved)} を回すと、毎月の貯金がそのぶん楽になります。`;
+      if (p) return "貯金目標に届いています。次の目標を決めると、また毎月の額を計算します。";
+      return `予算より浮かせたお金は合計 ${yen(s.saved)}。ホームの「貯金の計画」で目標を決めると、使い道がはっきりします。`;
+    }
+    if (a.cat === "rec") return "確定額を入れるほど、来月使えるお金の見込みが正確になります。";
+  } catch(_){}
+  return "";
+}
+/* ご褒美: a reward the viewer promised themselves for a medal; unlocking puts it into the budget */
+const rewardOf = id => (S.settings.rewards || {})[id];
+function grantRewards(list){
+  const out = {};
+  for (const a of list){
+    const r = rewardOf(a.id); if (!r || r.granted || !num(r.amount)) continue;
+    const [cy, cm] = todayKey.split("-").map(Number), room = summary(cy, cm).left;
+    // only spend what this month can afford; otherwise it waits for next month
+    const later = room < num(r.amount), [ny, nm] = later ? addMonths(cy, cm, 1) : [cy, cm];
+    const ymd = later ? periodRange(ny, nm).start : todayYmd;
+    S.events["rw_" + a.id] = {manual: true, included: true, title: `ご褒美：${r.title || a.t}`, ymd, budget: num(r.amount), memo: `実績「${a.t}」のご褒美`, group: ""};
+    r.granted = todayYmd;
+    out[a.id] = `ご褒美「${r.title}」${yen(num(r.amount))} を${later ? `${mName(ny, nm)}（今月は余裕がないため）` : mName(cy, cm)}の予算に入れました`;
+  }
+  if (Object.keys(out).length) persist();
+  S.rewardMsg = Object.assign(S.rewardMsg || {}, out);
+}
 function checkAchievements(){
   if (!Object.values(S.ready).every(Boolean) || achWriting) return;
   const s = stats(), fresh = ACH.filter(a => !S.ach[a.id] && a.v(s) >= achGoal(a, s));
@@ -1490,12 +1541,35 @@ function checkAchievements(){
   const done = () => { achWriting = false; };
   if (db) db.doc("app/achievements").set(S.ach).then(done, done); else { saveLocal(); done(); }
   const list = fresh.sort((a, b) => a.tier - b.tier);
+  grantRewards(list);
   if (busyEntering()){
     // while typing shifts or a sheet is open: a small note now, the full show later
     S.celePending = (S.celePending || []).concat(list);
     toast(`実績「${esc(list[0].t)}」${list.length > 1 ? `ほか${list.length - 1}個` : ""}を解除！ 入力が終わったら見られます`, "trophy");
   } else celebrate(list);
   if (S.tab === "ach") setTimeout(render, 0);
+}
+function rewardSection(s){
+  const rw = S.settings.rewards || {};
+  const cand = ACH.filter(a => !S.ach[a.id] && !a.secret && a.tier < 4 && isFinite(achGoal(a, s)) && achGoal(a, s) > 0)
+    .map(a => ({a, pct: Math.min(99, a.v(s) / achGoal(a, s) * 100)}))
+    .sort((p, q) => (rw[q.a.id] ? 1 : 0) - (rw[p.a.id] ? 1 : 0) || q.pct - p.pct).slice(0, 3);
+  if (!cand.length) return "";
+  const row = ({a, pct}) => {
+    const r = rw[a.id], editing = S.rewardEdit === a.id, g = achGoal(a, s), left = g - a.v(s);
+    return `<div class="rwrow">
+      <div class="rwm">${medal(a, false, 40)}</div>
+      <div class="rwb"><b>${esc(a.t)}</b><span class="small muted">${esc(a.d)}・あと ${a.fmt === "yen" ? yen(left) : `${Math.ceil(left)}${a.fmt || ""}`}</span>
+        <div class="meter mini"><span style="width:${pct.toFixed(1)}%"></span></div>
+        ${editing ? `<div class="rwform"><input type="text" id="rw-t" placeholder="例：焼肉、推しグッズ" value="${esc(r ? r.title : "")}" aria-label="ご褒美の内容"><input type="text" inputmode="decimal" id="rw-a" placeholder="予算（円）" value="${esc(r ? r.amount : "")}" aria-label="ご褒美の予算"><button type="button" class="primary small-btn" data-act="rwSave" data-id="${a.id}">決める</button><button type="button" class="ghost small-btn" data-act="rwCancel">やめる</button>${r ? `<button type="button" class="ghost small-btn" data-act="rwDel" data-id="${a.id}">消す</button>` : ""}</div>`
+          : r ? `<button type="button" class="rwset on" data-act="rwEdit" data-id="${a.id}">🎁 ${esc(r.title)} ${yen(num(r.amount))}</button>` : `<button type="button" class="rwset" data-act="rwEdit" data-id="${a.id}">＋ ご褒美を決める</button>`}
+      </div></div>`;
+  };
+  return `<section class="block">
+    <div class="blockhead"><h2>次のご褒美</h2></div>
+    <div class="small muted">もうすぐ取れる実績に、自分へのご褒美を決めておけます。取れたら、その予算が行事に入ります（今月に余裕がなければ来月）。</div>
+    ${cand.map(row).join("")}
+  </section>`;
 }
 function viewAch(){
   const s = stats();
@@ -1530,6 +1604,7 @@ function viewAch(){
     </div>
     <div class="gotcount"><b>${got}</b><span>/ ${ACH.length}</span></div>
   </section>
+  ${rewardSection(s)}
   <div class="tiles four">
     <div class="tile"><div class="k">今月かせいだ</div><div class="v">${yen(s.thisMonth)}</div></div>
     <div class="tile"><div class="k">${now.y}年かせいだ</div><div class="v">${yen(s.year)}</div></div>
@@ -2532,6 +2607,16 @@ document.addEventListener("click", e => {
     S.justExported = true; S.tab = "settings"; S.setTab = "other"; render();
     setTimeout(() => { const g = document.getElementById("moveGuide"); if (g) g.scrollIntoView({block: "start"}); }, 30);
     toast("バックアップを書き出しました");
+  }
+  else if (act === "rwEdit"){ S.rewardEdit = id; render(); setTimeout(() => { const el = document.getElementById("rw-t"); if (el) el.focus(); }, 30); }
+  else if (act === "rwCancel"){ S.rewardEdit = null; render(); }
+  else if (act === "rwDel"){ const rw = S.settings.rewards || {}; delete rw[id]; S.rewardEdit = null; putSettings("ご褒美を消しました"); }
+  else if (act === "rwSave"){
+    const t = (document.getElementById("rw-t") || {}).value || "", amt = (document.getElementById("rw-a") || {}).value || "";
+    if (!t.trim()){ toast("ご褒美の内容を入れてください", "warn"); return; }
+    if (!amt.trim() || badNum(amt) || !num(amt)){ toast("予算を数字で入れてください", "warn"); return; }
+    S.settings.rewards = Object.assign({}, S.settings.rewards, {[id]: {title: t.trim(), amount: num(amt)}});
+    S.rewardEdit = null; putSettings(`ご褒美「${esc(t.trim())}」を決めました`);
   }
   else if (act === "backupLater"){ const d = new Date(Date.UTC(now.y, now.m - 1, now.d + 14)); S.settings.backupSnooze = d.toISOString().slice(0, 10); persist(); render(); toast("2週間後にもう一度お知らせします"); }
   else if (act === "importOk"){ applyImport(); }
