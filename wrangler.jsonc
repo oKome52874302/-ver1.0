@@ -1,0 +1,10 @@
+// Cloudflare Workers の設定（静的サイトとして index.html などをそのまま配信）
+{
+  "name": "ver1-0",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "."
+  },
+  // PR ごとのプレビュー（npx wrangler preview）に必要。中身は空でよい
+  "previews": {}
+}
