@@ -4,5 +4,7 @@
   "compatibility_date": "2026-10-01",
   "assets": {
     "directory": "."
-  }
+  },
+  // PR ごとのプレビュー（npx wrangler preview）に必要。中身は空でよい
+  "previews": {}
 }
