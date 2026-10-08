@@ -2262,10 +2262,10 @@ function viewShifts(){
   const patHtml = pats.length ? `<div class="pats"><div class="small muted">前と同じ勤務をワンタップで追加</div>
     ${pats.map((pt, k) => `<button type="button" class="pat" data-act="quickpat" data-k="${k}"><span class="num">${esc(pt.start)}–${esc(pt.end)}</span><span class="pj"><span class="jdot" style="--jc:${jColor(pt.job)}"></span>${esc(jobById(pt.job).name)}</span><span class="small muted">${pt.breakMin ? `休憩${pt.breakMin}分` : "休憩なし"}</span></button>`).join("")}</div>` : "";
   const form = jobs.length ? `${patHtml}
-    <form id="shiftForm" class="dayform" autocomplete="off">
+    <form id="shiftForm" class="dayform" autocomplete="off" novalidate>
       <label class="f">${jobWord()}<select id="fJob" data-form="job">${jobs.map(j => `<option value="${esc(j.id)}" ${j.id === f.job ? "selected" : ""}>${esc(j.name)}</option>`).join("")}</select></label>
-      <label class="f">開始<input type="time" id="fStart" data-form="start" value="${esc(f.start)}" step="300"></label>
-      <label class="f">終了<input type="time" id="fEnd" data-form="end" value="${esc(f.end)}" step="300"></label>
+      <label class="f">開始<input type="time" id="fStart" data-form="start" value="${esc(f.start)}"></label>
+      <label class="f">終了<input type="time" id="fEnd" data-form="end" value="${esc(f.end)}"></label>
       <label class="f">休憩（分）<input type="text" inputmode="decimal" id="fBreak" data-form="breakMin" min="0" step="5" class="w-s" value="${esc(f.breakMin)}" placeholder="${hasBrkRule(fj) ? "自動" : "0"}"></label>
       <label class="f">交通費（円）<input type="text" inputmode="decimal" id="fTr" data-form="transport" min="0" step="10" class="w-s" value="${esc(f.transport ?? "")}" placeholder="${esc(String(fj ? num(fj.transport) : 0))}"></label>
       <label class="f" style="flex:1 1 10em">メモ<input type="text" id="fNote" data-form="note" class="w-l" value="${esc(f.note)}" placeholder="任意"></label>
