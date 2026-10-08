@@ -533,6 +533,10 @@ html,body{overflow-x:hidden}
 .cel-tip{font-size:13px;line-height:1.6;opacity:.9;margin:4px 0 2px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--surface) 70%,transparent);text-align:left}
 .cel-reward{font-size:13.5px;font-weight:900;margin-top:6px}
 .evseg{margin-bottom:2px}
+.spamount{font-size:24px!important;font-weight:900;min-height:56px}
+.spcats{display:flex;flex-wrap:wrap;gap:6px}
+.spcard{display:flex;flex-direction:column;gap:8px}.spcard .bv{font-size:22px;font-weight:900}
+.spbars{display:flex;flex-direction:column;gap:6px}.spbar > span:first-child{white-space:nowrap}.spbar{display:grid;grid-template-columns:auto minmax(3em,1fr) auto;gap:8px;align-items:center;font-size:13px}.spbar .meter{height:8px}
 .fuyocard{display:flex;flex-direction:column;gap:6px;border:1px dashed var(--accent)}.fuyocard.bad{border:1px solid var(--bad)}.fuyocard.bad > b{color:var(--bad)}
 .insbox{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:12px;background:var(--bg)}
 .impact{margin-top:6px;padding:8px 10px;border-radius:10px;background:color-mix(in srgb,var(--gold) 14%,var(--surface));line-height:1.6}
@@ -614,6 +618,7 @@ div.f{display:flex;flex-direction:column;gap:6px;font-size:.76rem;color:var(--mu
   <div id="sheet" hidden><div class="panel" role="dialog" aria-modal="true" aria-label="追加する">
     <div class="grab" aria-hidden="true"></div>
     <button type="button" class="opt" data-act="quickShift"><span class="oi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span><b>シフトを追加</b><span>今日の日付で入力をはじめます</span></span></button>
+    <button type="button" class="opt" data-act="quickSpent"><span class="oi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg></span><span><b>使ったお金を記録</b><span>予定になかった出費を、金額と分類だけで</span></span></button>
     <button type="button" class="opt" data-act="quickEvent"><span class="oi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/></svg></span><span><b>行事・出費を追加</b><span>旅行や飲み会などの予算を立てます</span></span></button>
     <button type="button" class="opt" data-act="quickIncome"><span class="oi"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/></svg></span><span class="ot"><b>給料の金額を入力</b><span>シフトを入れていない月の給料など</span></span></button>
     <button type="button" class="ghost" data-act="closeSheet">閉じる</button>
@@ -1187,6 +1192,66 @@ function eventList(y, m){
   }
   return out.sort((a, b) => a.ymd.localeCompare(b.ymd));
 }
+/* 予定外の出費（ざっくり家計簿）: stored as a manual event {spent: true, cat, actual}, so it comes off this month's money like any expense */
+const SPENT_CATS = [["food", "食費", "🍙"], ["cafe", "カフェ・おやつ", "☕"], ["fun", "遊び", "🎮"], ["shop", "買い物", "🛍"], ["move", "交通", "🚃"], ["other", "その他", "・"]];
+const spentCat = id => SPENT_CATS.find(c => c[0] === id) || SPENT_CATS[SPENT_CATS.length - 1];
+const isSpent = e => !!(e && (e.doc ? e.doc.spent : e.spent));
+function openSpent(id){
+  const d = id ? S.events[id] : null;
+  S.spEdit = {id: id || null, v: d ? {amount: d.actual ?? "", cat: d.cat || "other", ymd: d.ymd, memo: d.memo || ""} : {amount: "", cat: "", ymd: inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start, memo: ""}};
+  render(); setTimeout(() => { const el = document.getElementById("sp-amount"); if (el) el.focus(); }, 30);
+}
+function spSheetHtml(){
+  const ed = S.spEdit; if (!ed) return "";
+  const v = ed.v;
+  return `<div class="evsheet" data-sp="backdrop"><div class="evpanel" role="dialog" aria-modal="true" aria-label="使ったお金">
+    <div class="evs-h"><h2>${ed.id ? "使ったお金を直す" : "使ったお金を記録"}</h2><button type="button" class="ghost" data-sp="close" aria-label="閉じる">✕</button></div>
+    <label class="f">いくら使った？<input id="sp-amount" data-spf="amount" type="text" inputmode="decimal" placeholder="円" value="${esc(v.amount)}" class="spamount"></label>
+    <div class="spcats" role="group" aria-label="分類">${SPENT_CATS.map(([id, n, ic]) => `<button type="button" class="wchip" data-spcat="${id}" aria-pressed="${v.cat === id}">${ic} ${n}</button>`).join("")}</div>
+    <div class="evs-grid">
+      <label class="f">日付<input id="sp-ymd" data-spf="ymd" type="date" value="${esc(v.ymd)}"></label>
+      <label class="f">メモ（任意）<input id="sp-memo" data-spf="memo" type="text" placeholder="例：コンビニ" value="${esc(v.memo)}" autocomplete="off"></label>
+    </div>
+    <p class="small muted">予定していた出費（旅行・飲み会など）は「行事」に。ここは予定になかった分だけでOKです。</p>
+    <div class="evs-foot">${ed.id ? `<button type="button" class="ghost danger" data-sp="del">${S.confirmDel === "sp:" + ed.id ? "本当に削除する" : "削除"}</button>` : ""}<span style="flex:1"></span>
+      <button type="button" data-sp="close">キャンセル</button><button type="button" class="primary" data-sp="save">記録する</button></div>
+  </div></div>`;
+}
+document.addEventListener("input", e => {
+  const t = e.target; if (!t.dataset || !t.dataset.spf || !S.spEdit) return;
+  e.stopPropagation(); S.spEdit.v[t.dataset.spf] = t.value;
+}, true);
+document.addEventListener("click", e => {
+  const o = e.target.closest("[data-spedit]");
+  if (o){ e.stopPropagation(); openSpent(o.dataset.spedit); return; }
+  const c = e.target.closest("[data-spcat]");
+  if (c && S.spEdit){ e.stopPropagation(); S.spEdit.v.cat = c.dataset.spcat; document.querySelectorAll("[data-spcat]").forEach(b => b.setAttribute("aria-pressed", String(b === c))); return; }
+  const b = e.target.closest("[data-sp]"); if (!b || !S.spEdit) return;
+  const a = b.dataset.sp, ed = S.spEdit;
+  if (a === "backdrop" && e.target !== b) return;
+  e.stopPropagation();
+  if (a === "close" || a === "backdrop"){ S.spEdit = null; S.confirmDel = null; render(); return; }
+  if (a === "del"){
+    if (S.confirmDel !== "sp:" + ed.id){ S.confirmDel = "sp:" + ed.id; render(); return; }
+    S.confirmDel = null; S.spEdit = null; putDoc("events", ed.id, null, "削除しました"); return;
+  }
+  if (a === "save"){
+    const v = ed.v;
+    if (badNum(v.amount) || !num(v.amount)){ toast("金額を入れてください", "warn"); return; }
+    if (!v.cat){ toast("分類を選んでください", "warn"); return; }
+    if (!v.ymd){ toast("日付を選んでください", "warn"); return; }
+    const cat = spentCat(v.cat), id = ed.id || "sp" + Date.now().toString(36);
+    S.spEdit = null;
+    putDoc("events", id, {manual: true, included: true, spent: true, cat: cat[0], title: String(v.memo).trim() || cat[1], ymd: v.ymd, budget: "", actual: num(v.amount), memo: String(v.memo).trim(), group: ""},
+      `${cat[1]} ${yen(num(v.amount))} を記録しました${inPeriod(v.ymd, S.y, S.m) ? "" : `（${mName(...periodOf(...v.ymd.split("-").map(Number)))}に入りました）`}`);
+  }
+}, true);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && S.spEdit){ S.spEdit = null; render(); } });
+function spentRow(e){
+  const c = spentCat(e.doc.cat);
+  return `<button type="button" class="li evbtn" data-spedit="${esc(e.id)}" aria-label="${esc(e.title)}を直す">
+    <span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${c[2]} ${esc(e.title)}</b>${e.title !== c[1] ? `<span>${c[1]}</span>` : ""}</span><span class="la">${yen(evCost(e.doc))}</span><span class="chev" aria-hidden="true">›</span></button>`;
+}
 function evCost(doc){ const a = doc.actual, b = doc.budget; const hasA = a !== undefined && a !== "" && a !== null; return hasA ? num(a) : num(b); }
 function evStatus(doc){
   const hasB = doc.budget !== undefined && doc.budget !== "" && doc.budget !== null;
@@ -1584,7 +1649,7 @@ function confetti(tier){
     if (++f < 130) requestAnimationFrame(tick); else ctx.clearRect(0, 0, W, H);
   })();
 }
-const busyEntering = () => S.tab === "shifts" || !!S.evEdit || !!S.incEdit || !!S.wishEdit;
+const busyEntering = () => S.tab === "shifts" || !!S.evEdit || !!S.incEdit || !!S.wishEdit || !!S.spEdit;
 function flushCelebrations(){ if (S.celePending && S.celePending.length && !busyEntering()){ const l = S.celePending; S.celePending = []; celebrate(l); } }
 /* 役立つ一言: what this medal means for the next step, from the viewer's own numbers */
 function achTip(a){
@@ -1730,7 +1795,7 @@ function summary(y, m){
   for (const s of payIn){ const b = byJob[s.job.id] || (byJob[s.job.id] = {job: s.job, n:0, hours:0, pay:0, tr:0, pd:s.pd}); b.n++; b.hours += s.excluded ? 0 : s.paid; b.pay += s.pay; b.tr += s.transport; }
   const trIn = mi.estTr;
   const evs = eventList(y, m);
-  const evTotal = evs.reduce((a, e) => a + evCost(e.doc), 0);
+  const evTotal = evs.reduce((a, e) => a + evCost(e.doc), 0), spent = evs.filter(isSpent).reduce((a, e) => a + evCost(e.doc), 0);
   const fixed = num(S.settings.fixedCost), save = savingFor(y, m), wish = wishMonthTotal(key);
   const free = income - fixed - save - wish;
   const left = free - evTotal;
@@ -1747,7 +1812,7 @@ function summary(y, m){
   const workedPay = worked.reduce((a, s) => a + s.pay, 0);
   const pds = [...new Set(worked.map(s => `${s.pd.m}/${s.pd.d}`))];
   const workedPd = pds.length === 1 ? `${pds[0]}支給` : pds.length ? `${pds.join("・")}支給` : "";
-  return {key, mi, payIn, income, trIn, yearTr, yearWh, yearOtsu, yearIns, workedPay, workedPd, byJob, evs, evTotal, fixed, save, wish, free, left, yearPay, yearPayAll, missingRate};
+  return {key, mi, payIn, income, trIn, spent, yearTr, yearWh, yearOtsu, yearIns, workedPay, workedPd, byJob, evs, evTotal, fixed, save, wish, free, left, yearPay, yearPayAll, missingRate};
 }
 
 /* ---------- notices ---------- */
@@ -1805,7 +1870,7 @@ function render(){
   const html = onb ? viewOnboarding() : S.tab === "home" ? viewHome() : S.tab === "shifts" ? viewShifts() : S.tab === "events" ? viewEvents() : S.tab === "ach" ? viewAch() : viewSettings();
   const act = document.activeElement, fid = act && act.id && v.contains(act) ? act.id : null;
   const fval = fid ? act.value : null, fsel = fid ? (() => { try { return act.selectionStart; } catch(_){ return null; } })() : null;
-  v.innerHTML = html;
+  v.innerHTML = html + (onb ? "" : spSheetHtml());
   if (!onb) setTimeout(() => { checkAchievements(); flushCelebrations(); }, 0);
   setTimeout(drawTutorial, 0);
   if (fid){
@@ -1870,7 +1935,8 @@ function viewHome(){
 
   // hero: what is left to spend freely this month
   const out = x.fixed + x.save + x.wish + x.evTotal, base = Math.max(x.income, out, 1);
-  const wishTxt = x.wish ? `・ほしいもの ${yen(x.wish)}` : "";
+  const wishTxt = (x.wish ? `・ほしいもの ${yen(x.wish)}` : "") + (x.spent ? `・行事 ${yen(x.evTotal - x.spent)}・使った ${yen(x.spent)}` : "");
+  const evTxt = x.spent ? "" : `・行事 ${yen(x.evTotal)}`;
   const seg = (v, c) => `<span style="width:${(Math.max(0, v) / base * 100).toFixed(2)}%;background:${c}"></span>`;
   const isCur = `${S.y}-${pad(S.m)}` === todayKey;
   const pend = periodRange(S.y, S.m).end;
@@ -1892,12 +1958,12 @@ function viewHome(){
       <p class="hmsg">${wkHero ? `${wk.pds}に振り込まれて、${wk.uses}に使えるお金になります。${mName()}に使う給料（前の月までに働いた分）を入れると、ここに${mName()}に自由に使えるお金が出ます。` : noIncome ? `${mName()}に使う給料（${S.settings.jobs.length ? (isSimple() ? "先月までに働いた分の、振り込まれた金額" : "シフトか、振り込まれた金額") : `まずは${jobWord()}の登録`}）を入れると、ここに今月自由に使えるお金が出ます。` : `まだ入っていない給料があります：${missing.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}`}</p>
       <div class="hbtns">${S.settings.jobs.length ? `<button type="button" class="hbtn" data-incopen="budget">給料の金額を入れる ›</button>${isSimple() ? "" : `<button type="button" class="hbtn ghostb" data-act="quickShift">シフトを入れる</button>`}` : `<button type="button" class="hbtn" data-goto="settings">${jobWord()}を登録する ›</button>`}</div>
       ${!noIncome ? `<div class="hs">入力済みの分だけで計算すると ${yen(x.left)}</div>` : ""}
-      ${out ? `<div class="hs">出ていく予定：固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}${wishTxt}・行事 ${yen(x.evTotal)}</div>` : ""}
+      ${out ? `<div class="hs">出ていく予定：固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}${wishTxt}${evTxt}</div>` : ""}
     </div>` : `<div class="hero">
       <div class="hk"><span>${partial ? `${mName()}に自由に使えるお金（仮）` : x.left < 0 ? `${mName()}は足りません` : `${mName()}に自由に使えるお金`}</span>${isCur && x.left > 0 && daysLeft ? `<span>1日あたり ${yen(Math.floor(x.left / daysLeft))}</span>` : ""}</div>
       <div class="hv">${x.left < 0 ? "−" : ""}${yen(Math.abs(x.left)).replace("−", "")}</div>
       <div class="hbar" aria-hidden="true">${seg(x.fixed, "color-mix(in srgb, var(--on-accent) 45%, transparent)")}${seg(x.save + x.wish, "color-mix(in srgb, var(--on-accent) 70%, transparent)")}${seg(x.evTotal, "var(--gold)")}</div>
-      <div class="hs">入る ${yen(x.income)} − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}${wishTxt}・行事 ${yen(x.evTotal)}</div>
+      <div class="hs">入る ${yen(x.income)} − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}${wishTxt}${evTxt}</div>
       ${partial ? `<div class="hs">まだ入っていない給料があるので、仮の金額です。</div>` : x.left < 0 && rj && num(rj.wage) ? `<div class="hs">${esc(rj.name)}であと約${Math.ceil(-x.left / num(rj.wage))}時間働くか、行事の予算を見直すと足ります。</div>` : ""}
     </div>`;
 
@@ -1910,7 +1976,7 @@ function viewHome(){
     : `<button type="button" class="mini" data-act="openSaving"><span class="mk">貯金の目標</span><span class="mv">—</span><span class="ms">目標を決めると毎月の貯金額を計算します</span></button>`;
 
   // upcoming spending in the viewed month
-  const evs = x.evs.filter(e => !isCur || e.ymd >= todayYmd);
+  const evs = x.evs.filter(e => !isSpent(e) && (!isCur || e.ymd >= todayYmd));
   const upRows = evs.slice(0, 4).map(e => {
     const c = evCost(e.doc), [k] = evStatus(e.doc);
     const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>` : e.moved && e.moved.moved ? `<span>${movedNote(e.moved).replace(/[（）]/g, "")}</span>` : rj && c ? `<span>${esc(rj.name.replace(/（.*）/, ""))} ${dur(c / num(rj.wage))}ぶん</span>` : "";
@@ -2659,7 +2725,18 @@ function viewEventsSpend(){
     </section>`;
   // groups (a trip split into items) vs single events
   const groups = {}, singles = [];
-  for (const e of evs){ const g = String(e.doc.group || "").trim(); if (g && !e.rec) (groups[g] = groups[g] || []).push(e); else singles.push(e); }
+  for (const e of evs){ if (isSpent(e)) continue; const g = String(e.doc.group || "").trim(); if (g && !e.rec) (groups[g] = groups[g] || []).push(e); else singles.push(e); }
+  const sps = evs.filter(isSpent).sort((a, b) => b.ymd.localeCompare(a.ymd));
+  const spCard = (() => {
+    const tot = sps.reduce((a, e) => a + evCost(e.doc), 0);
+    const byCat = SPENT_CATS.map(c => ({c, v: sps.filter(e => spentCat(e.doc.cat)[0] === c[0]).reduce((a, e) => a + evCost(e.doc), 0)})).filter(r => r.v).sort((a, b) => b.v - a.v);
+    return `<section class="block spcard"><div class="sec-h"><h2>予定外に使ったお金</h2><button type="button" class="primary small-btn" data-act="quickSpent">＋ 使った</button></div>
+      ${sps.length ? `<div class="bv">${yen(tot)}<span class="small muted"> ・ ${sps.length}件</span></div>
+        <div class="spbars">${byCat.map(r => `<div class="spbar"><span>${r.c[2]} ${r.c[1]}</span><span class="meter"><span style="width:${(r.v / tot * 100).toFixed(1)}%"></span></span><b>${yen(r.v)}</b></div>`).join("")}</div>
+        <details class="more" data-more="sps" ${S.openMore === "sps" ? "open" : ""}><summary>記録を見る・直す</summary><div class="list">${sps.map(spentRow).join("")}</div></details>`
+      : `<span class="small muted">コンビニやカフェなど、予定になかった出費を記録すると、分類ごとの合計がここに出ます。＋ボタンの「使ったお金を記録」からも入れられます。</span>`}
+    </section>`;
+  })();
   const gList = Object.entries(groups).map(([name, items]) => ({name, items, total: items.reduce((a, e) => a + evCost(e.doc), 0)})).sort((a, b) => b.total - a.total);
   const groupCards = gList.map((g, gi) => {
     const top = g.items.slice().sort((a, b) => evCost(b.doc) - evCost(a.doc));
@@ -2687,11 +2764,12 @@ function viewEventsSpend(){
   const selEvs = byDay[S.evSel] || [];
   const calCard = `<section class="block evcal">${cal}${periodCtl("events")}
     <div class="evday"><div class="sec-h"><h2>${md(S.evSel)}（${DOW[new Date(S.evSel + "T00:00:00Z").getUTCDay()]}）${selEvs.length ? ` ${yen(selEvs.reduce((a, e) => a + evCost(e.doc), 0))}` : ""}</h2><button type="button" class="primary small-btn" data-evadd="1" data-evymd="${S.evSel}">＋ この日に追加</button></div>
-      ${selEvs.length ? `<div class="list">${selEvs.map(e => evRow(e, rj)).join("")}</div>` : `<span class="small muted">この日の行事はありません</span>`}</div></section>`;
+      ${selEvs.length ? `<div class="list">${selEvs.map(e => isSpent(e) ? spentRow(e) : evRow(e, rj)).join("")}</div>` : `<span class="small muted">この日の行事はありません</span>`}</div></section>`;
   const doneTotal = done.reduce((a, e) => a + evCost(e.doc), 0);
   return `
   ${budgetCard}
   ${calCard}
+  ${spCard}
   ${groupCards}
   <div class="sec">
     <div class="sec-h"><h2>${gList.length ? "そのほかの出費" : "これからの出費"}</h2><button type="button" class="primary small-btn" data-evadd="1">＋ 行事を追加</button></div>
@@ -3147,6 +3225,7 @@ document.addEventListener("click", e => {
   else if (act === "openSaving"){ S.openMore = "saving"; render(); const el = document.getElementById("hGb"); if (el){ el.scrollIntoView({block: "center"}); el.focus(); } }
   else if (act === "closeSheet"){ document.getElementById("sheet").hidden = true; }
   else if (act === "quickIncome"){ document.getElementById("sheet").hidden = true; S.tab = "home"; [S.y, S.m] = refreshToday(); openIncEditor("budget"); }
+  else if (act === "quickSpent"){ document.getElementById("sheet").hidden = true; [S.y, S.m] = refreshToday(); openSpent(null); }
   else if (act === "quickShift" || act === "quickEvent"){
     document.getElementById("sheet").hidden = true;
     [S.y, S.m] = refreshToday();
