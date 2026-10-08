@@ -255,6 +255,8 @@ body.in-onb #appHeader, body.in-onb nav.tabs{display:none}
 .pchip.on{border-color:var(--accent);background:var(--tint);color:var(--accent)}
 .fixlist{display:flex;flex-direction:column;gap:8px}
 .fixrow{display:grid;grid-template-columns:minmax(0,1fr) 7.5em auto;gap:8px;align-items:center}
+.fixrow .fixday{grid-column:1 / 3;min-height:40px;font-size:14px}
+.fixlist .fixrow:has(.fixday){padding-bottom:10px;border-bottom:1px dashed var(--line)}
 .fixrow input{width:100%!important}
 .onav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
 .onav-r{display:flex;gap:8px}
@@ -1456,7 +1458,8 @@ function projection(){
     const assumed = !cur && !mi.rows.some(r => r.used) && num(S.settings.assumeIncome) > 0;
     if (assumed) inflow += num(S.settings.assumeIncome);
     const outEv = eventList(y, m).filter(e => !cur || e.ymd >= todayYmd).reduce((a, e) => a + evCost(e.doc), 0);
-    const fixed = cur ? 0 : num(S.settings.fixedCost);
+    // this month: only fixed costs whose payday is still ahead (no payday set = already paid)
+    const fixed = cur ? fixedOn(y, m).filter(f => f.ymd >= todayYmd).reduce((a, f) => a + f.cost, 0) : num(S.settings.fixedCost);
     bal += inflow - outEv - fixed;
     out.push({k, y, m, inflow, outEv, fixed, bal, assumed});
   }
@@ -1977,8 +1980,10 @@ function viewHome(){
     : `<button type="button" class="mini" data-act="openSaving"><span class="mk">貯金の目標</span><span class="mv">—</span><span class="ms">目標を決めると毎月の貯金額を計算します</span></button>`;
 
   // upcoming spending in the viewed month
-  const evs = x.evs.filter(e => !isSpent(e) && (!isCur || e.ymd >= todayYmd));
+  const evs = x.evs.filter(e => !isSpent(e) && (!isCur || e.ymd >= todayYmd))
+    .concat(fixedOn(S.y, S.m).filter(f => !isCur || f.ymd >= todayYmd)).sort((a, b) => a.ymd.localeCompare(b.ymd));
   const upRows = evs.slice(0, 4).map(e => {
+    if (e.fixed) return `<div class="li"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b><span>固定費</span></span><span class="la">${yen(e.cost)}</span></div>`;
     const c = evCost(e.doc), [k] = evStatus(e.doc);
     const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>` : e.moved && e.moved.moved ? `<span>${movedNote(e.moved).replace(/[（）]/g, "")}</span>` : rj && c ? `<span>${esc(rj.name.replace(/（.*）/, ""))} ${dur(c / num(rj.wage))}ぶん</span>` : "";
     return `<div class="li"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span></div>`;
@@ -2101,7 +2106,7 @@ function savingHtml(x){
     <div class="tablewrap"><table class="proj"><thead><tr><th>月</th><th>入る</th><th>出る</th><th>月末の残高</th></tr></thead><tbody>
       ${proj.map(r => `<tr><td>${r.y !== now.y ? r.y + "/" : ""}${mName(r.y, r.m)}${r.k === todayKey ? "（今日以降）" : ""}</td><td>+${yen(r.inflow)}${r.assumed ? "*" : ""}</td><td>−${yen(r.outEv + r.fixed)}</td><td class="${r.bal < 0 ? "neg" : ""}">${yen(r.bal)}</td></tr>`).join("")}
     </tbody></table></div>
-    <div class="small muted">今後の振込（確定額かシフトの見込み）から、行事と固定費を引いて計算しています。今月分は今日より後の振込・行事だけを数え、今月の固定費は支払い済みとしています。まだ予算を入れていない行事は0円として扱います。${num(st.assumeIncome) ? `* はシフトも確定額もまだない月で、収入見込み ${yen(st.assumeIncome)} を使っています。` : "先の月はシフトを入れるまで収入0円になるので、下の「収入見込み」を入れると現実に近くなります。"}</div>
+    <div class="small muted">今後の振込（確定額かシフトの見込み）から、行事と固定費を引いて計算しています。今月分は今日より後の振込・行事・固定費（支払日を決めたもの）だけを数えています。まだ予算を入れていない行事は0円として扱います。${num(st.assumeIncome) ? `* はシフトも確定額もまだない月で、収入見込み ${yen(st.assumeIncome)} を使っています。` : "先の月はシフトを入れるまで収入0円になるので、下の「収入見込み」を入れると現実に近くなります。"}</div>
     <details ${dirty ? "open" : ""}><summary>残高・目標を変える</summary>${inputs}</details>
   </section>`;
 }
@@ -2755,17 +2760,18 @@ function viewEventsSpend(){
   }).join("");
   const ahead = singles.filter(e => !settled(e)), done = singles.filter(settled);
   // calendar: which days have spending, and the selected day's list
-  const byDay = {};
+  const byDay = {}, fixDay = {};
   for (const e of evs) (byDay[e.ymd] = byDay[e.ymd] || []).push(e);
+  for (const f of fixedOn(S.y, S.m)) (fixDay[f.ymd] = fixDay[f.ymd] || []).push(f);
   if (!S.evSel || !inPeriod(S.evSel, S.y, S.m)) S.evSel = inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start;
   const cal = calGrid("data-evday", S.evSel, key => {
-    const es = byDay[key] || [], c = es.reduce((a, e) => a + evCost(e.doc), 0);
-    return {html: es.length ? `<span class="evamt">${c ? shortYen(c) : "●"}</span>` : `<span class="evamt"></span>`, label: es.length ? `、行事${es.length}件 ${yen(c)}` : ""};
+    const es = byDay[key] || [], fs = fixDay[key] || [], c = es.reduce((a, e) => a + evCost(e.doc), 0) + fs.reduce((a, f) => a + f.cost, 0);
+    return {html: es.length || fs.length ? `<span class="evamt">${c ? shortYen(c) : "●"}</span>` : `<span class="evamt"></span>`, label: es.length || fs.length ? `、出費${es.length + fs.length}件 ${yen(c)}` : ""};
   });
-  const selEvs = byDay[S.evSel] || [];
+  const selEvs = byDay[S.evSel] || [], selFix = fixDay[S.evSel] || [];
   const calCard = `<section class="block evcal">${cal}${periodCtl("events")}
-    <div class="evday"><div class="sec-h"><h2>${md(S.evSel)}（${DOW[new Date(S.evSel + "T00:00:00Z").getUTCDay()]}）${selEvs.length ? ` ${yen(selEvs.reduce((a, e) => a + evCost(e.doc), 0))}` : ""}</h2><button type="button" class="primary small-btn" data-evadd="1" data-evymd="${S.evSel}">＋ この日に追加</button></div>
-      ${selEvs.length ? `<div class="list">${selEvs.map(e => isSpent(e) ? spentRow(e) : evRow(e, rj)).join("")}</div>` : `<span class="small muted">この日の行事はありません</span>`}</div></section>`;
+    <div class="evday"><div class="sec-h"><h2>${md(S.evSel)}（${DOW[new Date(S.evSel + "T00:00:00Z").getUTCDay()]}）${selEvs.length || selFix.length ? ` ${yen(selEvs.reduce((a, e) => a + evCost(e.doc), 0) + selFix.reduce((a, f) => a + f.cost, 0))}` : ""}</h2><button type="button" class="primary small-btn" data-evadd="1" data-evymd="${S.evSel}">＋ この日に追加</button></div>
+      ${selEvs.length || selFix.length ? `<div class="list">${selFix.map(fixRowHtml).join("")}${selEvs.map(e => isSpent(e) ? spentRow(e) : evRow(e, rj)).join("")}</div>` : `<span class="small muted">この日の行事はありません</span>`}</div></section>`;
   const doneTotal = done.reduce((a, e) => a + evCost(e.doc), 0);
   return `
   ${budgetCard}
@@ -2907,11 +2913,12 @@ function viewSettings(){
   } else if (tab === "spend"){
     body = `<section class="block">
       <div class="blockhead"><h2>固定費</h2><span class="num">${yen(fixTotal())} / 月</span></div>
-      <div class="small muted">スマホ代・サブスクなど、毎月決まって出ていくお金です。</div>
+      <div class="small muted">スマホ代・サブスクなど、毎月決まって出ていくお金です。支払日を決めると、行事のカレンダーとホームの「もうすぐ出ていくお金」に出て、貯金の見込みも支払日に合わせて計算します。</div>
       <div class="fixlist">${(s.fixedItems || []).map((f, i) => `<div class="fixrow">
         <input type="text" id="sf-n-${i}" data-fix="${i}" data-field="name" value="${esc(f.name)}" placeholder="名前" aria-label="名前">
         <input type="text" inputmode="decimal" id="sf-a-${i}" data-fix="${i}" data-field="amount" value="${esc(f.amount)}" placeholder="円" aria-label="金額">
-        <button type="button" class="ghost" data-act="delFix" data-i="${i}" aria-label="削除">×</button></div>`).join("")}
+        <button type="button" class="ghost" data-act="delFix" data-i="${i}" aria-label="削除">×</button>
+        <select id="sf-d-${i}" data-fix="${i}" data-field="day" class="fixday" aria-label="支払日">${fixDayOpts(f)}</select></div>`).join("")}
         <button type="button" data-act="addFix">＋ 固定費を追加</button></div>
     </section>
     <section class="block">
@@ -3266,6 +3273,7 @@ document.addEventListener("click", e => {
     migrateWalls(); migrateRates(); [S.y, S.m] = refreshToday(); saveLocal(); render(); toast("バックアップを読み込みました");
   }
   else if (act === "importNo"){ S.importPending = null; render(); }
+  else if (act === "gofix"){ S.tab = "settings"; S.setTab = "spend"; render(); window.scrollTo(0, 0); }
   else if (act === "addFix"){ (S.settings.fixedItems = S.settings.fixedItems || []).push({name: "", amount: ""}); S.settings.fixedCost = fixTotal(); putSettings("固定費の欄を追加しました"); setTimeout(() => { const el = document.getElementById("sf-n-" + (S.settings.fixedItems.length - 1)); if (el) el.focus(); }, 30); }
   else if (act === "delFix"){ S.settings.fixedItems.splice(Number(a.dataset.i), 1); S.settings.fixedCost = fixTotal(); putSettings("固定費を削除しました"); }
   else if (act === "syncshift") syncShift(id);
@@ -3364,7 +3372,7 @@ document.addEventListener("change", e => {
   } else if (t.dataset.fix !== undefined){
     const f = (S.settings.fixedItems || [])[Number(t.dataset.fix)], fld = t.dataset.field; if (!f) return;
     if (fld === "amount" && badNum(val)){ toast("数字で入力してください", "warn"); return; }
-    f[fld] = fld === "amount" ? (val === "" ? "" : num(val)) : String(val).trim();
+    f[fld] = fld === "amount" || fld === "day" ? (val === "" ? "" : num(val)) : String(val).trim();
     S.settings.fixedCost = fixTotal();
     putSettings(`「${esc(f.name || "固定費")}」を保存しました`);
   } else if (t.dataset.rec !== undefined){
@@ -3462,6 +3470,21 @@ const ONB_STEPS = ["ようこそ", "バイト先", "貯金目標", "固定費", 
 const FIX_PRESETS = [["スマホ代", 3000], ["サブスク", 1000], ["定期・交通費", 5000], ["家賃", 40000], ["ジム・習い事", 3000], ["部費・サークル費", 2000]];
 const newJob = () => Object.assign(newJobBase(), personaOf() === "worker" ? {payType: "salary", night: false, since: todayKey, netRate: 80, payOffset: 0} : {});
 const newJobBase = () => ({id: "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: "", payType: "hourly", wage: "", fixedPay: "", night: true, weekendExtra: 0, transport: "", cutoff: 0, payOffset: 1, payDay: 25, holidayShift: "prev", useLag: 1, calColor: "6"});
+/* 固定費の支払日: f.day = "" (未指定) | 1..28 | 99 (末日). Returns the date inside period (y, m), or null */
+function fixDate(f, y, m){
+  const D = num(f.day); if (!D) return null;
+  for (const off of [0, 1, -1]){
+    const [cy, cm] = addMonths(y, m, off), last = new Date(Date.UTC(cy, cm, 0)).getUTCDate(), d = D === 99 ? last : Math.min(D, last);
+    const ymd = `${cy}-${pad(cm)}-${pad(d)}`;
+    if (inPeriod(ymd, y, m)) return ymd;
+  }
+  return null;
+}
+const fixDayLabel = f => num(f.day) === 99 ? "末日" : num(f.day) ? `${num(f.day)}日` : "";
+const fixDayOpts = f => `<option value="">支払日 未指定</option>${Array.from({length: 28}, (_, k) => k + 1).map(d => `<option value="${d}" ${num(f.day) === d ? "selected" : ""}>毎月${d}日</option>`).join("")}<option value="99" ${num(f.day) === 99 ? "selected" : ""}>毎月末日</option>`;
+/* fixed costs with a payday in the viewed period, as list items */
+const fixedOn = (y, m) => (S.settings.fixedItems || []).filter(f => num(f.amount) > 0).map(f => { const ymd = fixDate(f, y, m); if (!ymd) return null; const [a, b, c] = ymd.split("-").map(Number); return {fixed: true, title: f.name || "固定費", ymd, d: c, dow: new Date(Date.UTC(a, b - 1, c)).getUTCDay(), cost: num(f.amount)}; }).filter(Boolean);
+const fixRowHtml = e => `<button type="button" class="li evbtn" data-act="gofix"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b><span>固定費</span></span><span class="la">${yen(e.cost)}</span><span class="chev" aria-hidden="true">›</span></button>`;
 const fixTotal = () => (S.settings.fixedItems || []).reduce((a, f) => a + num(f.amount), 0);
 function persist(){ S.settings.fixedCost = fixTotal(); saveLocal(); }
 function goalDraft(){ const st = S.settings; return S.goalDraft || (S.goalDraft = {balance: st.balance ?? "", goalAmount: st.goalAmount ?? "", goalMonth: st.goalMonth || "", assumeIncome: st.assumeIncome ?? ""}); }
