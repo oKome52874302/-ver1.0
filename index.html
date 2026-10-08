@@ -528,6 +528,8 @@ html,body{overflow-x:hidden}
 .cel-tip{font-size:13px;line-height:1.6;opacity:.9;margin:4px 0 2px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--surface) 70%,transparent);text-align:left}
 .cel-reward{font-size:13.5px;font-weight:900;margin-top:6px}
 .evseg{margin-bottom:2px}
+.fuyocard{display:flex;flex-direction:column;gap:6px;border:1px dashed var(--accent)}.fuyocard.bad{border:1px solid var(--bad)}.fuyocard.bad > b{color:var(--bad)}
+.taxret{display:flex;flex-direction:column;gap:4px;padding:12px;border-radius:12px;background:var(--bg);margin:8px 0}
 .wauto{font-size:14px}
 .jobbar{position:sticky;bottom:calc(84px + env(safe-area-inset-bottom, 0px));z-index:5;display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px -6px -6px;padding:10px;border-radius:14px;background:var(--surface);border:1px solid var(--line);box-shadow:0 4px 14px rgba(0,0,0,.08)}
 .jobbar{justify-content:flex-end}.jobbar [data-jobdirty]{flex:1 1 auto;color:var(--pop);font-weight:900}
@@ -1216,6 +1218,39 @@ const hourBase = j => num(j.salary) / Math.max(1, num(j.stdHours) || 160);
 /* ---------- summary ---------- */
 const hasVal = v => v !== undefined && v !== null && v !== "";
 /* Income paid in a month: per job, the amount the viewer confirmed (from the pay slip / bank) wins over the shift estimate. */
+/* 乙欄: a job without the 扶養控除等申告書 withholds more 所得税. 令和8年分 源泉徴収税額表（国税庁）の乙欄。
+   [下限/100, 税額, ...]; below the first row it is 3.063% (月額 105,000円未満・日額 3,500円未満). */
+const OTSU_M = [1050,3800,1070,3800,1090,3900,1110,4000,1130,4100,1150,4100,1170,4200,1190,4300,1210,4300,1230,4400,1250,4700,1270,5000,1290,5300,1310,5500,1330,5800,1350,6100,1370,6400,1390,6700,1410,7000,1430,7400,1450,7700,1470,8000,1490,8300,1510,8600,1530,8900,1550,9200,1570,9500,1590,9800,1610,10100,1630,10400,1650,10700,1670,11000,1690,11300,1710,11500,1730,11800,1750,12100,1770,12500,1790,12800,1810,13300,1830,14000,1850,14700,1870,15400,1890,16100,1910,16800,1930,17600,1950,18300,1970,19000,1990,19700,2010,20400,2030,21000,2050,21700,2070,22500,2090,23000,2110,23600,2130,24100,2150,24700,2170,25300,2190,25800,2210,26400,2240,27500,2270,28500,2300,29500,2330,30500,2360,31500,2390,32600,2420,33600,2450,34600,2480,35500,2510,36600,2540,37600,2570,38600,2600,39600,2630,40600,2660,41700,2690,42700,2720,43700,2750,44700,2780,45600,2810,46700,2840,47800,2870,48900,2900,50000,2930,51300,2960,52400,2990,53600,3020,54500,3050,55200,3080,56100,3110,56900,3140,57700,3170,58500,3200,59500,3230,60500,3260,61600,3290,62600,3320,63700,3350,64700,3380,65800,3410,66800,3440,67800,3470,68800,3500,69800,3530,70900,3560,71900,3590,72900,3620,73900,3650,74900,3680,76000,3710,76900,3740,77800,3770,78700,3800,79600,3830,80600,3860,82000,3890,83600,3920,85400,3950,87100,3980,88700,4010,90500,4040,92200,4070,93800,4100,95600,4130,97300,4160,98900,4190,100700,4220,102400,4250,104000,4280,105800,4310,107500,4340,109100,4370,110900,4400,112600,4430,114200,4460,116000,4490,117600,4520,119400,4550,121100,4580,122700,4610,124500,4640,126200,4670,127800,4700,129600,4730,131200,4760,132800,4790,134500,4820,136100,4850,137600,4880,139300,4910,140900,4940,142500,4970,144100,5000,145700,5030,147300,5060,149000,5090,150500,5120,152100,5150,153800,5180,155400,5210,156900,5240,158600,5270,160200,5300,161600,5330,163200,5360,164600,5390,166000,5420,167500,5450,169000,5480,170500,5510,171900,5540,173400,5570,174900,5600,176300,5630,177900,5660,179300,5690,180700,5720,182200,5750,183700,5780,185200,5810,186600,5840,188100,5870,189600,5900,191000,5930,192600,5960,194000,5990,195400,6020,197000,6050,198400,6080,199900,6110,201300,6140,202800,6170,204300,6200,205700,6230,207300,6260,208700,6290,210100,6320,211700,6350,213100,6380,214600,6410,215900,6440,217000,6470,218000,6500,219000,6530,220000,6560,221000,6590,222100,6620,223100,6650,224100,6680,225000,6710,226000,6740,227100,6770,228100,6800,229100,6830,230100,6860,231500,6890,233000,6920,234500,6950,236100,6980,237600,7010,239100,7040,240800,7070,242300,7100,243800,7130,245300,7160,246900,7190,248400,7220,250000,7250,251600,7280,253100,7310,254600,7340,256200,7370,257700], OTSU_M_END = 740000;
+const OTSU_D = [35,120,36,130,37,130,38,130,39,140,40,140,41,150,42,160,43,170,44,190,45,200,46,220,47,230,48,260,49,270,50,290,51,300,52,310,53,330,54,340,55,360,56,370,57,390,58,400,59,420,60,430,61,470,62,500,63,540,64,570,65,610,66,640,67,680,68,710,69,750,70,780,71,810,72,840,73,860,74,900,75,930,76,960,77,990,78,1030,79,1060,80,1090,81,1130,82,1160,83,1190,84,1240,85,1270,86,1300,87,1330,88,1370,89,1400,90,1430,91,1470,92,1500,93,1530,94,1570,95,1600,96,1640,97,1680,98,1730,99,1760,100,1800,101,1830,102,1850,103,1880,104,1910,105,1930,106,1960,107,2000,108,2030,109,2060,110,2100,111,2130,112,2160,113,2210,114,2240,115,2270,116,2310,117,2340,118,2370,119,2410,120,2440,121,2470,122,2510,123,2540,124,2570,125,2600,126,2630,127,2660,128,2700,129,2750,130,2810,131,2870,132,2920,133,2980,134,3030,135,3090,136,3140,137,3210,138,3260,139,3320,140,3380,141,3430,142,3490,143,3540,144,3600,145,3660,146,3720,147,3770,148,3830,149,3880,150,3940,151,4000,152,4050,153,4110,154,4170,155,4230,156,4280,157,4340,158,4390,159,4440,160,4500,161,4550,162,4600,163,4660,164,4720,165,4770,166,4820,167,4870,168,4930,169,4980,170,5030,171,5080,172,5150,173,5200,174,5250,175,5300,176,5360,177,5400,178,5450,179,5500,180,5550,181,5610,182,5650,183,5700,184,5750,185,5800,186,5850,187,5890,188,5940,189,5990,190,6040,191,6100,192,6140,193,6190,194,6240,195,6290,196,6340,197,6380,198,6430,199,6480,200,6530,201,6590,202,6630,203,6680,204,6730,205,6780,206,6830,207,6870,208,6920,209,6970,210,7020,211,7080,212,7120,213,7170,214,7210,215,7250,216,7280,217,7310,218,7340,219,7380,220,7410,221,7440,222,7480,223,7510,224,7550,225,7590,226,7620,227,7650,228,7680,229,7730,230,7780,231,7830,232,7880,233,7940,234,7990,235,8050,236,8100,237,8150,238,8200,239,8250], OTSU_D_END = 24000;
+function otsuTax(x, tbl, endHi, first, topRate){
+  x = Math.floor(x); if (x <= 0) return 0;
+  if (x < first) return Math.floor(x * 0.03063);
+  let tax = 0;
+  for (let i = 0; i < tbl.length; i += 2){ if (x >= tbl[i] * 100) tax = tbl[i + 1]; else break; }
+  if (x >= endHi) tax += Math.floor((x - endHi) * topRate);   // beyond the table (rare for part-time pay): a rough top rate
+  return tax;
+}
+const otsuMonth = x => otsuTax(x, OTSU_M, 740000, 105000, 0.45945);
+const otsuDay = x => otsuTax(x, OTSU_D, 24000, 3500, 0.40);
+/* j.fuyo: "yes" = 扶養控除等申告書を出した（甲欄）, "no" = 出していない（乙欄）, "" = わからない */
+function isOtsu(j){
+  if (!j || j.payType === "salary") return false;
+  if (j.fuyo === "yes") return false;
+  if (j.fuyo === "no") return true;
+  const pt = S.settings.jobs.filter(x => x.payType !== "salary");
+  if (pt.length < 2) return false;
+  // unknown: assume it went to a job marked "出した", or else to the first job
+  return pt.some(x => x.fuyo === "yes") || pt[0].id !== j.id;
+}
+/* 所得税 withheld under 乙欄 from one month's pay of a job (pay minus 交通費). 月払い: 月額表, 日払い: 日額表, 週払い: 日額表の7倍 */
+function otsuWithheld(j, xs, est, tr){
+  if (!isOtsu(j)) return 0;
+  const f = freqOf(j);
+  if (f === "monthly") return otsuMonth(Math.max(0, est - tr));
+  const by = {};
+  for (const s of xs){ const k = `${s.pd.y}-${s.pd.m}-${s.pd.d}`; by[k] = (by[k] || 0) + s.pay - s.transport; }
+  return Object.values(by).reduce((a, v) => a + (f === "weekly" ? otsuDay(v / 7) * 7 : otsuDay(v)), 0);
+}
 function monthIncome(y, m, shifts){
   const key = `${y}-${pad(m)}`, doc = S.income[key] || {}, conf = doc.jobs || {};
   const payIn = (shifts || allShifts()).filter(s => s.pd.key === key);
@@ -1245,6 +1280,10 @@ function monthIncome(y, m, shifts){
       est = Math.floor((sal + ot) * netRateOf(j) / 100) + tr + bonus;
     }
     const confirmed = hasVal(conf[j.id]);
+    // 乙欄 所得税: estimated pay is shown after it; a typed (deposited) amount already has it taken off
+    let wh = j.payType === "salary" ? 0 : otsuWithheld(j, xs, est, tr);
+    if (!xs.length && confirmed && isOtsu(j) && freqOf(j) === "monthly" && num(conf[j.id]) < 100000) wh = Math.floor(num(conf[j.id]) * 0.03063 / (1 - 0.03063));
+    est = Math.max(0, est - (xs.length ? wh : 0));
     const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
     // several payouts a month: show the next one still to come, else the last one
     const nextPd = pds.length ? (xs.find(s => ymdOf(s.pd) === (pds.find(k => k >= todayYmd) || pds[pds.length - 1])) || xs[0]).pd : null;
@@ -1257,7 +1296,7 @@ function monthIncome(y, m, shifts){
         if (!a || inPeriod(`${cy}-${pad(cm)}-${pad(sd)}`, y, m)){ a = b; if (inPeriod(`${cy}-${pad(cm)}-${pad(sd)}`, y, m)) break; }
       }
       return Object.assign(a, {key}); })();
-    return {job: j, freq, payouts: pds.length, fee, sal, ot, bonus, alw, alwHitM, n: xs.length, hours: xs.reduce((a, s) => a + s.paid, 0), est, tr, confirmed, conf: confirmed ? num(conf[j.id]) : null, used: confirmed ? num(conf[j.id]) : est, pd};
+    return {job: j, freq, payouts: pds.length, fee, wh, sal, ot, bonus, alw, alwHitM, n: xs.length, hours: xs.reduce((a, s) => a + s.paid, 0), est, tr, confirmed, conf: confirmed ? num(conf[j.id]) : null, used: confirmed ? num(conf[j.id]) : est, pd};
   });
   const others = Array.isArray(doc.others) ? doc.others : [];
   const othersTotal = others.reduce((a, o) => a + num(o.amount), 0);
@@ -1667,11 +1706,11 @@ function summary(y, m){
   const fixed = num(S.settings.fixedCost), save = savingFor(y, m), wish = wishMonthTotal(key);
   const free = income - fixed - save - wish;
   const left = free - evTotal;
-  let yearTr = 0, yearSum = 0;
+  let yearTr = 0, yearSum = 0, yearWh = 0, yearOtsu = 0;
   // 年収 = pay that actually arrives Jan 1 – Dec 31 (periods can straddle the new year), plus other income that is 所得
   for (let i = 0; i <= 12; i++){
     const [py, pm] = addMonths(y, 0, i), r = monthIncome(py, pm, shifts);
-    for (const row of r.rows) if (row.pd.y === y){ yearSum += row.used; if (!row.confirmed) yearTr += row.tr; }
+    for (const row of r.rows) if (row.pd.y === y){ yearSum += row.used + row.wh; yearWh += row.wh; if (!row.confirmed) yearTr += row.tr; if (isOtsu(row.job)) yearOtsu += row.used + row.wh - (row.confirmed ? 0 : row.tr); }
     if (py === y) yearSum += r.othersWork;
   }
   const yearPay = yearSum - yearTr + num(S.settings.otherIncome), yearPayAll = yearSum + num(S.settings.otherIncome);
@@ -1680,7 +1719,7 @@ function summary(y, m){
   const workedPay = worked.reduce((a, s) => a + s.pay, 0);
   const pds = [...new Set(worked.map(s => `${s.pd.m}/${s.pd.d}`))];
   const workedPd = pds.length === 1 ? `${pds[0]}支給` : pds.length ? `${pds.join("・")}支給` : "";
-  return {key, mi, payIn, income, trIn, yearTr, workedPay, workedPd, byJob, evs, evTotal, fixed, save, wish, free, left, yearPay, yearPayAll, missingRate};
+  return {key, mi, payIn, income, trIn, yearTr, yearWh, yearOtsu, workedPay, workedPd, byJob, evs, evTotal, fixed, save, wish, free, left, yearPay, yearPayAll, missingRate};
 }
 
 /* ---------- notices ---------- */
@@ -1785,7 +1824,7 @@ function viewHome(){
       <div class="main"><div class="title"><span class="jdot" style="--jc:${jColor(r.job.id)}"></span>${esc(r.job.name)}</div>${r.pd.moved ? `<div class="sub">振込日 ${r.pd.m}/${r.pd.d}${movedNote(r.pd)}</div>` : ""}
         <div class="sub"><span class="chip">${r.lag ? `${r.srcM}月振込分` : "今月振込分"}</span> ${r.confirmed ? `<span class="chip good">確定</span>` : r.est ? `<span class="chip">見込み</span>` : `<span class="chip warn">未入力</span>`}
           ${r.job.payType === "salary" ? (r.sal || r.ot || r.bonus ? [r.sal ? `月給 ${yen(r.sal)}` : "", r.ot ? `残業 ${yen(r.ot)}` : "", r.bonus ? `ボーナス ${yen(r.bonus)}` : "", r.tr ? `通勤手当 ${yen(r.tr)}` : ""].filter(Boolean).join("＋") + ` → 手取り目安 ${yen(r.est)}（額面の${netRateOf(r.job)}%）` : "この月の振込なし")
-            : r.n ? `シフト${r.n}回・実働 ${dur(r.hours)} → 見込み ${yen(r.est)}${r.tr ? `（交通費 ${yen(r.tr)} 含む）` : ""}${r.fee ? `・手数料 −${yen(r.fee)}` : ""}${r.alw ? `・手当 +${yen(r.alw)}（${r.alwHitM.map(a => esc(a.name || "手当")).join("・")}）` : ""}` : "シフト入力なし"}
+            : r.n ? `シフト${r.n}回・実働 ${dur(r.hours)} → 見込み ${yen(r.est)}${r.tr ? `（交通費 ${yen(r.tr)} 含む）` : ""}${r.fee ? `・手数料 −${yen(r.fee)}` : ""}${r.alw ? `・手当 +${yen(r.alw)}（${r.alwHitM.map(a => esc(a.name || "手当")).join("・")}）` : ""}${r.wh ? `・所得税（乙欄）−${yen(r.wh)}` : ""}` : "シフト入力なし"}
           ${r.confirmed && r.n && r.conf !== r.est ? `・差 ${r.conf - r.est > 0 ? "+" : "−"}${yen(Math.abs(r.conf - r.est))}` : ""}</div></div>
       <div class="amt">${yen(r.used)}</div>
       <div class="edit"><label class="inline">確定額 <input type="text" inputmode="decimal" id="ij-${esc(r.job.id)}-${r.srcKey}" data-inc-job="${esc(r.job.id)}" data-inc-key="${r.srcKey}" value="${r.confirmed ? esc(r.conf) : ""}" placeholder="${r.est ? esc(r.est) : "円"}"></label>
@@ -1859,6 +1898,13 @@ function viewHome(){
   return `
   ${warn.map(w => `<div class="notice warn"><div>${w}</div></div>`).join("")}
   ${hero}
+  ${(() => {
+    // 1/1〜3/15: last year's 乙欄 tax can be claimed back
+    if (now.m > 3 || (now.m === 3 && now.d > 15)) return "";
+    const ly = now.y - 1, done = (S.settings.taxNote || {})[ly]; if (done) return "";
+    const lx = summary(ly, 12); if (!lx.yearWh || lx.yearPay > 1780000) return "";
+    return `<div class="notice backupnote"><div><b>${ly}年分の確定申告で、約${yen(lx.yearWh)}戻るかもしれません</b><br><span class="small">掛け持ちの乙欄で引かれた所得税です。源泉徴収票をそろえて、税務署かe-Taxで還付申告をしましょう（5年以内ならいつでも）。</span></div><div class="dayform"><button type="button" class="primary small-btn" data-act="taxnote" data-v="done">申告した</button><button type="button" class="ghost small-btn" data-act="taxnote" data-v="later">今は閉じる</button></div></div>`;
+  })()}
   ${backupDue() ? `<div class="notice backupnote"><div><b>${S.settings.lastBackup ? `最後のバックアップから${daysSince(S.settings.lastBackup)}日たちました` : "まだバックアップがありません"}</b><br><span class="small">機種変更やデータの消失に備えて、ファイルに書き出しておきましょう。</span></div><div class="dayform"><button type="button" class="primary small-btn" data-act="exportData" data-from="home">書き出す</button><button type="button" class="ghost small-btn" data-act="backupLater">あとで</button></div></div>` : ""}
   ${false ? `<div class="notice warn"><div>${yen(-x.left)} 足りません。${esc(rj.name)}であと<b>約${Math.ceil(-x.left / num(rj.wage))}時間</b>働くか、行事の予算を見直しましょう。</div></div>` : ""}
   ${(() => { const ms = waiting ? [] : missing; return ms.length ? `<button type="button" class="notice warn incnote" data-incopen="budget"><div><b>${mName()}に使う給料の金額が入っていません</b><br><span class="small">${ms.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}。シフトを入れていなくても、金額だけ入れられます。</span></div><span class="incgo">入力する ›</span></button>` : ""; })()}
@@ -1891,9 +1937,21 @@ function viewHome(){
   ${walls.length ? `<details class="more" ${S.openMore === "wall" ? "open" : ""} data-more="wall"><summary>${S.y}年の収入と「年収の壁」<span class="sv">${nextWall ? `次まで ${yen(nextWall.amount - wallVal(nextWall, x))}` : "すべて超過"}</span></summary><div class="inner">
     <div class="blockhead"><span class="num">${yen(x.yearPay)}</span><span class="small muted">交通費込み ${yen(x.yearPayAll)}</span></div>
     ${wallRows}
+    ${taxReturnHtml(x, S.y)}
     <div class="small muted">振込月ベース（1〜12月に振り込まれた分）で集計しています。税金の壁は交通費（通勤手当）を除き、社会保険の壁は含めて判定します。金額は2026年分の目安で、制度は毎年のように変わるので、勤務先や家族の勤務先にも確認してください。表示する壁は設定で選べます。</div>
   </div></details>` : ""}
   ${incSheetHtml()}`;
+}
+/* 乙欄で引かれた所得税は、年収が少なければ確定申告（還付申告）でほぼ戻る */
+function taxReturnHtml(x, y){
+  if (!x.yearWh) return "";
+  const gross = x.yearPay, free = gross <= 1780000;
+  // 国税庁 No.1900: 年末調整されない給与が20万円超で原則申告。給与の合計−所得控除（基礎控除などを除く）が150万円以下なら不要
+  const must = x.yearOtsu > 200000 && gross > 1500000;
+  return `<div class="taxret"><b>確定申告で戻るかも：${y}年に乙欄で引かれる所得税 約${yen(x.yearWh)}</b>
+    <span class="small">${free ? `${y}年の年収が178万円以下なら所得税はかからないので、${y + 1}年1月以降に確定申告（還付申告）をすると、引かれた分がほぼ戻ります。5年以内なら後からでも申告できます。` : `年収が178万円を超えると所得税がかかるので、戻るのは一部か、追加で払うこともあります。`}
+    ${must ? `年末調整をしないバイト先の給料が年20万円を超え、年収も150万円を超えるので、確定申告が必要になる見込みです（社会保険料などを払っている場合は変わります）。` : ""}
+    必要なもの：各バイト先の源泉徴収票（年末〜1月ごろにもらえます）。金額は目安です。</span></div>`;
 }
 function savingHtml(x){
   const st = S.settings, p = savingPlan();
@@ -2540,6 +2598,20 @@ function viewEventsSpend(){
   ${evSheetHtml()}${incSheetHtml()}`;
 }
 
+/* 掛け持ち: the 扶養控除等申告書 goes to one job only; many students lose track of where it went */
+const FUYO_HOW = `<details class="moveguide"><summary>どこに出したか分からないときの確かめ方</summary><ol class="steps">
+  <li><b>給与明細の「所得税」を見る</b><span>月の給料が10.5万円未満の月で、所得税が<b>0円</b>なら出している（甲欄）、給料の<b>約3%</b>（5万円なら1,531円）引かれていれば出していない（乙欄）です。</span></li>
+  <li><b>分からなければ聞く</b><span>店長や事務の人に「扶養控除等申告書って、こちらに出していますか？」と聞けばOKです。</span></li>
+  <li><b>出せるのは1か所だけ</b><span>ふつうは一番多くかせぐバイト先に出します。働き始めと、毎年の年末（翌年分）に書く紙です。</span></li></ol></details>`;
+function fuyoCard(){
+  const pt = S.settings.jobs.filter(j => j.payType !== "salary"); if (pt.length < 2) return "";
+  const yes = pt.filter(j => j.fuyo === "yes"), unk = pt.filter(j => !j.fuyo);
+  if (yes.length >= 2) return `<section class="block fuyocard bad"><b>扶養控除等申告書が${yes.length}か所になっています</b>
+    <span class="small">${yes.map(j => esc(j.name)).join("・")}。出せるのは1か所だけです。どちらか1か所に決めて、もう一方には「扶養控除等申告書を取り下げたい」と伝えましょう。2か所で年末調整されると、年収によっては後で確定申告で税金を払うことになります。</span>${FUYO_HOW}</section>`;
+  if (unk.length) return `<section class="block fuyocard"><b>掛け持ちの確認：扶養控除等申告書はどこに出した？</b>
+    <span class="small">出していないバイト先では所得税が多めに引かれます（乙欄）。今は「${esc((pt.find(j => !isOtsu(j)) || pt[0]).name)}に出した」と仮定して計算しています。各バイト先を開いて選んでください。</span>${FUYO_HOW}</section>`;
+  return "";
+}
 function jobLive(i){
   const j = S.settings.jobs[i]; if (!j) return "";
   if (j.payType === "salary"){
@@ -2612,6 +2684,8 @@ function viewSettings(){
         ${j.payType === "fixed" ? "" : `<div class="f brkbox"><span>いつもの休憩<span class="small muted">（シフトの休憩欄が空欄のとき自動で入ります）</span></span>
           ${brkRows(j).map((r, k) => `<div class="brkrow">実働<input type="text" inputmode="decimal" id="jbo-${i}-${k}" data-brkjob="${i}" data-brk="${k}" data-bf="over" value="${esc(num(r.over) ? r.over : "")}" placeholder="6" aria-label="実働何時間を超えたら">時間を超えたら<input type="text" inputmode="decimal" id="jbm-${i}-${k}" data-brkjob="${i}" data-brk="${k}" data-bf="min" value="${esc(num(r.min) ? r.min : "")}" placeholder="45" aria-label="休憩（分）">分<button type="button" class="ghost" data-act="delbrk" data-id="${esc(j.id)}" data-k="${k}" aria-label="この段を削除">×</button></div>`).join("")}
           <div><button type="button" class="link" data-act="addbrk" data-id="${esc(j.id)}">＋ ${brkRows(j).length ? "段を追加（例：8時間を超えたら60分）" : "いつもの休憩を決める"}</button></div></div>`}
+        ${j.payType !== "salary" && s.jobs.filter(x => x.payType !== "salary").length >= 2 ? `<label class="f">扶養控除等申告書（年末調整の紙）をこのバイト先に<select id="jfy-${i}" data-job="${i}" data-field="fuyo">${[["yes", "出した"], ["no", "出していない"], ["", "わからない"]].map(([v, n]) => `<option value="${v}" ${(j.fuyo || "") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+          <div class="small muted">${isOtsu(j) ? `出していないバイト先として、所得税（乙欄・約3%〜）を引いた手取りで計算しています${j.fuyo ? "" : "（仮）"}。` : `出したバイト先として計算しています${j.fuyo ? "" : "（仮）"}。`}</div>` : ""}
         ${j.payType === "salary" ? "" : `<div class="small muted">昇給したら、${j.payType === "fixed" ? "1回の金額" : "時給"}を新しい額に変えて「保存する」。いつからかを聞くので、前のシフトは前の額のまま計算されます。</div>`}
         ${freqOf(j) === "monthly" ? `<div class="f">給料日${cycleEditor(j, i, "set")}</div>` : `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>`}
         <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
@@ -2620,7 +2694,7 @@ function viewSettings(){
         <div class="jobbar" data-jobbar><span class="small" data-jobdirty ${S.jobDirty ? "" : "hidden"}>まだ保存されていません</span>
           <button type="button" class="ghost" data-jobsave="revert" ${S.jobDirty ? "" : "disabled"}>元に戻す</button><button type="button" class="primary" data-jobsave="save" ${S.jobDirty ? "" : "disabled"}>保存する</button></div>
       </div>`; }).join("");
-    body = `<section class="block">
+    body = `${fuyoCard()}<section class="block">
       <div class="blockhead"><h2>${jobWord()}</h2><button class="primary" data-act="addjob">＋ 追加</button></div>
       <div class="joblist">${jobs || `<div class="empty">${jobWord()}がありません。「＋ 追加」から登録してください。</div>`}</div>
       <div class="small muted">タップすると時給や給料日を変えられます。変えたら「保存する」を押してください。</div>
@@ -2930,6 +3004,7 @@ document.addEventListener("click", e => {
     S.confirmDel = null; S.settings.recurring = (S.settings.recurring || []).filter(r => r.id !== id); putSettings("毎月の行事を削除しました");
   }
   else if (act === "fab"){ document.getElementById("sheet").hidden = false; const o = document.querySelector("#sheet .opt"); if (o) o.focus(); }
+  else if (act === "taxnote"){ S.settings.taxNote = Object.assign({}, S.settings.taxNote, {[now.y - 1]: a.dataset.v === "done" ? todayYmd : "later"}); putSettings(a.dataset.v === "done" ? "おつかれさまでした！" : "閉じました（年収の壁の画面でいつでも見られます）"); }
   else if (act === "gowish"){ S.tab = "events"; S.evView = "wish"; render(); window.scrollTo(0, 0); }
   else if (act === "evview"){ S.evView = a.dataset.v; render(); window.scrollTo(0, 0); }
   else if (act === "openSaving"){ S.openMore = "saving"; render(); const el = document.getElementById("hGb"); if (el){ el.scrollIntoView({block: "center"}); el.focus(); } }
@@ -3064,7 +3139,7 @@ document.addEventListener("change", e => {
   } else if (t.dataset.job){
     const j = S.settings.jobs[Number(t.dataset.job)], f = t.dataset.field;
     if (t.type !== "checkbox" && t.tagName !== "SELECT"){ clearTimeout(typingTimer); if (f !== "name" && f !== "since" && badNum(val)) return; }
-    j[f] = (t.type === "checkbox" || ["name","payType","calColor","holidayShift","since"].includes(f)) ? val : num(val);
+    j[f] = (t.type === "checkbox" || ["name","payType","calColor","holidayShift","since","fuyo"].includes(f)) ? val : num(val);
     if (f === "payType" && val === "salary") toSalary(j);
     if (f === PAY_FIELD.hourly || f === PAY_FIELD.fixed || f === PAY_FIELD.salary){ editTodayAmount(j, f); S.jobAmtTyped = true; }
     putSettings(`「${esc(j.name)}」を保存しました`);
