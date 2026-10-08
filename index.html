@@ -405,6 +405,11 @@ details.more section.block{padding:0;background:none}
 .day[aria-pressed="true"]{background:var(--ink);color:var(--surface);border:none;padding:2px}
 .day[aria-pressed="true"] .dn{color:var(--surface)}
 .day .dots{display:flex;gap:2px;height:6px}
+.day .evamt{font-size:10px;font-weight:900;line-height:1;height:10px;color:var(--pop);white-space:nowrap}
+.day[aria-pressed="true"] .evamt{color:var(--gold)}
+.pctl{margin-top:8px;font-size:13px}.pctl summary{display:flex;justify-content:space-between;gap:8px;cursor:pointer;color:var(--muted);list-style:none}
+.pctl summary::-webkit-details-marker{display:none}.pctl[open]{display:flex;flex-direction:column;gap:6px}
+.evcal{display:flex;flex-direction:column;gap:4px}.evday{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding-top:10px;border-top:1px solid var(--line)}.evday h2{font-size:16px;margin:0}
 .day .dots i{width:6px;height:6px;border-radius:50%;background:var(--jc)}
 .day[aria-pressed="true"] .dots i{box-shadow:0 0 0 1.5px var(--surface)}
 .pills{display:flex;flex-wrap:wrap;gap:6px}
@@ -2084,6 +2089,27 @@ function syncChip(s){
   if (s.rec.calSync === "ok") return `<span class="chip good">カレンダー反映済</span>`;
   return `<span class="chip ${s.rec.calSync === "error" ? "bad" : "warn"}">${s.rec.calSync === "error" ? "反映失敗" : "未反映"}</span><button data-act="syncshift" data-id="${esc(s.id)}" ${mcp ? "" : "disabled"}>反映</button>`;
 }
+/* 月の区切り日, changeable right where the calendar is (same setting as 設定 › その他) */
+function periodCtl(id){
+  const sd = startDay(), pr = periodRange(S.y, S.m);
+  return `<details class="pctl" data-more="pctl-${id}" ${S.openMore === "pctl-" + id ? "open" : ""}><summary><span>${md(pr.start)}〜${md(pr.end)}</span><span class="linkish">区切り：${sd === 1 ? "1日（ふつうの月）" : `${sd}日`} ›</span></summary>
+    <label class="f">1か月の始まりの日<select id="pctl-${id}" data-set="monthStart">${Array.from({length: 28}, (_, k) => k + 1).map(v => `<option value="${v}" ${sd === v ? "selected" : ""}>${v === 1 ? "1日（ふつうの月）" : `${v}日〜翌月${v - 1}日`}</option>`).join("")}</select></label>
+    <span class="small muted">給料日に合わせると使いやすくなります（例：25日払いなら25日）。シフト・行事・使えるお金の計算がすべてこの区切りになります。</span></details>`;
+}
+/* the viewed period as a month grid; cell(key, i) returns the inside of each day button */
+function calGrid(attr, sel, cell){
+  const pr = periodRange(S.y, S.m), t0 = Date.UTC(S.y, S.m - 1, startDay()), first = new Date(t0).getUTCDay();
+  let cells = DOW.map((w, i) => `<div class="wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</div>`).join("");
+  for (let i = 0; i < first; i++) cells += `<div class="day blank" aria-hidden="true"></div>`;
+  for (let t = t0, i = 0; i < 32; t += 864e5, i++){
+    const x = new Date(t), cm = x.getUTCMonth() + 1, d = x.getUTCDate(), key = `${x.getUTCFullYear()}-${pad(cm)}-${pad(d)}`;
+    if (key > pr.end) break;
+    const c = cell(key);
+    cells += `<button class="day ${key === todayYmd ? "today" : ""}" ${attr}="${key}" aria-pressed="${key === sel}" aria-label="${cm}月${d}日${c.label || ""}"><span class="dn">${d === 1 && i > 0 ? `${cm}/1` : d}</span>${c.html}</button>`;
+  }
+  return `<div class="cal">${cells}</div>`;
+}
+const shortYen = c => c >= 10000 ? `${(Math.round(c / 1000) / 10).toString()}万` : c >= 1000 ? `${Math.round(c / 1000)}千` : `${Math.round(c)}円`;
 function viewShifts(){
   const jobs = S.settings.jobs;
   const list = allShifts().filter(s => inPeriod(s.ev.ymd, S.y, S.m));
@@ -2144,6 +2170,7 @@ function viewShifts(){
   <section class="block">
     ${(() => { const pend = list.filter(x => needsSync(x.rec) && !syncing.has(x.id)); return S.settings.calSync && pend.length && mcp ? `<div class="notice warn"><div>Google カレンダーに未反映のシフトが ${pend.length}件 あります。</div><button data-act="syncmonth">まとめて反映</button></div>` : ""; })()}
     <div class="cal">${cells}</div>
+    ${periodCtl("shifts")}
     ${jobs.length > 1 ? `<div class="legend" style="justify-content:center">${perJob}</div>` : ""}
   </section>
   ${incSheetHtml()}
@@ -2253,7 +2280,7 @@ const EV_FIELDS = [["title", "行事名"], ["ymd", "日付"], ["budget", "予算
 function openEvEditor(id){
   const groupDefault = S.evDraft && S.evDraft.group || "";
   if (!id){
-    const ymd = inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start;
+    const ymd = S.evDraft && S.evDraft.ymd || (inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start);
     const v = {title: "", ymd, budget: "", actual: "", group: groupDefault, memo: ""};
     S.evEdit = {id: null, kind: "manual", v, orig: Object.assign({}, v), step: "edit"};
   } else {
@@ -2319,7 +2346,7 @@ function saveEvEditor(){
   if (!ed.id){
     const id = "m" + Date.now().toString(36);
     S.evDraft = {group: clean("group")};
-    S.evEdit = null;
+    S.evEdit = null; if (inPeriod(v.ymd, S.y, S.m)) S.evSel = v.ymd;
     const where = inPeriod(v.ymd, S.y, S.m) ? "" : `（${mName(...periodOf(...v.ymd.split("-").map(Number)))}に入りました）`;
     putDoc("events", id, {manual: true, included: true, title: clean("title"), ymd: v.ymd, budget: money("budget"), actual: "", memo: clean("memo"), group: clean("group")}, `「${esc(clean("title"))}」を保存しました${where}`);
     return;
@@ -2341,7 +2368,9 @@ document.addEventListener("click", e => {
   const row = e.target.closest("[data-evedit]");
   if (row){ e.stopPropagation(); openEvEditor(row.dataset.evedit); return; }
   const add = e.target.closest("[data-evadd]");
-  if (add){ e.stopPropagation(); S.evDraft = {group: add.dataset.evgroup || ""}; openEvEditor(null); return; }
+  if (add){ e.stopPropagation(); S.evDraft = {group: add.dataset.evgroup || "", ymd: add.dataset.evymd || ""}; openEvEditor(null); return; }
+  const evd = e.target.closest("[data-evday]");
+  if (evd){ e.stopPropagation(); S.evSel = evd.dataset.evday; render(); return; }
   const b = e.target.closest("[data-evs]"); if (!b || !S.evEdit) return;
   const a = b.dataset.evs, ed = S.evEdit;
   if (a === "backdrop" && e.target !== b) return;   // taps inside the panel are not the backdrop
@@ -2602,9 +2631,22 @@ function viewEventsSpend(){
     </section>`;
   }).join("");
   const ahead = singles.filter(e => !settled(e)), done = singles.filter(settled);
+  // calendar: which days have spending, and the selected day's list
+  const byDay = {};
+  for (const e of evs) (byDay[e.ymd] = byDay[e.ymd] || []).push(e);
+  if (!S.evSel || !inPeriod(S.evSel, S.y, S.m)) S.evSel = inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start;
+  const cal = calGrid("data-evday", S.evSel, key => {
+    const es = byDay[key] || [], c = es.reduce((a, e) => a + evCost(e.doc), 0);
+    return {html: es.length ? `<span class="evamt">${c ? shortYen(c) : "●"}</span>` : `<span class="evamt"></span>`, label: es.length ? `、行事${es.length}件 ${yen(c)}` : ""};
+  });
+  const selEvs = byDay[S.evSel] || [];
+  const calCard = `<section class="block evcal">${cal}${periodCtl("events")}
+    <div class="evday"><div class="sec-h"><h2>${md(S.evSel)}（${DOW[new Date(S.evSel + "T00:00:00Z").getUTCDay()]}）${selEvs.length ? ` ${yen(selEvs.reduce((a, e) => a + evCost(e.doc), 0))}` : ""}</h2><button type="button" class="primary small-btn" data-evadd="1" data-evymd="${S.evSel}">＋ この日に追加</button></div>
+      ${selEvs.length ? `<div class="list">${selEvs.map(e => evRow(e, rj)).join("")}</div>` : `<span class="small muted">この日の行事はありません</span>`}</div></section>`;
   const doneTotal = done.reduce((a, e) => a + evCost(e.doc), 0);
   return `
   ${budgetCard}
+  ${calCard}
   ${groupCards}
   <div class="sec">
     <div class="sec-h"><h2>${gList.length ? "そのほかの出費" : "これからの出費"}</h2><button type="button" class="primary small-btn" data-evadd="1">＋ 行事を追加</button></div>
