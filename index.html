@@ -1208,8 +1208,22 @@ const WALLS = [
   {id: "tax178",     amount: 1780000, tr: false, name: "自分に所得税がかかり始める",      note: ""}
 ];
 const WALL_DEF = {student: ["shaho150", "tokutei159", "tax178"], part: ["shaho130", "fuyo136", "spouse169", "tax178"], worker: []};
+/* the walls the viewer ticked, adjusted to what applies: 19〜22歳 only for 150万/特定親族, and whose 扶養 */
+function wallIds(){
+  const st = S.settings; let on = Array.isArray(st.walls) ? st.walls.slice() : [];
+  const by = num(st.birthYear);
+  if (by > 1900){
+    const age = S.y - by;   // as of Dec 31 of the year shown
+    if (age < 19 || age > 22) on = on.map(id => id === "shaho150" ? "shaho130" : id === "tokutei159" ? "fuyo136" : id);
+  }
+  const who = st.fuyoOf;
+  if (who === "none") on = on.filter(id => !/^(shaho|fuyo136|tokutei159|spouse169)/.test(id));
+  if (who === "parent") on = on.filter(id => id !== "spouse169");
+  if (who === "spouse") on = on.filter(id => id !== "tokutei159");
+  return [...new Set(on)];
+}
 function wallList(){
-  const st = S.settings, on = Array.isArray(st.walls) ? st.walls : [];
+  const st = S.settings, on = wallIds();
   const ws = WALLS.filter(w => on.includes(w.id)).map(w => Object.assign({}, w));
   if (num(st.wallCustom)) ws.push({id: "custom", amount: num(st.wallCustom), tr: !!st.wallTransport, name: "自分で決めた上限", note: ""});
   return ws.sort((a, b) => a.amount - b.amount);
@@ -1814,7 +1828,8 @@ function nextPayday(shifts){
     const [y, m] = addMonths(Number(todayKey.slice(0, 4)), Number(todayKey.slice(5, 7)), i), [py, pm] = addMonths(y, m, -1), prev = monthIncome(py, pm, shifts).rows;
     for (const r0 of monthIncome(y, m, shifts).rows){
       const r = Object.assign({}, r0, {key: `${y}-${pad(m)}`});   // the period the pay belongs to, for entering its amount
-      const regular = r.freq === "monthly" && prev.some(q => q.job.id === r.job.id && q.used);
+      // かんたんモード: every monthly job is paid every month even before an amount is typed
+      const regular = r.freq === "monthly" && (isSimple() || prev.some(q => q.job.id === r.job.id && q.used));
       if (!r.used && !regular) continue;
       const ymd = `${r.pd.y}-${pad(r.pd.m)}-${pad(r.pd.d)}`;
       if (ymd < todayYmd) continue;
@@ -1889,7 +1904,7 @@ function viewHome(){
   // next payday + savings
   const np = nextPayday(shifts);
   const npHtml = np ? `<div class="mini ${np.rows.some(r => !r.used) ? "tap" : ""}" ${np.rows.some(r => !r.used) ? `data-incopen="pay" role="button" tabindex="0"` : ""}><span class="mk">次の給料日</span><span class="mv">${Number(np.ymd.slice(5, 7))}/${Number(np.ymd.slice(8))}<small>（${DOW[new Date(np.ymd + "T00:00:00Z").getUTCDay()]}）</small></span><span class="ms">${np.rows.map(r => `${esc(r.job.name)} ${r.used ? yen(r.used) : `<span class="warn">金額未入力</span>`}`).join("・")}</span>${np.rows.some(r => !r.used) ? `<span class="ms linkish">タップして金額を入れる ›</span>` : ""}</div>`
-    : `<button type="button" class="mini" data-act="quickShift"><span class="mk">次の給料日</span><span class="mv">—</span><span class="ms">シフトを入れると表示されます</span></button>`;
+    : `<button type="button" class="mini" data-act="quickShift"><span class="mk">次の給料日</span><span class="mv">—</span><span class="ms">${isSimple() ? "給料日を設定すると表示されます" : "シフトを入れると表示されます"}</span></button>`;
   const p = savingPlan();
   const svHtml = p ? `<div class="mini"><span class="mk">貯金 ${Number(p.gm.slice(5))}月までに${yen(p.goal)}</span><span class="mv">${Math.min(100, Math.floor(p.bal / p.goal * 100))}%</span><div class="meter"><span style="width:${Math.min(100, p.bal / p.goal * 100).toFixed(1)}%"></span></div></div>`
     : `<button type="button" class="mini" data-act="openSaving"><span class="mk">貯金の目標</span><span class="mv">—</span><span class="ms">目標を決めると毎月の貯金額を計算します</span></button>`;
@@ -1919,6 +1934,10 @@ function viewHome(){
     const lx = summary(ly, 12); if (!lx.yearWh || lx.yearPay > 1780000) return "";
     return `<div class="notice backupnote"><div><b>${ly}年分の確定申告で、約${yen(lx.yearWh)}戻るかもしれません</b><br><span class="small">掛け持ちの乙欄で引かれた所得税です。源泉徴収票をそろえて、税務署かe-Taxで還付申告をしましょう（5年以内ならいつでも）。</span></div><div class="dayform"><button type="button" class="primary small-btn" data-act="taxnote" data-v="done">申告した</button><button type="button" class="ghost small-btn" data-act="taxnote" data-v="later">今は閉じる</button></div></div>`;
   })()}
+  ${S.settings.intl ? (() => {
+    const end = new Date(Date.UTC(now.y, now.m - 1, now.d) + 20 * 864e5).toISOString().slice(0, 10), b = intlMaxWeek(todayYmd, end);
+    return b.h > 28 ? `<div class="notice warn"><div><b>${md(b.start)}〜${md(b.end)}のシフトが合計${dur(b.h)}です</b><br><span class="small">${INTL_NOTE}長期休業中でなければ、シフトを減らせないか相談しましょう。</span></div></div>` : "";
+  })() : ""}
   ${backupDue() ? `<div class="notice backupnote"><div><b>${S.settings.lastBackup ? `最後のバックアップから${daysSince(S.settings.lastBackup)}日たちました` : "まだバックアップがありません"}</b><br><span class="small">機種変更やデータの消失に備えて、ファイルに書き出しておきましょう。</span></div><div class="dayform"><button type="button" class="primary small-btn" data-act="exportData" data-from="home">書き出す</button><button type="button" class="ghost small-btn" data-act="backupLater">あとで</button></div></div>` : ""}
   ${false ? `<div class="notice warn"><div>${yen(-x.left)} 足りません。${esc(rj.name)}であと<b>約${Math.ceil(-x.left / num(rj.wage))}時間</b>働くか、行事の予算を見直しましょう。</div></div>` : ""}
   ${(() => { const ms = waiting ? [] : missing; return ms.length ? `<button type="button" class="notice warn incnote" data-incopen="budget"><div><b>${mName()}に使う給料の金額が入っていません</b><br><span class="small">${ms.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}。シフトを入れていなくても、金額だけ入れられます。</span></div><span class="incgo">入力する ›</span></button>` : ""; })()}
@@ -1957,13 +1976,21 @@ function viewHome(){
   ${incSheetHtml()}`;
 }
 /* the 社会保険の扶養 walls: what crossing them costs in take-home pay */
+const FUYO_OF = [["parent", "親など家族"], ["spouse", "配偶者（会社員・公務員）"], ["none", "入っていない"]];
+const fuyoOfEff = () => S.settings.fuyoOf || (personaOf() === "student" ? "parent" : "");
 function wallImpact(w, v){
   if (!/^shaho/.test(w.id) || v < w.amount * 0.8) return "";
   if (S.settings.jobs.some(j => j.shaho)) return `<div class="impact small">勤め先の社会保険に入っているので、この壁は関係ありません（保険料はすでに給料から引いて計算しています）。</div>`;
-  const part = S.settings.persona === "part", nen = KOKUNEN_M * 12, monthly = Math.round(w.amount / 12);
+  const who = fuyoOfEff(), nen = KOKUNEN_M * 12, monthly = Math.round(w.amount / 12);
+  // which costs start depends on whose 扶養: a spouse's (第3号 → 国民年金 too) or a parent's (20歳以上は国民年金をもともと払う)
+  if (!who) return `<div class="impact small"><b>超えると手取りが減ります。誰の扶養に入っていますか？</b>
+    <div class="dayform">${FUYO_OF.map(([v, n]) => `<button type="button" class="ghost small-btn" data-act="fuyoof" data-v="${v}">${n}</button>`).join("")}</div>
+    <span>配偶者の扶養なら国民年金と国民健康保険、親の扶養なら国民健康保険を自分で払うことになります。</span></div>`;
+  if (who === "none") return "";
+  const spouse = who === "spouse";
   return `<div class="impact small"><b>超えると手取りが減ります</b>
-    ${part ? `家族の扶養から外れ、自分で<b>国民年金 月${yen(KOKUNEN_M)}（年${yen(nen)}）</b>と国民健康保険料（市区町村で違います）を払います。年収${yen(w.amount)}のときの手取りに戻るには、少なくとも年収 約${Math.ceil((w.amount + nen) / 10000)}万円以上が必要です（国民健康保険料のぶん、さらに上がります）。`
-      : `家族の健康保険から外れ、自分で国民健康保険料（市区町村で違います）を払うことになります。勤め先の社会保険に入る場合は、給料から約${SHAHO_RATE}%引かれます。`}
+    ${spouse ? `配偶者の扶養から外れ、自分で<b>国民年金 月${yen(KOKUNEN_M)}（年${yen(nen)}）</b>と国民健康保険料（市区町村で違います）を払います。年収${yen(w.amount)}のときの手取りに戻るには、少なくとも年収 約${Math.ceil((w.amount + nen) / 10000)}万円以上が必要です（国民健康保険料のぶん、さらに上がります）。`
+      : `家族の健康保険から外れ、自分で国民健康保険料（市区町村で違います）を払うことになります。20歳以上なら国民年金はもともと自分で払う（学生は猶予できる）ので、増えるのは健康保険の分です。勤め先の社会保険に入る場合は、給料から約${SHAHO_RATE}%引かれます。`}
     <br>年の合計だけでなく、月 約${yen(monthly)}を超える月が続くと、年の途中でも外れることがあります。</div>`;
 }
 /* 乙欄で引かれた所得税は、年収が少なければ確定申告（還付申告）でほぼ戻る */
@@ -2110,6 +2137,19 @@ function calGrid(attr, sel, cell){
   return `<div class="cal">${cells}</div>`;
 }
 const shortYen = c => c >= 10000 ? `${(Math.round(c / 1000) / 10).toString()}万` : c >= 1000 ? `${Math.round(c / 1000)}千` : `${Math.round(c)}円`;
+/* 留学生（資格外活動）: どの7日間で数えても合計28時間まで（長期休業中は1日8時間・週40時間まで） */
+function intlMaxWeek(from, to){
+  const by = {};
+  for (const t of allShifts()) by[t.ev.ymd] = (by[t.ev.ymd] || 0) + t.paid;
+  let best = {h: 0, start: from};
+  const d0 = Date.parse(from + "T00:00:00Z") - 6 * 864e5, d1 = Date.parse(to + "T00:00:00Z");
+  for (let t = d0; t <= d1; t += 864e5){
+    let h = 0; for (let k = 0; k < 7; k++) h += by[new Date(t + k * 864e5).toISOString().slice(0, 10)] || 0;
+    if (h > best.h) best = {h, start: new Date(t).toISOString().slice(0, 10), end: new Date(t + 6 * 864e5).toISOString().slice(0, 10)};
+  }
+  return best;
+}
+const INTL_NOTE = "留学生は、どの曜日から数えても7日間で合計28時間まで（すべてのバイト先の合計）。学校の長期休業中だけは1日8時間・週40時間まで働けます。";
 function viewShifts(){
   const jobs = S.settings.jobs;
   const list = allShifts().filter(s => inPeriod(s.ev.ymd, S.y, S.m));
@@ -2166,6 +2206,8 @@ function viewShifts(){
   const perJob = jobs.map(j => { const xs = list.filter(s => s.job.id === j.id); return `<span><span class="jdot" style="--jc:${jColor(j.id)}"></span>${esc(j.name)}${xs.length ? ` ${xs.length}回・${yen(xs.reduce((a, s) => a + s.pay, 0))}` : ""}</span>`; }).join("");
   const isToday = S.sel === todayYmd;
   return `
+  ${S.settings.intl ? (() => { const pr = periodRange(S.y, S.m), b = intlMaxWeek(pr.start, pr.end);
+    return `<div class="notice ${b.h > 28 ? "warn" : ""}"><div><b>${b.h > 28 ? `${md(b.start)}〜${md(b.end)}が合計${dur(b.h)}で、28時間を超えています` : `この月の7日間の最大は${dur(b.h)}（28時間まで）`}</b><br><span class="small">${INTL_NOTE}</span></div></div>`; })() : ""}
   <div class="pills"><span class="pill">${list.length}回 ・ ${dur(h)}</span><span class="pill">見込み ${yen(total)}</span><button type="button" class="pill pillbtn" data-incopen="work">シフトなしで金額だけ入れる ›</button></div>
   <section class="block">
     ${(() => { const pend = list.filter(x => needsSync(x.rec) && !syncing.has(x.id)); return S.settings.calSync && pend.length && mcp ? `<div class="notice warn"><div>Google カレンダーに未反映のシフトが ${pend.length}件 あります。</div><button data-act="syncmonth">まとめて反映</button></div>` : ""; })()}
@@ -2405,9 +2447,12 @@ const wishes = () => Array.isArray(S.settings.wishes) ? S.settings.wishes : [];
 const wishActive = () => wishes().filter(w => !w.done);
 /* 毎月取り分ける: w.auto + w.monthly from period w.autoFrom; each month that has begun counts as saved */
 const monthsFrom = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7)) + 1;
+/* a month's set-aside is counted once that month's pay is entered (shifts or an amount) */
+const payInKey = k => { const mi = budgetIncome(Number(k.slice(0, 4)), Number(k.slice(5, 7))); return mi.total > 0 || mi.rows.some(r => r.confirmed); };
 function wishSaved(w, upto){
   let v = num(w.saved);
-  if (w.auto && w.autoFrom && num(w.monthly) && !w.done) v += Math.max(0, monthsFrom(w.autoFrom, upto || todayKey)) * num(w.monthly);
+  if (w.auto && w.autoFrom && num(w.monthly) && !w.done)
+    for (let k = w.autoFrom, n = 0; k <= (upto || todayKey) && n < 240; k = keyAdd(k, 1), n++) if (payInKey(k)) v += num(w.monthly);
   return num(w.price) ? Math.min(v, num(w.price)) : v;
 }
 function wishDeduct(w, key){
@@ -2540,8 +2585,8 @@ document.addEventListener("click", e => {
     const base = {saved: num(v.saved), autoFrom: rec.auto ? todayKey : ""};
     if (ed.id){
       const old = wishes().find(w => w.id === ed.id);
-      // a new total typed by hand already includes this month; otherwise past months stay and the new amount starts this month
-      const patch = num(v.saved) !== wishSaved(old) ? {saved: num(v.saved), autoFrom: rec.auto ? keyAdd(todayKey, 1) : ""}
+      // a new total typed by hand becomes the base; otherwise past months stay. Either way set-asides restart this month (counted once its pay is in)
+      const patch = num(v.saved) !== wishSaved(old) ? {saved: num(v.saved), autoFrom: rec.auto ? todayKey : ""}
         : !!old.auto !== rec.auto || num(old.monthly) !== num(rec.monthly) ? {saved: foldWish(old).saved, autoFrom: rec.auto ? todayKey : ""} : {};
       saveWishes(wishes().map(w => w.id === ed.id ? Object.assign({}, w, rec, patch) : w), `「${esc(rec.title)}」を保存しました`);
     }
@@ -2573,9 +2618,9 @@ function viewWishes(){
       <div class="meter"><span style="width:${i.pct.toFixed(1)}%"></span></div>
       ${reached ? `<p class="small">目標額まで貯まりました。買ったら「かなえた」を押してください。</p>`
         : `<p class="wishline">${i.hours ? `<b>${wishHoursText(i)}</b>働けば届きます。` : r ? "" : "時給を設定すると、あと何時間働けばいいかも出します。"}
-          ${w.auto && num(w.monthly) && i.left ? `<br>毎月 ${yen(num(w.monthly))} ずつ取り分けると、<b>${(k => `${k.slice(0, 4) !== String(now.y) ? k.slice(0, 4) + "年" : ""}${Number(k.slice(5))}月`)(keyAdd(todayKey, Math.ceil(i.left / num(w.monthly))))}</b>に届きます${i.perMonth && i.perMonth > num(w.monthly) && !i.late ? `（期限に間に合わせるには毎月 ${yen(i.perMonth)}）` : ""}。` : i.perMonth ? `<br>${i.late ? "期限を過ぎています。" : `${i.months}か月なので`}<b>毎月 ${yen(i.perMonth)}</b>${i.hoursMonth ? `（月 約${Math.ceil(i.hoursMonth)}時間）` : ""}ずつ貯めれば間に合います。` : ""}</p>
+          ${w.auto && num(w.monthly) && i.left ? `<br>毎月 ${yen(num(w.monthly))} ずつ取り分けると、<b>${(k => `${k.slice(0, 4) !== String(now.y) ? k.slice(0, 4) + "年" : ""}${Number(k.slice(5))}月`)(keyAdd(todayKey, Math.ceil(i.left / num(w.monthly)) - (payInKey(todayKey) ? 0 : 1)))}</b>に届きます${i.perMonth && i.perMonth > num(w.monthly) && !i.late ? `（期限に間に合わせるには毎月 ${yen(i.perMonth)}）` : ""}。` : i.perMonth ? `<br>${i.late ? "期限を過ぎています。" : `${i.months}か月なので`}<b>毎月 ${yen(i.perMonth)}</b>${i.hoursMonth ? `（月 約${Math.ceil(i.hoursMonth)}時間）` : ""}ずつ貯めれば間に合います。` : ""}</p>
           <label class="inline wauto"><input type="checkbox" data-wishauto="${esc(w.id)}" ${w.auto ? "checked" : ""}> 毎月 <b>${yen(num(w.monthly) || wishSuggest(w))}</b> を固定費のように取り分ける</label>
-          ${w.auto ? `<p class="small muted">${mName(...todayKey.split("-").map(Number))}の自由に使えるお金から ${yen(wishDeduct(w, todayKey))} 引いて、ここに足しています。額は「編集」で変えられます。</p>` : ""}
+          ${w.auto ? `<p class="small muted">${payInKey(todayKey) ? `${mName(...todayKey.split("-").map(Number))}の自由に使えるお金から ${yen(wishDeduct(w, todayKey))} 引いて、ここに足しています。` : `${mName(...todayKey.split("-").map(Number))}の給料を入れると、${yen(wishDeduct(w, todayKey))} をここに足します。`}額は「編集」で変えられます。</p>` : ""}
           ${i.wall ? `<p class="small warn">残りを全部今年の追加バイトでかせぐと「${esc(i.wall.name)}」を超えそうです。今ある貯金や来年の分と分けて考えましょう。</p>` : ""}`}
       <div class="dayform">${reached ? `<button type="button" class="primary small-btn" data-wish="done" data-id="${esc(w.id)}">かなえた</button>` : `<button type="button" class="primary small-btn" data-wishopen="${esc(w.id)}" data-step="add">＋ 貯めた</button>`}<button type="button" class="ghost small-btn" data-wishopen="${esc(w.id)}">編集</button></div>
     </section>`;
@@ -2669,6 +2714,8 @@ function weeklyHours(j){
   const from = new Date(Date.UTC(now.y, now.m - 1, now.d) - 56 * 864e5).toISOString().slice(0, 10);
   return allShifts().filter(t => t.job.id === j.id && t.ev.ymd > from && t.ev.ymd <= todayYmd).reduce((a, t) => a + t.paid, 0) / 8;
 }
+/* the insurance box is in the main card only when it likely applies (checked, or 週20時間以上); otherwise under 詳しい設定 */
+const insShow = j => !!(j.koyo || j.shaho) || weeklyHours(j) >= 20;
 function insBox(j, i){
   const wh = weeklyHours(j), student = (S.settings.persona || "student") === "student";
   const hint = student ? "昼間の学生は、ふつうどちらも入りません（休学中・定時制・卒業後も続ける場合などは別）。"
@@ -2748,6 +2795,7 @@ function viewSettings(){
         ${j.payType === "hourly" ? `<label class="inline"><input type="checkbox" id="jg-${i}" data-job="${i}" data-field="night" ${j.night ? "checked" : ""}> 22時〜5時は25%増し（在宅など対象外ならオフ）</label>` : ""}
         ${j.payType === "salary" ? bonusEditor(j, i) : freqOf(j) === "monthly" ? `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>` : ""}
         ${histEditor(j, i)}
+        ${j.payType !== "salary" && !insShow(j) ? insBox(j, i) : ""}
         ${j.payType === "salary" ? "" : rateEditor(j, i) + allowanceEditor(j, i)}
         <div class="dayform"><button class="ghost danger" data-act="deljob" data-id="${esc(j.id)}">${confirming ? (n ? `シフト${n}件ごと削除する` : "本当に削除する") : "この勤務先を削除"}</button>${confirming ? `<button data-act="cancelDel">やめる</button>` : ""}</div>`;
       return `
@@ -2764,11 +2812,10 @@ function viewSettings(){
           <div><button type="button" class="link" data-act="addbrk" data-id="${esc(j.id)}">＋ ${brkRows(j).length ? "段を追加（例：8時間を超えたら60分）" : "いつもの休憩を決める"}</button></div></div>`}
         ${j.payType !== "salary" && s.jobs.filter(x => x.payType !== "salary").length >= 2 ? `<label class="f">扶養控除等申告書（年末調整の紙）をこのバイト先に<select id="jfy-${i}" data-job="${i}" data-field="fuyo">${[["yes", "出した"], ["no", "出していない"], ["", "わからない"]].map(([v, n]) => `<option value="${v}" ${(j.fuyo || "") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
           <div class="small muted">${isOtsu(j) ? `出していないバイト先として、所得税（乙欄・約3%〜）を引いた手取りで計算しています${j.fuyo ? "" : "（仮）"}。` : `出したバイト先として計算しています${j.fuyo ? "" : "（仮）"}。`}</div>` : ""}
-        ${j.payType === "salary" ? "" : insBox(j, i)}
-        ${j.payType === "salary" ? "" : `<div class="small muted">昇給したら、${j.payType === "fixed" ? "1回の金額" : "時給"}を新しい額に変えて「保存する」。いつからかを聞くので、前のシフトは前の額のまま計算されます。</div>`}
+        ${j.payType !== "salary" && insShow(j) ? insBox(j, i) : ""}
         ${freqOf(j) === "monthly" ? `<div class="f">給料日${cycleEditor(j, i, "set")}</div>` : `<div class="f">給料の受け取り方${freqEditor(j, i, "set")}</div>`}
         <div class="live" id="jl-${i}" aria-live="polite">${esc(jobLive(i))}</div>
-        <button type="button" class="moret" data-jobmore="${esc(j.id)}" aria-expanded="${more}">${more ? "▾" : "▸"} 詳しい設定（${j.payType === "salary" ? "手取り・残業・ボーナス・昇給" : "土日の時給・手当・昇給・振込日のずれ"}など）</button>
+        <button type="button" class="moret" data-jobmore="${esc(j.id)}" aria-expanded="${more}">${more ? "▾" : "▸"} 詳しい設定（${j.payType === "salary" ? "手取り・残業・ボーナス・昇給" : "土日の時給・手当・昇給・保険・振込日のずれ"}など）</button>
         ${more ? `<div class="morebox">${advanced}</div>` : ""}
         <div class="jobbar" data-jobbar><span class="small" data-jobdirty ${S.jobDirty ? "" : "hidden"}>まだ保存されていません</span>
           <button type="button" class="ghost" data-jobsave="revert" ${S.jobDirty ? "" : "disabled"}>元に戻す</button><button type="button" class="primary" data-jobsave="save" ${S.jobDirty ? "" : "disabled"}>保存する</button></div>
@@ -2809,7 +2856,17 @@ function viewSettings(){
       <div class="small muted">期限つきの貯金目標は、ホームの「貯金の計画」から決められます。</div>
     </section>`;
   } else if (tab === "wall"){
+    const yrs = Array.from({length: 60}, (_, k) => now.y - 15 - k);
     body = `<section class="block">
+      <h2>あなたについて</h2>
+      <div class="grid2">
+        <label class="f">生まれた年<select id="sBy" data-set="birthYear"><option value="">選ばない</option>${yrs.map(y => `<option value="${y}" ${num(s.birthYear) === y ? "selected" : ""}>${y}年</option>`).join("")}</select></label>
+        <label class="f">誰の扶養に入っている？<select id="sFo" data-set="fuyoOf"><option value="">わからない</option>${FUYO_OF.map(([v, n]) => `<option value="${v}" ${s.fuyoOf === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+      </div>
+      <label class="inline"><input type="checkbox" id="sIntl" data-set="intl" ${s.intl ? "checked" : ""}> 留学生（資格外活動許可でバイトしている）</label>
+      <div class="small muted">年齢と扶養に合わせて、当てはまる壁だけを表示します（150万円の壁は19〜22歳だけ）。留学生にすると、週28時間を超えそうなときに知らせます。</div>
+    </section>
+    <section class="block">
       <h2>年収の壁</h2>
       <div class="small muted">ホームに表示する壁を選んでください（2026年分の目安）。社会保険の「106万円の壁」（勤務先の社会保険に入る基準）は、2026年10月1日に賃金要件（月8.8万円）がなくなり、今は主に週20時間以上働くかどうかで決まります（日本年金機構の案内より）。ただし昼間の学生は、原則この「勤務先の社会保険」の対象外です（夜間・通信・定時制の学生や休学中の人は対象）。学生が気にするのは、主に家族の扶養の壁（130万円・150万円など）です。</div>
       <div class="wallpick">${WALLS.map(w => `<label class="inline"><input type="checkbox" data-wall="${w.id}" ${(s.walls || []).includes(w.id) ? "checked" : ""}> <b>${yen(w.amount)}</b> ${esc(w.name)}</label>`).join("")}</div>
@@ -3083,6 +3140,7 @@ document.addEventListener("click", e => {
     S.confirmDel = null; S.settings.recurring = (S.settings.recurring || []).filter(r => r.id !== id); putSettings("毎月の行事を削除しました");
   }
   else if (act === "fab"){ document.getElementById("sheet").hidden = false; const o = document.querySelector("#sheet .opt"); if (o) o.focus(); }
+  else if (act === "fuyoof"){ S.settings.fuyoOf = a.dataset.v; putSettings(`「${FUYO_OF.find(f => f[0] === a.dataset.v)[1]}」の扶養として表示します（設定の「年収の壁」で変えられます）`); }
   else if (act === "taxnote"){ S.settings.taxNote = Object.assign({}, S.settings.taxNote, {[now.y - 1]: a.dataset.v === "done" ? todayYmd : "later"}); putSettings(a.dataset.v === "done" ? "おつかれさまでした！" : "閉じました（年収の壁の画面でいつでも見られます）"); }
   else if (act === "gowish"){ S.tab = "events"; S.evView = "wish"; render(); window.scrollTo(0, 0); }
   else if (act === "evview"){ S.evView = a.dataset.v; render(); window.scrollTo(0, 0); }
@@ -3237,7 +3295,7 @@ document.addEventListener("change", e => {
   } else if (t.dataset.set){
     const f = t.dataset.set;
     if (["balance","goalAmount","assumeIncome"].includes(f) && badNum(val)){ toast("数字で入力してください", "warn"); return; }
-    S.settings[f] = t.type === "checkbox" ? val : ["eventColors","rateJob","ignoreTitles","goalMonth","persona","fontSize"].includes(f) ? val : (["balance","goalAmount","assumeIncome","wallCustom"].includes(f) && val === "" ? "" : num(val));
+    S.settings[f] = t.type === "checkbox" ? val : ["eventColors","rateJob","ignoreTitles","goalMonth","persona","fontSize","fuyoOf"].includes(f) ? val : (["balance","goalAmount","assumeIncome","wallCustom"].includes(f) && val === "" ? "" : num(val));
     if (f === "persona"){ S.settings.walls = WALL_DEF[val].slice(); putSettings("年収の壁を" + PERSONAS.find(p => p[0] === val)[1] + "向けにしました"); return; }
     if (f === "balance") S.settings.balanceDate = todayYmd;
     if (f === "monthStart"){
@@ -3651,7 +3709,7 @@ function viewOnboarding(){
     </div>${cta("はじめる")}`;
   if (step === 1){
     const jobs = st.jobs.length ? st.jobs : (st.jobs = [newJob()]);
-    body = `<div class="ostep-h"><h2 class="oh">どこで<br>${personaOf() === "worker" ? "働いてる？" : "バイトしてる？"}</h2><p class="osub">給料の計算に使います。${personaOf() === "worker" ? "副業があれば2つ目に追加してください。" : "深夜割増や「土曜は時給が高い」などの細かい設定は、あとで設定画面から追加できます。"}</p></div>
+    body = `<div class="ostep-h"><h2 class="oh">どこで<br>${personaOf() === "worker" ? "働いてる？" : "バイトしてる？"}</h2><p class="osub">給料の計算に使います。${personaOf() === "worker" ? "副業があれば2つ目に追加してください。" : isSimple() ? "給料日を知るために使います。" : "深夜割増や「土曜は時給が高い」などの細かい設定は、あとで設定画面から追加できます。"}</p></div>
       ${isSimple() ? `<p class="small muted" style="margin:0">給料の金額は、シフトボードなどに出ている見込みを月に1回入れるだけでOKです。ここでは給料日だけ教えてください。</p>` : ""}
       ${jobs.map((j, i) => {
         const pi = presetOf(j), custom = S.onbCustom[i] || pi < 0;
@@ -3729,7 +3787,7 @@ function viewOnboarding(){
         <li><span>貯金</span><b>${p ? `毎月 ${yen(p.perMonth)}（${Number(p.gm.slice(5))}月までに ${yen(p.goal)}）` : "あとで設定"}</b></li>
         <li><span>固定費</span><b>${yen(fixTotal())} / 月</b></li>
       </ul>
-      <p class="small muted">まずは下の「＋」から、働いた日のシフトを入れてみましょう。</p>
+      <p class="small muted">${isSimple() ? "まずはホームの「働いた分の見込み」に、シフトボードなどに出ている今月の見込みを入れてみましょう。" : "まずは下の「＋」から、働いた日のシフトを入れてみましょう。"}</p>
     </div>${cta("シフポケをはじめる")}`;
   }
   return `<div class="onb">${top}<div class="ostep">${body}</div></div>`;
