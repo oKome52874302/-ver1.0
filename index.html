@@ -1853,6 +1853,29 @@ function applyImport(){
   S.settings.onboarded = true; S.settings.tutorialDone = true;
   migrateWalls(); migrateRates(); [S.y, S.m] = refreshToday(); S.tab = "home"; saveLocal(); render(); toast("バックアップを読み込みました");
 }
+/* ホーム画面に追加: on iPhone, Safari may erase a site's saved data after days without a visit unless it is added to the home screen */
+const UA = navigator.userAgent || "";
+const isStandalone = () => { try { return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; } catch(_){ return false; } };
+const isIOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+const isAndroid = /Android/.test(UA);
+const inAppBrowser = /Line\/|Instagram|FBAN|FBAV|Twitter|TikTok|BytedanceWebview/i.test(UA);
+let installEvt = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; renderSoon(); });
+function installSteps(){
+  if (inAppBrowser) return `<ol class="steps"><li><b>まずブラウザで開く</b><span>LINEやインスタの中で開いているときは、右上（または右下）のメニューから「${isIOS ? "Safari" : "ブラウザ"}で開く」を選んでください。アプリ内のブラウザではホーム画面に追加できず、データも消えやすくなります。</span></li><li><b>開いたら、もう一度この案内の手順へ</b></li></ol>`;
+  if (isIOS) return `<ol class="steps"><li><b>Safariの共有ボタン</b><span>画面下（または上）の「□に↑」のマークを押します。</span></li><li><b>「ホーム画面に追加」</b><span>出てこないときは、一覧を下にスクロールするか「アクションを編集」から追加します。</span></li><li><b>ホーム画面のアイコンから開く</b><span>これからはアイコンから開いてください。データはこのスマホの中に保存されたままです。</span></li></ol>`;
+  return `<ol class="steps"><li><b>Chromeの右上「︙」メニュー</b></li><li><b>「ホーム画面に追加」または「アプリをインストール」</b></li><li><b>ホーム画面のアイコンから開く</b></li></ol>`;
+}
+function installNoteHtml(){
+  const st = S.settings;
+  if (isStandalone() || !(isIOS || isAndroid) || !st.onboarded) return "";
+  if (st.installSnooze && st.installSnooze > todayYmd) return "";
+  return `<div class="notice backupnote installnote"><div><b>ホーム画面に追加しておきましょう</b><br><span class="small">${isIOS ? "iPhoneでは、ホーム画面に追加しないまましばらく開かないと、入力したデータが消えることがあります。" : "アイコンからすぐ開けて、データも消えにくくなります。"}</span></div>
+    <details class="moveguide"><summary>追加のしかた</summary>${installSteps()}</details>
+    <div class="dayform">${installEvt ? `<button type="button" class="primary small-btn" data-act="install">追加する</button>` : ""}<button type="button" class="ghost small-btn" data-act="installLater">あとで</button></div></div>`;
+}
+/* ask the browser to keep this site's data (honoured by Chrome/Android; harmless elsewhere) */
+function askPersist(){ try { if (navigator.storage && navigator.storage.persist && !S.persistAsked){ S.persistAsked = true; navigator.storage.persist().catch(() => {}); } } catch(_){} }
 /* かんたんモード: shifts live in another app (シフトボード etc.); the viewer types the monthly pay estimate instead */
 const isSimple = () => S.settings.mode === "simple";
 function render(){
@@ -1877,7 +1900,7 @@ function render(){
   const act = document.activeElement, fid = act && act.id && v.contains(act) ? act.id : null;
   const fval = fid ? act.value : null, fsel = fid ? (() => { try { return act.selectionStart; } catch(_){ return null; } })() : null;
   v.innerHTML = html + (onb ? "" : spSheetHtml());
-  if (!onb) setTimeout(() => { checkAchievements(); flushCelebrations(); }, 0);
+  if (!onb) setTimeout(() => { checkAchievements(); flushCelebrations(); askPersist(); }, 0);
   setTimeout(drawTutorial, 0);
   if (fid){
     const el = document.getElementById(fid);
@@ -2012,6 +2035,7 @@ function viewHome(){
     const end = new Date(Date.UTC(now.y, now.m - 1, now.d) + 20 * 864e5).toISOString().slice(0, 10), b = intlMaxWeek(todayYmd, end);
     return b.h > 28 ? `<div class="notice warn"><div><b>${md(b.start)}〜${md(b.end)}のシフトが合計${dur(b.h)}です</b><br><span class="small">${INTL_NOTE}長期休業中でなければ、シフトを減らせないか相談しましょう。</span></div></div>` : "";
   })() : ""}
+  ${installNoteHtml()}
   ${backupDue() ? `<div class="notice backupnote"><div><b>${S.settings.lastBackup ? `最後のバックアップから${daysSince(S.settings.lastBackup)}日たちました` : "まだバックアップがありません"}</b><br><span class="small">機種変更やデータの消失に備えて、ファイルに書き出しておきましょう。</span></div><div class="dayform"><button type="button" class="primary small-btn" data-act="exportData" data-from="home">書き出す</button><button type="button" class="ghost small-btn" data-act="backupLater">あとで</button></div></div>` : ""}
   ${false ? `<div class="notice warn"><div>${yen(-x.left)} 足りません。${esc(rj.name)}であと<b>約${Math.ceil(-x.left / num(rj.wage))}時間</b>働くか、行事の予算を見直しましょう。</div></div>` : ""}
   ${(() => { const ms = waiting ? [] : missing; return ms.length ? `<button type="button" class="notice warn incnote" data-incopen="budget"><div><b>${mName()}に使う給料の金額が入っていません</b><br><span class="small">${ms.map(r => `${esc(r.job.name)}（${r.pd.m}/${r.pd.d}振込）`).join("・")}。シフトを入れていなくても、金額だけ入れられます。</span></div><span class="incgo">入力する ›</span></button>` : ""; })()}
@@ -2848,6 +2872,12 @@ function jobSummary(j){
   const tags = [rulesOf(j).length ? "特別時給" : "", alwOf(j).length ? "手当" : "", histOf(j, f).length ? "昇給あり" : "", (j.bonuses || []).length ? "ボーナス" : ""].filter(Boolean);
   return {pay, when, tags};
 }
+/* アクセス数だけを数える（Cloudflare Web Analytics: Cookieなし・入力したデータは送らない）。トークンはCloudflareの管理画面で発行 */
+const CF_BEACON_TOKEN = "";
+if (CF_BEACON_TOKEN && location.protocol === "https:"){
+  const sc = document.createElement("script"); sc.defer = true; sc.src = "https://static.cloudflareinsights.com/beacon.min.js";
+  sc.setAttribute("data-cf-beacon", JSON.stringify({token: CF_BEACON_TOKEN})); document.head.appendChild(sc);
+}
 const FEEDBACK_URL = "https://docs.google.com/forms/d/e/1FAIpQLSe5mIi8zrs5X4LIvge0b-Ax5U83nzNiDhv_VhaN1Gpc671LDQ/viewform";   // Googleフォーム「シフポケ」ご意見・ご感想
 const SET_TABS = [["jobs", "JOB"], ["spend", "毎月の出費"], ["wall", "年収の壁"], ["other", "その他"]];
 function viewSettings(){
@@ -2986,10 +3016,11 @@ function viewSettings(){
     <section class="block">
       <h2>使い方</h2>
       <div class="dayform"><button type="button" class="primary" data-act="tutorial">使い方をもう一度見る</button></div>
+      <details class="moveguide"><summary>ホーム画面に追加する（${isStandalone() ? "追加済み" : "おすすめ"}）</summary>${isStandalone() ? `<p class="small muted">ホーム画面のアイコンから開いています。このままでOKです。</p>` : `<p class="small muted">ホーム画面に追加すると、アプリのようにアイコンから開けます。iPhoneでは、追加しないまましばらく開かないとデータが消えることがあるので、追加をおすすめします。</p>${installSteps()}`}</details>
     </section>
     <section class="block">
       <h2>ご意見・不具合の報告</h2>
-      <div class="small muted">使いにくいところ、ほしい機能、計算がおかしいところなど、なんでも送ってください。名前やメールアドレスは必要ありません。金額などの個人的な数字は書かなくて大丈夫です。</div>
+      <div class="small muted">${CF_BEACON_TOKEN ? "このサイトは、開いた回数だけを数えています（Cookieなし。入力した金額やシフトは送信しません）。" : ""}使いにくいところ、ほしい機能、計算がおかしいところなど、なんでも送ってください。名前やメールアドレスは必要ありません。金額などの個人的な数字は書かなくて大丈夫です。</div>
       <div class="dayform"><a class="btnlike" style="text-decoration:none;color:var(--accent)" href="${FEEDBACK_URL}" target="_blank" rel="noopener">ご意見フォームを開く ↗</a></div>
     </section>
     <section class="block">
@@ -3289,6 +3320,8 @@ document.addEventListener("click", e => {
   }
   else if (act === "importNo"){ S.importPending = null; render(); }
   else if (act === "addCardRec"){ S.settings.recurring = (S.settings.recurring || []).concat([{id: "card", title: "クレジットカード引き落とし", day: 27, budget: "", holidayShift: "next"}]); putSettings("クレジットカード引き落とし（毎月27日）を追加しました。日付は変えられます"); }
+  else if (act === "installLater"){ const d = new Date(Date.UTC(now.y, now.m - 1, now.d) + 7 * 864e5).toISOString().slice(0, 10); S.settings.installSnooze = d; putSettings("7日後にもう一度お知らせします（設定の「その他」からも見られます）"); }
+  else if (act === "install"){ if (installEvt){ installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; renderSoon(); }); } }
   else if (act === "gofix"){ S.tab = "settings"; S.setTab = "spend"; render(); window.scrollTo(0, 0); }
   else if (act === "addFix"){ (S.settings.fixedItems = S.settings.fixedItems || []).push({name: "", amount: ""}); S.settings.fixedCost = fixTotal(); putSettings("固定費の欄を追加しました"); setTimeout(() => { const el = document.getElementById("sf-n-" + (S.settings.fixedItems.length - 1)); if (el) el.focus(); }, 30); }
   else if (act === "delFix"){ S.settings.fixedItems.splice(Number(a.dataset.i), 1); S.settings.fixedCost = fixTotal(); putSettings("固定費を削除しました"); }
