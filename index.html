@@ -2846,6 +2846,7 @@ function jobSummary(j){
   const tags = [rulesOf(j).length ? "特別時給" : "", alwOf(j).length ? "手当" : "", histOf(j, f).length ? "昇給あり" : "", (j.bonuses || []).length ? "ボーナス" : ""].filter(Boolean);
   return {pay, when, tags};
 }
+const FEEDBACK_URL = "https://docs.google.com/forms/d/e/1FAIpQLSe5mIi8zrs5X4LIvge0b-Ax5U83nzNiDhv_VhaN1Gpc671LDQ/viewform";   // Googleフォーム「シフポケ」ご意見・ご感想
 const SET_TABS = [["jobs", "JOB"], ["spend", "毎月の出費"], ["wall", "年収の壁"], ["other", "その他"]];
 function viewSettings(){
   const s = S.settings, tab = SET_TABS.some(t => t[0] === S.setTab) ? S.setTab : "jobs";
@@ -2981,6 +2982,11 @@ function viewSettings(){
     <section class="block">
       <h2>使い方</h2>
       <div class="dayform"><button type="button" class="primary" data-act="tutorial">使い方をもう一度見る</button></div>
+    </section>
+    <section class="block">
+      <h2>ご意見・不具合の報告</h2>
+      <div class="small muted">使いにくいところ、ほしい機能、計算がおかしいところなど、なんでも送ってください。名前やメールアドレスは必要ありません。金額などの個人的な数字は書かなくて大丈夫です。</div>
+      <div class="dayform"><a class="btnlike" style="text-decoration:none;color:var(--accent)" href="${FEEDBACK_URL}" target="_blank" rel="noopener">ご意見フォームを開く ↗</a></div>
     </section>
     <section class="block">
       <h2>バックアップ</h2>
