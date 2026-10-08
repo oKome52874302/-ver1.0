@@ -347,7 +347,8 @@ nav.tabs button{display:flex;flex-direction:column;align-items:center;justify-co
 nav.tabs button[aria-selected="true"]{color:var(--accent);font-weight:900;border:none}
 nav.tabs button svg{width:24px;height:24px}
 nav.tabs .fab{justify-self:center;width:58px;height:58px;min-height:58px;margin-top:-28px;border-radius:20px;background:var(--pop);color:#FFFFFF;border:3px solid var(--ink);box-shadow:3px 3px 0 var(--ink);padding:0;display:grid;place-items:center}
-nav.tabs .fab svg{width:28px;height:28px}
+nav.tabs .fab svg{width:24px;height:24px}
+nav.tabs .fab{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}.fablbl{font-size:10px;font-weight:900;line-height:1;margin-top:1px}
 body.in-onb nav.tabs{display:none}
 #toast{bottom:calc(96px + env(safe-area-inset-bottom, 0px))}
 body.in-onb #toast{bottom:calc(20px + env(safe-area-inset-bottom, 0px))}
@@ -611,7 +612,7 @@ div.f{display:flex;flex-direction:column;gap:6px;font-size:.76rem;color:var(--mu
   <nav class="tabs" role="tablist" aria-label="メニュー">
     <button role="tab" data-tab="home" aria-selected="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>ホーム</button>
     <button role="tab" data-tab="shifts" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>シフト</button>
-    <button type="button" class="fab" data-act="fab" aria-label="シフトや出費を追加"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button type="button" class="fab" data-act="fab" aria-label="使ったお金を記録"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span class="fablbl">使った</span></button>
     <button role="tab" data-tab="events" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16v4a2 2 0 0 0 0 4v4H4v-4a2 2 0 0 0 0-4z"/></svg>予定・目標</button>
     <button role="tab" data-tab="ach" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="6"/><path d="M8.5 14L7 22l5-3 5 3-1.5-8"/></svg>実績</button>
   </nav>
@@ -3103,10 +3104,11 @@ document.addEventListener("change", e => {
 /* ---------- tutorial: three coach marks after the first setup ---------- */
 const TUT_STEPS = [
   {sel: ".hero", title: "これが今月自由に使えるお金", text: "給料から固定費・貯金・行事の予算を引いた残りです。シフトや予算を入れるほど正確になります。"},
-  {sel: "[data-act=fab]", title: "働いた日はここから", text: "＋を押して「シフトを追加」。時給・深夜・交通費まで自動で計算します。シフトなしで給料の金額だけ入れることもできます。"},
+  {sel: "nav [data-tab=shifts]", title: "働いた日はここから", text: "カレンダーで日付を選んでシフトを入れると、時給・深夜・交通費まで自動で計算します。シフトなしで給料の金額だけ入れることもできます。"},
+  {sel: "[data-act=fab]", title: "使ったらここ", text: "予定になかった出費は、真ん中のボタンから金額と分類だけで記録。自由に使えるお金からすぐ引かれます。"},
   {sel: "nav [data-tab=events]", title: "旅行の予算と、ほしいものはここ", text: "行事ごとに予算を入れると、今月あといくら使えるかが分かります。「ほしいもの」に夢や買いたい物を入れると、あと何円・何時間働けば届くかを出します。"}
 ];
-const tutSteps = () => isSimple() ? TUT_STEPS.map((t, i) => i === 1 ? Object.assign({}, t, {title: "給料の見込みはここから", text: "＋の「給料の金額を入力」から、シフトボードなどの見込みを月1回入れるだけ。振り込まれたら実際の金額に直します。"}) : t) : TUT_STEPS;
+const tutSteps = () => isSimple() ? TUT_STEPS.map((t, i) => i === 1 ? Object.assign({}, t, {sel: ".simplerow", title: "給料の見込みはここから", text: "シフトボードなどに出ている給料の見込みを、ここに月1回入れるだけ。振り込まれたら実際の金額に直します。"}) : t) : TUT_STEPS;
 function drawTutorial(){
   const old = document.getElementById("tut"); if (old) old.remove();
   if (S.tut == null || !S.settings.onboarded || S.tab !== "home") return;
@@ -3217,7 +3219,7 @@ document.addEventListener("click", e => {
     if (S.confirmDel !== "r:" + id){ S.confirmDel = "r:" + id; render(); return; }
     S.confirmDel = null; S.settings.recurring = (S.settings.recurring || []).filter(r => r.id !== id); putSettings("毎月の行事を削除しました");
   }
-  else if (act === "fab"){ document.getElementById("sheet").hidden = false; const o = document.querySelector("#sheet .opt"); if (o) o.focus(); }
+  else if (act === "fab"){ [S.y, S.m] = refreshToday(); openSpent(null); }   // the center button records spending in one tap
   else if (act === "fuyoof"){ S.settings.fuyoOf = a.dataset.v; putSettings(`「${FUYO_OF.find(f => f[0] === a.dataset.v)[1]}」の扶養として表示します（設定の「年収の壁」で変えられます）`); }
   else if (act === "taxnote"){ S.settings.taxNote = Object.assign({}, S.settings.taxNote, {[now.y - 1]: a.dataset.v === "done" ? todayYmd : "later"}); putSettings(a.dataset.v === "done" ? "おつかれさまでした！" : "閉じました（年収の壁の画面でいつでも見られます）"); }
   else if (act === "gowish"){ S.tab = "events"; S.evView = "wish"; render(); window.scrollTo(0, 0); }
