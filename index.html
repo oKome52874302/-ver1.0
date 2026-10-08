@@ -222,6 +222,7 @@ body.in-onb #appHeader, body.in-onb nav.tabs{display:none}
 .ostep{display:flex;flex-direction:column;gap:14px}
 .ostep-h{display:flex;flex-direction:column;gap:6px}
 .cycbox{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.cyck{display:flex;align-items:center;gap:6px}.cycx{min-height:28px!important;padding:0 8px!important}.cycadd{color:var(--accent);font-weight:900}
 .cycrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;align-items:end;background:var(--bg);border-radius:12px;padding:10px}
 .cycrow .cyck{grid-column:1 / -1;font-size:.74rem;font-weight:900;color:var(--accent)}
 .cycrow select{width:100%}
@@ -3562,7 +3563,7 @@ function cycleEditor(j, i, ctx){
   const cs = cyclesOf(j);
   const sel = (k, f, opts, v) => `<select id="cy-${ctx}-${i}-${k}-${f}" data-cyc="${i}" data-k="${k}" data-f="${f}" data-ctx="${ctx}">${opts.map(([ov, n]) => `<option value="${ov}" ${v === ov ? "selected" : ""}>${n}</option>`).join("")}</select>`;
   const rows = cs.map((c, k) => `<div class="cycrow">
-      ${cs.length > 1 ? `<span class="cyck">${k + 1}回目</span>` : ""}
+      ${cs.length > 1 ? `<span class="cyck">${k + 1}回目<button type="button" class="ghost cycx" data-cycdel="${i}" data-k="${k}" data-ctx="${ctx}" aria-label="${k + 1}回目を削除">×</button></span>` : ""}
       <label class="f">締め日${sel(k, "cutoff", CUT_OPTS, c.cutoff)}</label>
       <label class="f">給料が出る月${sel(k, "payOffset", [[0, "締めた月"], [1, "翌月"], [2, "翌々月"]], c.payOffset)}</label>
       <label class="f">給料日${sel(k, "payDay", PDAY_OPTS, c.payDay)}</label>
@@ -3570,7 +3571,7 @@ function cycleEditor(j, i, ctx){
   const ex = [10, 25].map(d => { const pd = payday({y: now.y, m: now.m, d}, j); return `${now.m}/${d}の勤務 → ${pd.m}/${pd.d}振込`; }).join("、");
   return `<div class="cycbox">${rows}
     <div class="cycfoot"><span class="small muted">例：${ex}</span>
-    ${cs.length > 1 ? `<button type="button" class="ghost" data-cycdel="${i}" data-ctx="${ctx}">1回だけにする</button>` : `<button type="button" class="ghost" data-cycadd="${i}" data-ctx="${ctx}">＋ 締め日をもう1つ（月2回払い）</button>`}</div></div>`;
+    ${cs.length < 4 ? `<button type="button" class="ghost cycadd" data-cycadd="${i}" data-ctx="${ctx}">＋ 給料日を追加（月に2回以上もらう場合）</button>` : ""}</div></div>`;
 }
 const RATE_PRESETS = [
   {l: "土日祝", days: [0, 6, 7]}, {l: "土曜", days: [6]}, {l: "日曜・祝日", days: [0, 7]},
@@ -3804,12 +3805,12 @@ document.addEventListener("click", e => {
   const i = Number(a.dataset.cycadd ?? a.dataset.cycdel), j = S.settings.jobs[i]; if (!j) return;
   const cs = cyclesOf(j);
   if (a.dataset.cycadd !== undefined){
-    // a sensible second cycle: the half the first one does not cover
-    const second = cs[0].cutoff === 15 ? {cutoff: 0, payOffset: 1, payDay: 15} : {cutoff: 15, payOffset: 0, payDay: 0};
-    setCycles(j, [cs[0], second]);
-  } else setCycles(j, [cs[0]]);
-  if (a.dataset.ctx === "onb") S.onbCustom[i] = true;
-  afterCycleEdit(a.dataset.ctx, j, a.dataset.cycadd !== undefined ? "締め日を2つにしました" : "締め日を1つにしました");
+    // a sensible next cycle: a cutoff not used yet (15日締め→月末払い, 月末締め→翌月15日, else 翌月25日)
+    const used = cs.map(c => c.cutoff), cut = [15, 0, 10, 20, 5, 25].find(c => !used.includes(c)) ?? 10;
+    cs.push(cut === 15 ? {cutoff: 15, payOffset: 0, payDay: 0} : cut === 0 ? {cutoff: 0, payOffset: 1, payDay: 15} : {cutoff: cut, payOffset: 1, payDay: 25});
+  } else cs.splice(a.dataset.k !== undefined ? Number(a.dataset.k) : 1, cs.length > 1 ? 1 : 0);
+  setCycles(j, cs.length ? cs : cyclesOf(j).slice(0, 1));
+  afterCycleEdit(a.dataset.ctx, j, a.dataset.cycadd !== undefined ? `給料日を${cs.length}つにしました` : "給料日を削除しました");
 });
 const PAY_PRESETS = [
   {l: "月末締め・翌月25日", c: 0, o: 1, d: 25},
@@ -3851,11 +3852,7 @@ function viewOnboarding(){
         <div class="ocard-h"><span class="jdot" style="--jc:var(--j${i % 5})"></span><b>${jobs.length > 1 ? `${jobWord()} ${i + 1}` : jobWord()}</b>${jobs.length > 1 ? `<button type="button" class="ghost" data-onb="deljob" data-i="${i}">削除</button>` : ""}</div>
         <label class="f">名前<input type="text" id="oj-n-${i}" data-o="jobs.${i}.name" value="${esc(j.name)}" placeholder="例：カフェ、塾講師、コンビニ"></label>
         <label class="f">時給（任意・「何時間ぶん」の計算に使います）<input type="text" inputmode="decimal" id="oj-w-${i}" data-o="jobs.${i}.wage" value="${esc(j.wage)}" placeholder="例：1100"></label>
-        <div class="f">給料日
-          <div class="opay">${PAY_PRESETS.map((p, k) => `<button type="button" data-onb="paypreset" data-i="${i}" data-p="${k}" aria-pressed="${!custom && pi === k}">${p.l}</button>`).join("")}
-            <button type="button" data-onb="paycustom" data-i="${i}" aria-pressed="${custom}">ほかの日にち</button></div>
-        </div>
-        ${custom ? cycleEditor(j, i, "onb") : ""}
+        <div class="f">給料日<span class="small muted">締め日と振込日を選んでください。給与明細やシフト表に書いてあります。</span>${cycleEditor(j, i, "onb")}</div>
       </div>`;
         return `<div class="ocard">
         <div class="ocard-h"><span class="jdot" style="--jc:var(--j${i % 5})"></span><b>${jobs.length > 1 ? `${jobWord()} ${i + 1}` : jobWord()}</b>${jobs.length > 1 ? `<button type="button" class="ghost" data-onb="deljob" data-i="${i}">削除</button>` : ""}</div>
@@ -3878,11 +3875,7 @@ function viewOnboarding(){
             ${open ? `<div class="odetail">${rateEditor(j, i)}${allowanceEditor(j, i)}</div>` : ""}`; })()}
         ${j.payType === "salary" ? `<p class="small muted">手取りは額面の約8割で見込みます（設定で変更可）。給与明細が来たら確定額を入れると、そちらを優先します。残業した日はシフトに入れると残業代も計算します。</p>` : ""}
         ${j.payType === "salary" ? "" : `<div class="f">給料の受け取り方${freqEditor(j, i, "onb")}</div>`}
-        ${freqOf(j) !== "monthly" ? "" : `<div class="f">給料日
-          <div class="opay">${PAY_PRESETS.map((p, k) => `<button type="button" data-onb="paypreset" data-i="${i}" data-p="${k}" aria-pressed="${!custom && pi === k}">${p.l}</button>`).join("")}
-            <button type="button" data-onb="paycustom" data-i="${i}" aria-pressed="${custom}">ほかの日にち</button></div>
-        </div>
-        ${custom ? cycleEditor(j, i, "onb") : ""}`}
+        ${freqOf(j) !== "monthly" ? "" : `<div class="f">給料日<span class="small muted">締め日と振込日を選んでください。給与明細やシフト表に書いてあります。</span>${cycleEditor(j, i, "onb")}</div>`}
       </div>`; }).join("")}
       <button type="button" class="ghost" style="align-self:flex-start;color:var(--accent);font-weight:900" data-onb="addjob">＋ ${jobWord()}をもう1つ追加</button>
       ${onbMonthStart()}
