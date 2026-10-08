@@ -2873,8 +2873,9 @@ function jobSummary(j){
   return {pay, when, tags};
 }
 /* アクセス数だけを数える（Cloudflare Web Analytics: Cookieなし・入力したデータは送らない）。トークンはCloudflareの管理画面で発行 */
-const CF_BEACON_TOKEN = "";
-if (CF_BEACON_TOKEN && location.protocol === "https:"){
+const CF_BEACON_TOKEN = "dd1f0d59239f43b6bdc84abe4aa045e0";
+const CF_ON = !!CF_BEACON_TOKEN && location.hostname === "ver1-0.shiopoke.workers.dev";   // only on the public site
+if (CF_ON){
   const sc = document.createElement("script"); sc.defer = true; sc.src = "https://static.cloudflareinsights.com/beacon.min.js";
   sc.setAttribute("data-cf-beacon", JSON.stringify({token: CF_BEACON_TOKEN})); document.head.appendChild(sc);
 }
@@ -3020,7 +3021,7 @@ function viewSettings(){
     </section>
     <section class="block">
       <h2>ご意見・不具合の報告</h2>
-      <div class="small muted">${CF_BEACON_TOKEN ? "このサイトは、開いた回数だけを数えています（Cookieなし。入力した金額やシフトは送信しません）。" : ""}使いにくいところ、ほしい機能、計算がおかしいところなど、なんでも送ってください。名前やメールアドレスは必要ありません。金額などの個人的な数字は書かなくて大丈夫です。</div>
+      <div class="small muted">${CF_ON ? "このサイトは、開いた回数だけを数えています（Cookieなし。入力した金額やシフトは送信しません）。" : ""}使いにくいところ、ほしい機能、計算がおかしいところなど、なんでも送ってください。名前やメールアドレスは必要ありません。金額などの個人的な数字は書かなくて大丈夫です。</div>
       <div class="dayform"><a class="btnlike" style="text-decoration:none;color:var(--accent)" href="${FEEDBACK_URL}" target="_blank" rel="noopener">ご意見フォームを開く ↗</a></div>
     </section>
     <section class="block">
