@@ -1808,7 +1808,7 @@ function viewHome(){
   const pend = periodRange(S.y, S.m).end;
   const daysLeft = isCur ? Math.round((Date.UTC(...pend.split("-").map((v, i) => i === 1 ? v - 1 : Number(v))) - Date.UTC(now.y, now.m - 1, now.d)) / 864e5) + 1 : 0;
   // no pay entered for this month yet (e.g. right after the first setup): ask for it instead of showing a big minus
-  const missing = missingPay(x), noIncome = x.income <= 0, partial = !noIncome && missing.length > 0;
+  const missing = missingPay(x), noIncome = !payEntered(x), partial = !noIncome && missing.length > 0;
   const waiting = noIncome || (partial && x.left < 0);   // a minus that only comes from pay not typed in yet
   // pay for work done in this month arrives later; say when it becomes spendable
   const wk = (() => {
@@ -2164,9 +2164,11 @@ document.addEventListener("click", e => {
   }
 }, true);
 /* a regular job whose pay for this month has no amount yet (no shifts, not confirmed) */
+/* a pay amount typed as ¥0 (no work that month) still counts as entered */
+const payEntered = x => x.income > 0 || x.mi.rows.some(r => r.confirmed);
 function missingPay(x){
   const used = new Set([...Object.values(S.shifts).map(r => r.job), ...Object.values(S.income).flatMap(d => Object.keys(d.jobs || {}))]);
-  return x.mi.rows.filter(r => !r.used && r.freq === "monthly" && r.job.payType !== "salary" && used.has(r.job.id));
+  return x.mi.rows.filter(r => !r.used && !r.confirmed && r.freq === "monthly" && r.job.payType !== "salary" && used.has(r.job.id));
 }
 
 /* ---------- event editor sheet: edit freely, then confirm before anything is saved ---------- */
@@ -2493,7 +2495,7 @@ function viewEventsSpend(){
   const x = summary(S.y, S.m), evs = x.evs, rj = rateJob();
   // budget overview
   const room = x.income - x.fixed - x.save - x.wish, used = x.evTotal, pct = room > 0 ? Math.min(100, used / room * 100) : (used ? 100 : 0);
-  const budgetCard = x.income <= 0 ? `<section class="block budgetcard">
+  const budgetCard = !payEntered(x) ? `<section class="block budgetcard">
       <div class="blockhead"><span class="small muted"><b>${mName()}の行事・出費</b></span><span class="small muted">使えるお金 給料未入力</span></div>
       <div class="bv">${yen(used)}</div>
       <span class="small muted">${mName()}に使う給料が入っていないので、あといくら使えるかはまだ出せません。</span>
