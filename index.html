@@ -256,6 +256,7 @@ body.in-onb #appHeader, body.in-onb nav.tabs{display:none}
 .fixlist{display:flex;flex-direction:column;gap:8px}
 .fixrow{display:grid;grid-template-columns:minmax(0,1fr) 7.5em auto;gap:8px;align-items:center}
 .fixrow .fixday{grid-column:1 / 3;min-height:40px;font-size:14px}
+.fixrow span.fixday{min-height:0;align-self:center}.fixrow .fixcard{font-size:13px;white-space:nowrap;grid-column:3 / 4}
 .fixlist .fixrow:has(.fixday){padding-bottom:10px;border-bottom:1px dashed var(--line)}
 .fixrow input{width:100%!important}
 .onav{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px}
@@ -476,7 +477,7 @@ details.more section.block{padding:0;background:none}
 .morebox{display:flex;flex-direction:column;gap:12px;padding-top:4px;border-top:1px dashed var(--line)}
 #tut{position:fixed;inset:0;z-index:200}
 .tut-spot{position:fixed;border-radius:22px;box-shadow:0 0 0 9999px rgba(15,25,20,.62);pointer-events:none;transition:all .2s}
-.tut-card{position:fixed;left:16px;right:16px;max-width:520px;margin:0 auto;background:var(--surface);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.tut-card{position:fixed;left:16px;right:16px;max-width:520px;margin:0 auto;overflow-y:auto;background:var(--surface);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:6px;box-shadow:0 8px 30px rgba(0,0,0,.25)}
 .tut-card b{font-size:17px}.tut-card p{margin:0;font-size:14px;color:var(--muted);line-height:1.6}
 .tut-dots{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}.tut-dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}.tut-dots i.on{background:var(--accent)}.tut-dots span{margin-left:auto}
 .tut-foot{display:flex;justify-content:space-between;gap:8px;margin-top:6px}.tut-foot button{min-height:44px;padding:0 18px}
@@ -1457,7 +1458,7 @@ function projection(){
     let inflow = mi.rows.reduce((a, r) => a + (!cur || `${r.pd.y}-${pad(r.pd.m)}-${pad(r.pd.d)}` > todayYmd ? r.used : 0), 0) + (cur ? 0 : mi.othersTotal);
     const assumed = !cur && !mi.rows.some(r => r.used) && num(S.settings.assumeIncome) > 0;
     if (assumed) inflow += num(S.settings.assumeIncome);
-    const outEv = eventList(y, m).filter(e => !cur || e.ymd >= todayYmd).reduce((a, e) => a + evCost(e.doc), 0);
+    const evsP = eventList(y, m).filter(e => !cur || e.ymd >= todayYmd), outEv = evsP.reduce((a, e) => a + evCost(e.doc), 0) - cardOverlap(evsP);
     // this month: only fixed costs whose payday is still ahead (no payday set = already paid)
     const fixed = cur ? fixedOn(y, m).filter(f => f.ymd >= todayYmd).reduce((a, f) => a + f.cost, 0) : num(S.settings.fixedCost);
     bal += inflow - outEv - fixed;
@@ -1799,7 +1800,7 @@ function summary(y, m){
   for (const s of payIn){ const b = byJob[s.job.id] || (byJob[s.job.id] = {job: s.job, n:0, hours:0, pay:0, tr:0, pd:s.pd}); b.n++; b.hours += s.excluded ? 0 : s.paid; b.pay += s.pay; b.tr += s.transport; }
   const trIn = mi.estTr;
   const evs = eventList(y, m);
-  const evTotal = evs.reduce((a, e) => a + evCost(e.doc), 0), spent = evs.filter(isSpent).reduce((a, e) => a + evCost(e.doc), 0);
+  const evTotal = evs.reduce((a, e) => a + evCost(e.doc), 0) - cardOverlap(evs), spent = evs.filter(isSpent).reduce((a, e) => a + evCost(e.doc), 0);
   const fixed = num(S.settings.fixedCost), save = savingFor(y, m), wish = wishMonthTotal(key);
   const free = income - fixed - save - wish;
   const left = free - evTotal;
@@ -1983,7 +1984,7 @@ function viewHome(){
   const evs = x.evs.filter(e => !isSpent(e) && (!isCur || e.ymd >= todayYmd))
     .concat(fixedOn(S.y, S.m).filter(f => !isCur || f.ymd >= todayYmd)).sort((a, b) => a.ymd.localeCompare(b.ymd));
   const upRows = evs.slice(0, 4).map(e => {
-    if (e.fixed) return `<div class="li"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b><span>固定費</span></span><span class="la">${yen(e.cost)}</span></div>`;
+    if (e.fixed) return `<div class="li"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b><span>${e.card ? "固定費・カードの請求に含まれます" : "固定費"}</span></span><span class="la">${yen(e.cost)}</span></div>`;
     const c = evCost(e.doc), [k] = evStatus(e.doc);
     const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>` : e.moved && e.moved.moved ? `<span>${movedNote(e.moved).replace(/[（）]/g, "")}</span>` : rj && c ? `<span>${esc(rj.name.replace(/（.*）/, ""))} ${dur(c / num(rj.wage))}ぶん</span>` : "";
     return `<div class="li"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span></div>`;
@@ -2300,9 +2301,9 @@ function evRow(e, rj){
   const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>`
     : hasVal(e.doc.actual) && hasVal(e.doc.budget)
       ? `<span>予算 ${yen(num(e.doc.budget))} ・ ${k === "bad" ? `<b class="bad">${yen(num(e.doc.actual) - num(e.doc.budget))} オーバー</b>` : num(e.doc.budget) > num(e.doc.actual) ? `${yen(num(e.doc.budget) - num(e.doc.actual))} 浮いた` : "ぴったり"}</span>`
-    : `<span>${e.rec ? "毎月 ・ " : ""}${l}${e.moved && e.moved.moved ? " ・ " + movedNote(e.moved).replace(/[（）]/g, "") : rj && c && !hasVal(e.doc.actual) ? ` ・ ${esc(rj.name.replace(/（.*）/, ""))} ${dur(c / num(rj.wage))}ぶん` : ""}</span>`;
+    : `<span>${e.rec ? "毎月 ・ " : ""}${e.rec && e.rec.id === "card" && cardFixedTotal() ? `うち固定費 ${yen(cardFixedTotal())}（二重には数えません） ・ ` : ""}${l}${e.moved && e.moved.moved ? " ・ " + movedNote(e.moved).replace(/[（）]/g, "") : rj && c && !hasVal(e.doc.actual) ? ` ・ ${esc(rj.name.replace(/（.*）/, ""))} ${dur(c / num(rj.wage))}ぶん` : ""}</span>`;
   return `<button type="button" class="li evbtn" data-evedit="${esc(e.id)}" aria-label="${esc(e.title)}を編集">
-    <span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span><span class="chev" aria-hidden="true">›</span></button>`;
+    <span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub.replace(/(\s・\s)+(?=\s*・|<\/span>)/g, "").replace(/(\s・\s){2,}/g, " ・ ")}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span><span class="chev" aria-hidden="true">›</span></button>`;
 }
 const settled = e => hasVal(e.doc.actual);
 function itemName(title, group){
@@ -2765,12 +2766,12 @@ function viewEventsSpend(){
   for (const f of fixedOn(S.y, S.m)) (fixDay[f.ymd] = fixDay[f.ymd] || []).push(f);
   if (!S.evSel || !inPeriod(S.evSel, S.y, S.m)) S.evSel = inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start;
   const cal = calGrid("data-evday", S.evSel, key => {
-    const es = byDay[key] || [], fs = fixDay[key] || [], c = es.reduce((a, e) => a + evCost(e.doc), 0) + fs.reduce((a, f) => a + f.cost, 0);
+    const es = byDay[key] || [], fs = fixDay[key] || [], c = es.reduce((a, e) => a + evCost(e.doc), 0) + fs.reduce((a, f) => a + f.cost, 0) - cardOverlap(es);
     return {html: es.length || fs.length ? `<span class="evamt">${c ? shortYen(c) : "●"}</span>` : `<span class="evamt"></span>`, label: es.length || fs.length ? `、出費${es.length + fs.length}件 ${yen(c)}` : ""};
   });
   const selEvs = byDay[S.evSel] || [], selFix = fixDay[S.evSel] || [];
   const calCard = `<section class="block evcal">${cal}${periodCtl("events")}
-    <div class="evday"><div class="sec-h"><h2>${md(S.evSel)}（${DOW[new Date(S.evSel + "T00:00:00Z").getUTCDay()]}）${selEvs.length || selFix.length ? ` ${yen(selEvs.reduce((a, e) => a + evCost(e.doc), 0) + selFix.reduce((a, f) => a + f.cost, 0))}` : ""}</h2><button type="button" class="primary small-btn" data-evadd="1" data-evymd="${S.evSel}">＋ この日に追加</button></div>
+    <div class="evday"><div class="sec-h"><h2>${md(S.evSel)}（${DOW[new Date(S.evSel + "T00:00:00Z").getUTCDay()]}）${selEvs.length || selFix.length ? ` ${yen(selEvs.reduce((a, e) => a + evCost(e.doc), 0) + selFix.reduce((a, f) => a + f.cost, 0) - cardOverlap(selEvs))}` : ""}</h2><button type="button" class="primary small-btn" data-evadd="1" data-evymd="${S.evSel}">＋ この日に追加</button></div>
       ${selEvs.length || selFix.length ? `<div class="list">${selFix.map(fixRowHtml).join("")}${selEvs.map(e => isSpent(e) ? spentRow(e) : evRow(e, rj)).join("")}</div>` : `<span class="small muted">この日の行事はありません</span>`}</div></section>`;
   const doneTotal = done.reduce((a, e) => a + evCost(e.doc), 0);
   return `
@@ -2919,7 +2920,9 @@ function viewSettings(){
         <input type="text" id="sf-n-${i}" data-fix="${i}" data-field="name" value="${esc(f.name)}" placeholder="名前" aria-label="名前">
         <input type="text" inputmode="decimal" id="sf-a-${i}" data-fix="${i}" data-field="amount" value="${esc(f.amount)}" placeholder="円" aria-label="金額">
         <button type="button" class="ghost" data-act="delFix" data-i="${i}" aria-label="削除">×</button>
-        <select id="sf-d-${i}" data-fix="${i}" data-field="day" class="fixday" aria-label="支払日">${fixDayOpts(f)}</select></div>`).join("")}
+        ${f.card && cardRec() ? `<span class="small muted fixday">カードの引き落とし日（毎月${num(cardRec().day)}日）に出ていきます</span>` : `<select id="sf-d-${i}" data-fix="${i}" data-field="day" class="fixday" aria-label="支払日">${fixDayOpts(f)}</select>`}
+        <label class="inline fixcard"><input type="checkbox" id="sf-c-${i}" data-fix="${i}" data-field="card" ${f.card ? "checked" : ""}> カード払い</label></div>`).join("")}
+      ${(s.fixedItems || []).some(f => f.card) && !cardRec() ? `<div class="small warn">カード払いの固定費があります。下の「毎月決まった日の出費」に「クレジットカード引き落とし」を追加すると、引き落とし日に合わせて表示します。<button type="button" class="link" data-act="addCardRec">追加する</button></div>` : ""}
         <button type="button" data-act="addFix">＋ 固定費を追加</button></div>
     </section>
     <section class="block">
@@ -3129,10 +3132,15 @@ function drawTutorial(){
   if (cel && !cel.hidden && getComputedStyle(cel).display !== "none"){ setTimeout(drawTutorial, 700); return; }
   const st = tutSteps()[S.tut], el = document.querySelector(st.sel); if (!el) return;
   if (S.tut === 0) window.scrollTo(0, 0);
+  else if (!el.closest("nav")){ const q = el.getBoundingClientRect(); if (q.top < 60 || q.bottom > window.innerHeight - 90) el.scrollIntoView({block: "center"}); }
   const r = el.getBoundingClientRect(), pad = 8, below = r.top + r.height / 2 < window.innerHeight / 2;
+  // the card goes on the side with more room and may scroll inside itself, so a tall card (big text, small phone) is never cut off
+  const H = window.innerHeight, room = below ? H - (r.bottom + pad + 12) - 12 : r.top - pad - 12 - 12;
+  // big text zooms <body>; the overlay lives in it, so screen pixels are divided by that zoom
+  const z = parseFloat(getComputedStyle(document.body).zoom) || 1, px = v => `${(v / z).toFixed(1)}px`;
   const box = document.createElement("div"); box.id = "tut";
-  box.innerHTML = `<div class="tut-spot" style="top:${r.top - pad}px;left:${r.left - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px"></div>
-    <div class="tut-card" role="dialog" aria-modal="true" aria-label="使い方" style="${below ? `top:${Math.min(window.innerHeight - 220, r.bottom + pad + 12)}px` : `bottom:${Math.min(window.innerHeight - 220, window.innerHeight - r.top + pad + 12)}px`}">
+  box.innerHTML = `<div class="tut-spot" style="top:${px(r.top - pad)};left:${px(r.left - pad)};width:${px(r.width + pad * 2)};height:${px(r.height + pad * 2)}"></div>
+    <div class="tut-card" role="dialog" aria-modal="true" aria-label="使い方" style="${below ? `top:${px(r.bottom + pad + 12)}` : `bottom:${px(H - r.top + pad + 12)}`};max-height:${px(Math.max(150, room))}">
       <div class="tut-dots">${TUT_STEPS.map((_, k) => `<i class="${k === S.tut ? "on" : ""}"></i>`).join("")}<span>${S.tut + 1} / ${TUT_STEPS.length}</span></div>
       <b>${st.title}</b><p>${st.text}</p>
       <div class="tut-foot"><button type="button" class="ghost" data-tut="skip">スキップ</button><button type="button" class="primary" data-tut="next">${S.tut === TUT_STEPS.length - 1 ? "はじめる" : "次へ"}</button></div>
@@ -3279,6 +3287,7 @@ document.addEventListener("click", e => {
     migrateWalls(); migrateRates(); [S.y, S.m] = refreshToday(); saveLocal(); render(); toast("バックアップを読み込みました");
   }
   else if (act === "importNo"){ S.importPending = null; render(); }
+  else if (act === "addCardRec"){ S.settings.recurring = (S.settings.recurring || []).concat([{id: "card", title: "クレジットカード引き落とし", day: 27, budget: "", holidayShift: "next"}]); putSettings("クレジットカード引き落とし（毎月27日）を追加しました。日付は変えられます"); }
   else if (act === "gofix"){ S.tab = "settings"; S.setTab = "spend"; render(); window.scrollTo(0, 0); }
   else if (act === "addFix"){ (S.settings.fixedItems = S.settings.fixedItems || []).push({name: "", amount: ""}); S.settings.fixedCost = fixTotal(); putSettings("固定費の欄を追加しました"); setTimeout(() => { const el = document.getElementById("sf-n-" + (S.settings.fixedItems.length - 1)); if (el) el.focus(); }, 30); }
   else if (act === "delFix"){ S.settings.fixedItems.splice(Number(a.dataset.i), 1); S.settings.fixedCost = fixTotal(); putSettings("固定費を削除しました"); }
@@ -3378,7 +3387,7 @@ document.addEventListener("change", e => {
   } else if (t.dataset.fix !== undefined){
     const f = (S.settings.fixedItems || [])[Number(t.dataset.fix)], fld = t.dataset.field; if (!f) return;
     if (fld === "amount" && badNum(val)){ toast("数字で入力してください", "warn"); return; }
-    f[fld] = fld === "amount" || fld === "day" ? (val === "" ? "" : num(val)) : String(val).trim();
+    f[fld] = fld === "card" ? !!val : fld === "amount" || fld === "day" ? (val === "" ? "" : num(val)) : String(val).trim();
     S.settings.fixedCost = fixTotal();
     putSettings(`「${esc(f.name || "固定費")}」を保存しました`);
   } else if (t.dataset.rec !== undefined){
@@ -3476,8 +3485,23 @@ const ONB_STEPS = ["ようこそ", "バイト先", "貯金目標", "固定費", 
 const FIX_PRESETS = [["スマホ代", 3000], ["サブスク", 1000], ["定期・交通費", 5000], ["家賃", 40000], ["ジム・習い事", 3000], ["部費・サークル費", 2000]];
 const newJob = () => Object.assign(newJobBase(), personaOf() === "worker" ? {payType: "salary", night: false, since: todayKey, netRate: 80, payOffset: 0} : {});
 const newJobBase = () => ({id: "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: "", payType: "hourly", wage: "", fixedPay: "", night: true, weekendExtra: 0, transport: "", cutoff: 0, payOffset: 1, payDay: 25, holidayShift: "prev", useLag: 1, calColor: "6"});
+/* カード払いの固定費: the money leaves on the card's withdrawal day, and is part of that card bill */
+const cardRec = () => (S.settings.recurring || []).find(r => r.id === "card");
+function cardDateIn(y, m){
+  const c = cardRec(); if (!c) return null;
+  for (const off of [-1, 0, 1, 2]){
+    const [by, bm] = addMonths(y, m, off), last = new Date(Date.UTC(by, bm, 0)).getUTCDate();
+    const a = bizAdjust(by, bm, Math.min(Math.max(1, num(c.day) || 1), last), c.holidayShift || "next"), ymd = `${a.y}-${pad(a.m)}-${pad(a.d)}`;
+    if (inPeriod(ymd, y, m)) return ymd;
+  }
+  return null;
+}
+const cardFixedTotal = () => (S.settings.fixedItems || []).filter(f => f.card).reduce((a, f) => a + num(f.amount), 0);
+/* the card bill typed in includes the card-paid fixed costs, which are already counted as 固定費: count that part once */
+const cardOverlap = evs => evs.filter(e => e.rec && e.rec.id === "card").reduce((a, e) => a + Math.min(evCost(e.doc), cardFixedTotal()), 0);
 /* 固定費の支払日: f.day = "" (未指定) | 1..28 | 99 (末日). Returns the date inside period (y, m), or null */
 function fixDate(f, y, m){
+  if (f.card && cardRec()) return cardDateIn(y, m);
   const D = num(f.day); if (!D) return null;
   for (const off of [0, 1, -1]){
     const [cy, cm] = addMonths(y, m, off), last = new Date(Date.UTC(cy, cm, 0)).getUTCDate(), d = D === 99 ? last : Math.min(D, last);
@@ -3489,8 +3513,8 @@ function fixDate(f, y, m){
 const fixDayLabel = f => num(f.day) === 99 ? "末日" : num(f.day) ? `${num(f.day)}日` : "";
 const fixDayOpts = f => `<option value="">支払日 未指定</option>${Array.from({length: 28}, (_, k) => k + 1).map(d => `<option value="${d}" ${num(f.day) === d ? "selected" : ""}>毎月${d}日</option>`).join("")}<option value="99" ${num(f.day) === 99 ? "selected" : ""}>毎月末日</option>`;
 /* fixed costs with a payday in the viewed period, as list items */
-const fixedOn = (y, m) => (S.settings.fixedItems || []).filter(f => num(f.amount) > 0).map(f => { const ymd = fixDate(f, y, m); if (!ymd) return null; const [a, b, c] = ymd.split("-").map(Number); return {fixed: true, title: f.name || "固定費", ymd, d: c, dow: new Date(Date.UTC(a, b - 1, c)).getUTCDay(), cost: num(f.amount)}; }).filter(Boolean);
-const fixRowHtml = e => `<button type="button" class="li evbtn" data-act="gofix"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b><span>固定費</span></span><span class="la">${yen(e.cost)}</span><span class="chev" aria-hidden="true">›</span></button>`;
+const fixedOn = (y, m) => (S.settings.fixedItems || []).filter(f => num(f.amount) > 0).map(f => { const ymd = fixDate(f, y, m); if (!ymd) return null; const [a, b, c] = ymd.split("-").map(Number); return {fixed: true, card: !!(f.card && cardRec()), title: f.name || "固定費", ymd, d: c, dow: new Date(Date.UTC(a, b - 1, c)).getUTCDay(), cost: num(f.amount)}; }).filter(Boolean);
+const fixRowHtml = e => `<button type="button" class="li evbtn" data-act="gofix"><span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b><span>${e.card ? "固定費・カードの請求に含まれます" : "固定費"}</span></span><span class="la">${yen(e.cost)}</span><span class="chev" aria-hidden="true">›</span></button>`;
 const fixTotal = () => (S.settings.fixedItems || []).reduce((a, f) => a + num(f.amount), 0);
 function persist(){ S.settings.fixedCost = fixTotal(); saveLocal(); }
 function goalDraft(){ const st = S.settings; return S.goalDraft || (S.goalDraft = {balance: st.balance ?? "", goalAmount: st.goalAmount ?? "", goalMonth: st.goalMonth || "", assumeIncome: st.assumeIncome ?? ""}); }
@@ -3880,7 +3904,8 @@ function viewOnboarding(){
       ${items.length ? `<div class="ocard"><div class="fixlist">${items.map((f, i) => `<div class="fixrow">
           <input type="text" id="of-n-${i}" data-o="fixedItems.${i}.name" value="${esc(f.name)}" placeholder="名前" aria-label="名前">
           <input type="text" inputmode="decimal" id="of-a-${i}" data-o="fixedItems.${i}.amount" value="${esc(f.amount)}" placeholder="${f.hint ? `例：${f.hint}` : "円"}" aria-label="金額">
-          <button type="button" class="ghost" data-onb="delfix" data-i="${i}" aria-label="${esc(f.name || "固定費")}を削除">×</button></div>`).join("")}</div></div>` : ""}
+          <button type="button" class="ghost" data-onb="delfix" data-i="${i}" aria-label="${esc(f.name || "固定費")}を削除">×</button>
+          <label class="inline fixcard"><input type="checkbox" id="of-c-${i}" data-o="fixedItems.${i}.card" ${f.card ? "checked" : ""}> カード払い</label></div>`).join("")}</div></div>` : ""}
       <button type="button" class="ghost" style="align-self:flex-start;color:var(--accent);font-weight:900" data-onb="addfix">＋ ほかの固定費</button>
       <div class="opreview">固定費の合計 <b id="onbFix">${yen(fixTotal())}</b> / 月</div>
       <label class="choice ${card ? "sel" : ""}"><input type="checkbox" data-onb-card="1" ${card ? "checked" : ""}><span class="ct">クレジットカードの引き落としも管理する</span><span class="cd">毎月の引き落とし日に出費として入ります。金額は毎月入力します。</span></label>
@@ -3934,7 +3959,7 @@ function setPath(path, val){
 }
 document.addEventListener("input", e => {
   const t = e.target; if (!t.dataset.o || S.settings.onboarded) return;
-  if (t.type === "radio" || t.tagName === "SELECT") return;
+  if (t.type === "radio" || t.tagName === "SELECT" || t.type === "checkbox") return;
   if (t.getAttribute("inputmode") === "decimal" && badNum(t.value)){ toast("数字で入力してください", "warn"); return; }
   setPath(t.dataset.o, t.value); persist();
   const g = document.getElementById("onbGoal"); if (g) g.textContent = onbGoalPreview();
@@ -3948,6 +3973,7 @@ document.addEventListener("change", e => {
     persist(); render(); return;
   }
   if (!t.dataset.o || S.settings.onboarded) return;
+  if (t.type === "checkbox"){ setPath(t.dataset.o, t.checked); persist(); render(); return; }
   if (t.type === "radio" || t.tagName === "SELECT" || t.type === "month"){ setPath(t.dataset.o, t.value); persist(); render(); }
 }, true);
 document.addEventListener("click", e => {
