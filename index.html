@@ -538,6 +538,7 @@ html,body{overflow-x:hidden}
 .cel-tip{font-size:13px;line-height:1.6;opacity:.9;margin:4px 0 2px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--surface) 70%,transparent);text-align:left}
 .cel-reward{font-size:13.5px;font-weight:900;margin-top:6px}
 .evseg{margin-bottom:2px}
+.owgoal{align-self:flex-start;color:var(--accent);font-weight:900}
 .spamount{font-size:24px!important;font-weight:900;min-height:56px}
 .spcats{display:flex;flex-wrap:wrap;gap:6px}
 .spcard{display:flex;flex-direction:column;gap:8px}.spcard .bv{font-size:22px;font-weight:900}
@@ -2112,6 +2113,7 @@ function savingHtml(x){
       <label class="f">いつまでに<input type="month" id="hGm" data-gd="goalMonth" value="${esc(gd.goalMonth)}"></label>
       <label class="f">まだ入力のない月の収入見込み（月）<input type="text" inputmode="decimal" id="hGa" data-gd="assumeIncome" value="${esc(gd.assumeIncome)}" placeholder="例：60000"></label>
     </div>
+    ${(w => w ? `<button type="button" class="ghost owgoal" data-act="wishgoal" data-id="${esc(w.id)}">「${esc(w.title)}」のあと ${yen(Math.max(0, num(w.price) - wishSaved(w)))} を目標にする</button>` : "")(wishActive().find(w => num(w.price) > wishSaved(w)))}
     <div class="opreview" data-goalpreview>${esc(goalPreviewText())}</div>
     <div class="goalbtns"><span class="small" style="color:var(--pop);font-weight:900" data-goaldirty ${dirty ? "" : "hidden"}>まだ保存されていません</span>
       <button type="button" class="ghost" data-act="resetGoal" ${dirty ? "" : "disabled"}>元に戻す</button>
@@ -3323,6 +3325,12 @@ document.addEventListener("click", e => {
   else if (act === "addCardRec"){ S.settings.recurring = (S.settings.recurring || []).concat([{id: "card", title: "クレジットカード引き落とし", day: 27, budget: "", holidayShift: "next"}]); putSettings("クレジットカード引き落とし（毎月27日）を追加しました。日付は変えられます"); }
   else if (act === "installLater"){ const d = new Date(Date.UTC(now.y, now.m - 1, now.d) + 7 * 864e5).toISOString().slice(0, 10); S.settings.installSnooze = d; putSettings("7日後にもう一度お知らせします（設定の「その他」からも見られます）"); }
   else if (act === "install"){ if (installEvt){ installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; renderSoon(); }); } }
+  else if (act === "wishgoal"){
+    const w = wishes().find(x => x.id === id); if (!w) return;
+    const g = goalDraft(), left = Math.max(0, num(w.price) - wishSaved(w));
+    g.goalAmount = String(num(g.balance) + left); if (w.due) g.goalMonth = w.due;
+    S.openMore = "saving"; render(); toast(`残高 ${yen(num(g.balance))} ＋ ${esc(w.title)} ${yen(left)} を目標にしました。「保存する」で確定します`);
+  }
   else if (act === "gofix"){ S.tab = "settings"; S.setTab = "spend"; render(); window.scrollTo(0, 0); }
   else if (act === "addFix"){ (S.settings.fixedItems = S.settings.fixedItems || []).push({name: "", amount: ""}); S.settings.fixedCost = fixTotal(); putSettings("固定費の欄を追加しました"); setTimeout(() => { const el = document.getElementById("sf-n-" + (S.settings.fixedItems.length - 1)); if (el) el.focus(); }, 30); }
   else if (act === "delFix"){ S.settings.fixedItems.splice(Number(a.dataset.i), 1); S.settings.fixedCost = fixTotal(); putSettings("固定費を削除しました"); }
@@ -3568,6 +3576,13 @@ function goalPreviewText(){
   if (!p.need) return "もう目標額に届いています！";
   return `あと ${yen(p.need)}。${Number(p.gm.slice(0, 4))}年${Number(p.gm.slice(5))}月まで${p.left}か月なので、毎月 ${yen(p.perMonth)} 貯めればOK`;
 }
+document.addEventListener("input", e => { const t = e.target; if (t.dataset && t.dataset.ow && S.onbWish){ e.stopPropagation(); S.onbWish[t.dataset.ow] = t.value; } }, true);
+document.addEventListener("change", e => { const t = e.target; if (t.dataset && t.dataset.ow && S.onbWish){ e.stopPropagation(); S.onbWish[t.dataset.ow] = t.value; } }, true);
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-owpreset]"); if (!b || !S.onbWish) return;
+  e.stopPropagation(); const p = WISH_PRESETS.find(x => x.id === b.dataset.owpreset);
+  Object.assign(S.onbWish, {preset: p.id, title: p.t, price: String(Math.round((p.lo + p.hi) / 2 / 10000) * 10000)}); render();
+}, true);
 function syncGoalUI(){
   document.querySelectorAll("[data-goalpreview]").forEach(el => { el.textContent = goalPreviewText(); });
   const dirty = goalDirty();
@@ -3887,6 +3902,7 @@ function viewOnboarding(){
         <label class="f">名前<input type="text" id="oj-n-${i}" data-o="jobs.${i}.name" value="${esc(j.name)}" placeholder="例：カフェ、塾講師、コンビニ"></label>
         <label class="f">時給（任意・「何時間ぶん」の計算に使います）<input type="text" inputmode="decimal" id="oj-w-${i}" data-o="jobs.${i}.wage" value="${esc(j.wage)}" placeholder="例：1100"></label>
         <div class="f">給料日<span class="small muted">締め日と振込日を選んでください。給与明細やシフト表に書いてあります。</span>${cycleEditor(j, i, "onb")}</div>
+        <label class="f">振込日が土日祝のとき<select id="oj-h-${i}" data-o="jobs.${i}.holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(j.holidayShift || "prev") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
       </div>`;
         return `<div class="ocard">
         <div class="ocard-h"><span class="jdot" style="--jc:var(--j${i % 5})"></span><b>${jobs.length > 1 ? `${jobWord()} ${i + 1}` : jobWord()}</b>${jobs.length > 1 ? `<button type="button" class="ghost" data-onb="deljob" data-i="${i}">削除</button>` : ""}</div>
@@ -3909,20 +3925,31 @@ function viewOnboarding(){
             ${open ? `<div class="odetail">${rateEditor(j, i)}${allowanceEditor(j, i)}</div>` : ""}`; })()}
         ${j.payType === "salary" ? `<p class="small muted">手取りは額面の約8割で見込みます（設定で変更可）。給与明細が来たら確定額を入れると、そちらを優先します。残業した日はシフトに入れると残業代も計算します。</p>` : ""}
         ${j.payType === "salary" ? "" : `<div class="f">給料の受け取り方${freqEditor(j, i, "onb")}</div>`}
-        ${freqOf(j) !== "monthly" ? "" : `<div class="f">給料日<span class="small muted">締め日と振込日を選んでください。給与明細やシフト表に書いてあります。</span>${cycleEditor(j, i, "onb")}</div>`}
+        ${freqOf(j) !== "monthly" ? "" : `<div class="f">給料日<span class="small muted">締め日と振込日を選んでください。給与明細やシフト表に書いてあります。</span>${cycleEditor(j, i, "onb")}</div>
+        <label class="f">振込日が土日祝のとき<select id="oj-h-${i}" data-o="jobs.${i}.holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(j.holidayShift || "prev") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>`}
       </div>`; }).join("")}
       <button type="button" class="ghost" style="align-self:flex-start;color:var(--accent);font-weight:900" data-onb="addjob">＋ ${jobWord()}をもう1つ追加</button>
       ${onbMonthStart()}
       ${cta("つぎへ", true)}`;
   }
-  if (step === 2) body = `<div class="ostep-h"><h2 class="oh">貯金の目標は？</h2><p class="osub">今の残高と目標から、毎月貯める額と「自由に使えるお金」を出します。</p></div>
-      <div class="ocard"><div class="grid2">
+  if (step === 2){ const ow = S.onbWish || (S.onbWish = {title: "", price: "", due: "", preset: ""}); body = `<div class="ostep-h"><h2 class="oh">ほしいもの・<br>貯金の目標は？</h2><p class="osub">どちらも任意です。ほしいものがあると「あと何円・何時間働けば届くか」を出します。</p></div>
+      <div class="ocard"><b>ほしいもの・やりたいこと</b>
+        <div class="wpresets">${WISH_PRESETS.map(p => `<button type="button" class="wchip" data-owpreset="${p.id}" aria-pressed="${ow.preset === p.id}">${esc(p.t)}</button>`).join("")}</div>
+        ${(p => p ? `<span class="small muted">目安 ${yen(p.lo)}〜${yen(p.hi)}（2026年時点の大まかな目安。実際の値段に直してください）</span>` : "")(WISH_PRESETS.find(p => p.id === ow.preset))}
+        <div class="grid2">
+          <label class="f" style="grid-column:1 / -1">なにがほしい？<input type="text" id="ow-t" data-ow="title" value="${esc(ow.title)}" placeholder="例：合宿免許、新しいスマホ" autocomplete="off"></label>
+          <label class="f">金額<input type="text" inputmode="decimal" id="ow-p" data-ow="price" value="${esc(ow.price)}" placeholder="円"></label>
+          <label class="f">いつまでに<input type="month" id="ow-d" data-ow="due" value="${esc(ow.due)}"></label>
+        </div>
+        <button type="button" class="ghost owgoal" data-onb="wishgoal">↓ この金額を貯金の目標にする</button>
+      </div>
+      <div class="ocard"><b>貯金の目標</b><div class="grid2">
         <label class="f">今の口座残高<input type="text" inputmode="decimal" id="og-b" data-gd="balance" value="${esc(goalDraft().balance)}" placeholder="例：50000"></label>
         <label class="f">貯金目標額<input type="text" inputmode="decimal" id="og-g" data-gd="goalAmount" value="${esc(goalDraft().goalAmount)}" placeholder="例：200000"></label>
         <label class="f" style="grid-column:1 / -1">いつまでに<input type="month" id="og-m" data-gd="goalMonth" value="${esc(goalDraft().goalMonth)}"></label>
       </div></div>
       <div class="opreview" data-goalpreview>${esc(goalPreviewText())}</div>
-      ${cta("保存してつぎへ", true)}`;
+      ${cta("保存してつぎへ", true)}`; }
   if (step === 3){
     const items = st.fixedItems || (st.fixedItems = []);
     const card = (st.recurring || []).find(r => r.id === "card");
@@ -4012,7 +4039,16 @@ document.addEventListener("click", e => {
       if (nameless >= 0 && !b.classList.contains("skip")){ toast(`${jobWord()}の名前を入れてください`, "warn"); const el = document.getElementById("oj-n-" + nameless); if (el) el.focus(); return; }
       st.jobs = st.jobs.filter(j => String(j.name).trim());
     }
-    if (S.onbStep === 2){ if (b.classList.contains("skip")) S.goalDraft = null; else if (goalDirty()) commitGoal(false); }
+    if (S.onbStep === 2){
+      if (b.classList.contains("skip")){ S.goalDraft = null; S.onbWish = null; }
+      else {
+        if (goalDirty()) commitGoal(false);
+        const ow = S.onbWish;
+        if (ow && String(ow.title).trim() && num(ow.price) > 0 && !badNum(ow.price))
+          st.wishes = (Array.isArray(st.wishes) ? st.wishes : []).concat([{id: "w" + Date.now().toString(36), title: String(ow.title).trim(), price: num(ow.price), saved: 0, due: ow.due || "", preset: ow.preset || ""}]);
+        S.onbWish = null;
+      }
+    }
     if (S.onbStep === 3) st.fixedItems = (st.fixedItems || []).filter(f => String(f.name).trim() || num(f.amount));
     if (S.onbStep >= ONB_STEPS.length - 1){
       // with a payday-based month, each pay is spent in the period it arrives in
@@ -4034,6 +4070,12 @@ document.addEventListener("click", e => {
     st.jobs = st.jobs.filter(j => String(j.name).trim() || num(j.wage) || num(j.salary));
   }
   else if (a === "paypreset"){ const j = st.jobs[Number(b.dataset.i)], pp = PAY_PRESETS[Number(b.dataset.p)]; setCycles(j, pp.cycles ? pp.cycles.map(c => Object.assign({}, c)) : [{cutoff: pp.c, payOffset: pp.o, payDay: pp.d}]); S.onbCustom[b.dataset.i] = false; }
+  else if (a === "wishgoal"){
+    const ow = S.onbWish || {}, price = num(ow.price);
+    if (!price || badNum(ow.price)){ toast("先にほしいものの金額を入れてください", "warn"); const el = document.getElementById("ow-p"); if (el) el.focus(); return; }
+    const g = goalDraft(); g.goalAmount = String(num(g.balance) + price); if (ow.due) g.goalMonth = ow.due;
+    toast(num(g.balance) ? `今の残高 ${yen(num(g.balance))} ＋ ${esc(ow.title || "ほしいもの")} ${yen(price)} を目標にしました` : `${esc(ow.title || "ほしいもの")} の ${yen(price)} を目標にしました`);
+  }
   else if (a === "paycustom") S.onbCustom[b.dataset.i] = true;
   else if (a === "deljob") st.jobs.splice(Number(b.dataset.i), 1);
   else if (a === "preset"){
