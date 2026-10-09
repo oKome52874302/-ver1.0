@@ -538,7 +538,8 @@ html,body{overflow-x:hidden}
 .cel-tip{font-size:13px;line-height:1.6;opacity:.9;margin:4px 0 2px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--surface) 70%,transparent);text-align:left}
 .cel-reward{font-size:13.5px;font-weight:900;margin-top:6px}
 .evseg{margin-bottom:2px}
-.owgoal{align-self:flex-start;color:var(--accent);font-weight:900}
+.owgoal{align-self:flex-start;color:var(--accent);font-weight:900;text-align:left}
+.owgoals{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
 .spamount{font-size:24px!important;font-weight:900;min-height:56px}
 .spcats{display:flex;flex-wrap:wrap;gap:6px}
 .spcard{display:flex;flex-direction:column;gap:8px}.spcard .bv{font-size:22px;font-weight:900}
@@ -2113,7 +2114,9 @@ function savingHtml(x){
       <label class="f">いつまでに<input type="month" id="hGm" data-gd="goalMonth" value="${esc(gd.goalMonth)}"></label>
       <label class="f">まだ入力のない月の収入見込み（月）<input type="text" inputmode="decimal" id="hGa" data-gd="assumeIncome" value="${esc(gd.assumeIncome)}" placeholder="例：60000"></label>
     </div>
-    ${(w => w ? `<button type="button" class="ghost owgoal" data-act="wishgoal" data-id="${esc(w.id)}">「${esc(w.title)}」のあと ${yen(Math.max(0, num(w.price) - wishSaved(w)))} を目標にする</button>` : "")(wishActive().find(w => num(w.price) > wishSaved(w)))}
+    ${(w => w ? `<div class="owgoals"><span class="small muted">「${esc(w.title)}」（${yen(num(w.price))}）を目標にする</span>
+      <button type="button" class="ghost owgoal" data-act="wishgoal" data-v="add" data-id="${esc(w.id)}">今の残高は残して、あと ${yen(Math.max(0, num(w.price) - wishSaved(w)))} 上乗せで貯める</button>
+      <button type="button" class="ghost owgoal" data-act="wishgoal" data-v="use" data-id="${esc(w.id)}">今の残高も使って、残高 ${yen(num(w.price))} を目指す</button></div>` : "")(wishActive().find(w => num(w.price) > wishSaved(w)))}
     <div class="opreview" data-goalpreview>${esc(goalPreviewText())}</div>
     <div class="goalbtns"><span class="small" style="color:var(--pop);font-weight:900" data-goaldirty ${dirty ? "" : "hidden"}>まだ保存されていません</span>
       <button type="button" class="ghost" data-act="resetGoal" ${dirty ? "" : "disabled"}>元に戻す</button>
@@ -3327,9 +3330,11 @@ document.addEventListener("click", e => {
   else if (act === "install"){ if (installEvt){ installEvt.prompt(); installEvt.userChoice.finally(() => { installEvt = null; renderSoon(); }); } }
   else if (act === "wishgoal"){
     const w = wishes().find(x => x.id === id); if (!w) return;
-    const g = goalDraft(), left = Math.max(0, num(w.price) - wishSaved(w));
-    g.goalAmount = String(num(g.balance) + left); if (w.due) g.goalMonth = w.due;
-    S.openMore = "saving"; render(); toast(`残高 ${yen(num(g.balance))} ＋ ${esc(w.title)} ${yen(left)} を目標にしました。「保存する」で確定します`);
+    const g = goalDraft(), left = Math.max(0, num(w.price) - wishSaved(w)), add = a.dataset.v !== "use";
+    // 上乗せ: keep today's balance and save the rest on top. 残高も使う: the balance itself should reach the price
+    g.goalAmount = String(add ? num(g.balance) + left : num(w.price)); if (w.due) g.goalMonth = w.due;
+    S.openMore = "saving"; render();
+    toast(add ? `残高 ${yen(num(g.balance))} ＋ ${esc(w.title)} ${yen(left)} を目標にしました。「保存する」で確定します` : `残高 ${yen(num(w.price))} を目標にしました（今の残高も使います）。「保存する」で確定します`);
   }
   else if (act === "gofix"){ S.tab = "settings"; S.setTab = "spend"; render(); window.scrollTo(0, 0); }
   else if (act === "addFix"){ (S.settings.fixedItems = S.settings.fixedItems || []).push({name: "", amount: ""}); S.settings.fixedCost = fixTotal(); putSettings("固定費の欄を追加しました"); setTimeout(() => { const el = document.getElementById("sf-n-" + (S.settings.fixedItems.length - 1)); if (el) el.focus(); }, 30); }
@@ -3941,7 +3946,9 @@ function viewOnboarding(){
           <label class="f">金額<input type="text" inputmode="decimal" id="ow-p" data-ow="price" value="${esc(ow.price)}" placeholder="円"></label>
           <label class="f">いつまでに<input type="month" id="ow-d" data-ow="due" value="${esc(ow.due)}"></label>
         </div>
-        <button type="button" class="ghost owgoal" data-onb="wishgoal">↓ この金額を貯金の目標にする</button>
+        <div class="owgoals"><span class="small muted">この金額を貯金の目標にする</span>
+          <button type="button" class="ghost owgoal" data-onb="wishgoal" data-v="add">↓ 今の残高は残して、上乗せで貯める</button>
+          <button type="button" class="ghost owgoal" data-onb="wishgoal" data-v="use">↓ 今の残高も使って買う</button></div>
       </div>
       <div class="ocard"><b>貯金の目標</b><div class="grid2">
         <label class="f">今の口座残高<input type="text" inputmode="decimal" id="og-b" data-gd="balance" value="${esc(goalDraft().balance)}" placeholder="例：50000"></label>
@@ -4073,8 +4080,10 @@ document.addEventListener("click", e => {
   else if (a === "wishgoal"){
     const ow = S.onbWish || {}, price = num(ow.price);
     if (!price || badNum(ow.price)){ toast("先にほしいものの金額を入れてください", "warn"); const el = document.getElementById("ow-p"); if (el) el.focus(); return; }
-    const g = goalDraft(); g.goalAmount = String(num(g.balance) + price); if (ow.due) g.goalMonth = ow.due;
-    toast(num(g.balance) ? `今の残高 ${yen(num(g.balance))} ＋ ${esc(ow.title || "ほしいもの")} ${yen(price)} を目標にしました` : `${esc(ow.title || "ほしいもの")} の ${yen(price)} を目標にしました`);
+    const g = goalDraft(), add = b.dataset.v !== "use", bal = num(g.balance), nm = esc(ow.title || "ほしいもの");
+    g.goalAmount = String(add ? bal + price : price); if (ow.due) g.goalMonth = ow.due;
+    toast(add ? (bal ? `今の残高 ${yen(bal)} ＋ ${nm} ${yen(price)} を目標にしました` : `${nm} の ${yen(price)} を目標にしました`)
+      : bal >= price ? `今の残高で${nm}の ${yen(price)} に届いています` : `残高を ${yen(price)} にする目標にしました（今の残高 ${yen(bal)} も使います）`);
   }
   else if (a === "paycustom") S.onbCustom[b.dataset.i] = true;
   else if (a === "deljob") st.jobs.splice(Number(b.dataset.i), 1);
