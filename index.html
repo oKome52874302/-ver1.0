@@ -1206,7 +1206,7 @@ const spentCat = id => SPENT_CATS.find(c => c[0] === id) || SPENT_CATS[SPENT_CAT
 const isSpent = e => !!(e && (e.doc ? e.doc.spent : e.spent));
 function openSpent(id){
   const d = id ? S.events[id] : null;
-  S.spEdit = {id: id || null, v: d ? {amount: d.actual ?? "", cat: d.cat || "other", ymd: d.ymd, memo: d.memo || ""} : {amount: "", cat: "", ymd: inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start, memo: ""}};
+  S.spEdit = {id: id || null, v: d ? {amount: d.actual ?? "", cat: d.cat || "other", ymd: d.ymd, memo: d.memo || "", card: !!d.card} : {amount: "", cat: "", ymd: inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start, memo: ""}};
   render(); setTimeout(() => { const el = document.getElementById("sp-amount"); if (el) el.focus(); }, 30);
 }
 function spSheetHtml(){
@@ -1220,6 +1220,7 @@ function spSheetHtml(){
       <label class="f">日付<input id="sp-ymd" data-spf="ymd" type="date" value="${esc(v.ymd)}"></label>
       <label class="f">メモ（任意）<input id="sp-memo" data-spf="memo" type="text" placeholder="例：コンビニ" value="${esc(v.memo)}" autocomplete="off"></label>
     </div>
+    ${cardRec() ? `<label class="inline"><input type="checkbox" id="sp-card" data-spf="card" ${v.card ? "checked" : ""}> カードで払った（引き落としの請求に入っても二重に数えません）</label>` : ""}
     <p class="small muted">予定していた出費（旅行・飲み会など）は「行事」に。ここは予定になかった分だけでOKです。</p>
     <div class="evs-foot">${ed.id ? `<button type="button" class="ghost danger" data-sp="del">${S.confirmDel === "sp:" + ed.id ? "本当に削除する" : "削除"}</button>` : ""}<span style="flex:1"></span>
       <button type="button" data-sp="close">キャンセル</button><button type="button" class="primary" data-sp="save">記録する</button></div>
@@ -1227,7 +1228,7 @@ function spSheetHtml(){
 }
 document.addEventListener("input", e => {
   const t = e.target; if (!t.dataset || !t.dataset.spf || !S.spEdit) return;
-  e.stopPropagation(); S.spEdit.v[t.dataset.spf] = t.value;
+  e.stopPropagation(); S.spEdit.v[t.dataset.spf] = t.type === "checkbox" ? t.checked : t.value;
 }, true);
 document.addEventListener("click", e => {
   const o = e.target.closest("[data-spedit]");
@@ -1250,7 +1251,7 @@ document.addEventListener("click", e => {
     if (!v.ymd){ toast("日付を選んでください", "warn"); return; }
     const cat = spentCat(v.cat), id = ed.id || "sp" + Date.now().toString(36);
     S.spEdit = null;
-    putDoc("events", id, {manual: true, included: true, spent: true, cat: cat[0], title: String(v.memo).trim() || cat[1], ymd: v.ymd, budget: "", actual: num(v.amount), memo: String(v.memo).trim(), group: ""},
+    putDoc("events", id, {manual: true, included: true, spent: true, cat: cat[0], title: String(v.memo).trim() || cat[1], ymd: v.ymd, budget: "", actual: num(v.amount), memo: String(v.memo).trim(), group: "", card: !!v.card},
       `${cat[1]} ${yen(num(v.amount))} を記録しました${inPeriod(v.ymd, S.y, S.m) ? "" : `（${mName(...periodOf(...v.ymd.split("-").map(Number)))}に入りました）`}`);
   }
 }, true);
@@ -1258,7 +1259,7 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && S.spEdit){
 function spentRow(e){
   const c = spentCat(e.doc.cat);
   return `<button type="button" class="li evbtn" data-spedit="${esc(e.id)}" aria-label="${esc(e.title)}を直す">
-    <span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${c[2]} ${esc(e.title)}</b>${e.title !== c[1] ? `<span>${c[1]}</span>` : ""}</span><span class="la">${yen(evCost(e.doc))}</span><span class="chev" aria-hidden="true">›</span></button>`;
+    <span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${c[2]} ${esc(e.title)}</b>${e.title !== c[1] || e.doc.card ? `<span>${c[1]}${e.doc.card ? "・カード" : ""}</span>` : ""}</span><span class="la">${yen(evCost(e.doc))}</span><span class="chev" aria-hidden="true">›</span></button>`;
 }
 function evCost(doc){ const a = doc.actual, b = doc.budget; const hasA = a !== undefined && a !== "" && a !== null; return hasA ? num(a) : num(b); }
 function evStatus(doc){
@@ -2221,15 +2222,35 @@ function syncChip(s){
   return `<span class="chip ${s.rec.calSync === "error" ? "bad" : "warn"}">${s.rec.calSync === "error" ? "反映失敗" : "未反映"}</span><button data-act="syncshift" data-id="${esc(s.id)}" ${mcp ? "" : "disabled"}>反映</button>`;
 }
 /* 月の区切り日, changeable right where the calendar is (same setting as 設定 › その他) */
-function periodCtl(id){
-  const sd = startDay(), pr = periodRange(S.y, S.m);
-  return `<details class="pctl" data-more="pctl-${id}" ${S.openMore === "pctl-" + id ? "open" : ""}><summary><span>${md(pr.start)}〜${md(pr.end)}</span><span class="linkish">区切り：${sd === 1 ? "1日（ふつうの月）" : `${sd}日`} ›</span></summary>
-    <label class="f">1か月の始まりの日<select id="pctl-${id}" data-set="monthStart">${Array.from({length: 28}, (_, k) => k + 1).map(v => `<option value="${v}" ${sd === v ? "selected" : ""}>${v === 1 ? "1日（ふつうの月）" : `${v}日〜翌月${v - 1}日`}</option>`).join("")}</select></label>
-    <span class="small muted">給料日に合わせると使いやすくなります（例：25日払いなら25日）。シフト・行事・使えるお金の計算がすべてこの区切りになります。</span></details>`;
+/* each calendar (shifts / events) may start on its own day; "" = the household month (月の区切り) */
+const calStartOf = kind => { const v = num((S.settings.calStart || {})[kind]); return v >= 1 && v <= 28 ? v : 0; };
+const ymdOfT = t => new Date(t).toISOString().slice(0, 10);
+function calRange(kind){
+  const sd = calStartOf(kind), pr = periodRange(S.y, S.m);
+  if (!sd || sd === startDay()) return pr;
+  // the range starting on day sd that holds the middle of the viewed household month
+  const a = Date.parse(pr.start + "T00:00:00Z"), b = Date.parse(pr.end + "T00:00:00Z"), mid = new Date((a + b) / 2);
+  let y = mid.getUTCFullYear(), m = mid.getUTCMonth() + 1;
+  if (mid.getUTCDate() < sd) [y, m] = addMonths(y, m, -1);
+  const [ny, nm] = addMonths(y, m, 1);
+  return {start: `${y}-${pad(m)}-${pad(sd)}`, end: ymdOfT(Date.UTC(ny, nm - 1, sd) - 864e5)};
 }
+const inRange = (ymd, r) => !!ymd && ymd >= r.start && ymd <= r.end;
+function periodCtl(id){
+  const own = calStartOf(id), sd = own || startDay(), pr = calRange(id);
+  return `<details class="pctl" data-more="pctl-${id}" ${S.openMore === "pctl-" + id ? "open" : ""}><summary><span>${md(pr.start)}〜${md(pr.end)}</span><span class="linkish">始まり：${sd === 1 ? "1日" : `${sd}日`} ›</span></summary>
+    <label class="f">このカレンダーの始まりの日<select id="pctl-${id}" data-calstart="${id}"><option value="" ${own ? "" : "selected"}>家計の1か月と同じ（${startDay() === 1 ? "1日" : `${startDay()}日`}〜）</option>${Array.from({length: 28}, (_, k) => k + 1).map(v => `<option value="${v}" ${own === v ? "selected" : ""}>${v === 1 ? "1日〜末日" : `${v}日〜翌月${v - 1}日`}</option>`).join("")}</select></label>
+    <span class="small muted">${id === "shifts" ? "シフトのカレンダー" : "行事のカレンダー"}だけの設定です（例：シフト表が16日始まりなら16日）。「使えるお金」を計算する1か月の区切りは、設定の「その他」で変えられます。</span></details>`;
+}
+document.addEventListener("change", e => {
+  const t = e.target; if (!t.dataset || t.dataset.calstart === undefined) return;
+  e.stopPropagation(); S.settings.calStart = Object.assign({}, S.settings.calStart, {[t.dataset.calstart]: t.value === "" ? "" : num(t.value)});
+  S.sel = null; S.evSel = null; putSettings(t.value === "" ? "家計の1か月と同じ区切りに戻しました" : `このカレンダーを毎月${t.value}日始まりにしました`);
+}, true);
 /* the viewed period as a month grid; cell(key, i) returns the inside of each day button */
-function calGrid(attr, sel, cell){
-  const pr = periodRange(S.y, S.m), t0 = Date.UTC(S.y, S.m - 1, startDay()), first = new Date(t0).getUTCDay();
+function calGrid(attr, sel, cell, pr){
+  pr = pr || periodRange(S.y, S.m);
+  const t0 = Date.parse(pr.start + "T00:00:00Z"), first = new Date(t0).getUTCDay();
   let cells = DOW.map((w, i) => `<div class="wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</div>`).join("");
   for (let i = 0; i < first; i++) cells += `<div class="day blank" aria-hidden="true"></div>`;
   for (let t = t0, i = 0; i < 32; t += 864e5, i++){
@@ -2256,15 +2277,15 @@ function intlMaxWeek(from, to){
 const INTL_NOTE = "留学生は、どの曜日から数えても7日間で合計28時間まで（すべてのバイト先の合計）。学校の長期休業中だけは1日8時間・週40時間まで働けます。";
 function viewShifts(){
   const jobs = S.settings.jobs;
-  const list = allShifts().filter(s => inPeriod(s.ev.ymd, S.y, S.m));
-  const pr = periodRange(S.y, S.m);
+  const pr = calRange("shifts");
+  const list = allShifts().filter(s => inRange(s.ev.ymd, pr));
   const total = list.reduce((a, s) => a + s.pay, 0), h = list.reduce((a, s) => a + s.paid, 0);
   const byDay = {};
   for (const s of list) (byDay[s.ev.ymd] = byDay[s.ev.ymd] || []).push(s);
-  if (!inPeriod(S.sel, S.y, S.m)) S.sel = inPeriod(todayYmd, S.y, S.m) ? todayYmd : pr.start;
+  if (!inRange(S.sel, pr)) S.sel = inRange(todayYmd, pr) ? todayYmd : pr.start;
   if (!S.form) S.form = defaultForm();
   if (S.form.transport === undefined) S.form.transport = "";
-  const t0 = Date.UTC(S.y, S.m - 1, startDay()), first = new Date(t0).getUTCDay();
+  const t0 = Date.parse(pr.start + "T00:00:00Z"), first = new Date(t0).getUTCDay();
   let cells = DOW.map((w, i) => `<div class="wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</div>`).join("");
   for (let i = 0; i < first; i++) cells += `<div class="day blank" aria-hidden="true"></div>`;
   for (let t = t0, i = 0; i < 32; t += 864e5, i++){
@@ -2332,7 +2353,7 @@ function evRow(e, rj){
   const sub = k === "warn" ? `<span class="warn">金額を入力してください</span>`
     : hasVal(e.doc.actual) && hasVal(e.doc.budget)
       ? `<span>予算 ${yen(num(e.doc.budget))} ・ ${k === "bad" ? `<b class="bad">${yen(num(e.doc.actual) - num(e.doc.budget))} オーバー</b>` : num(e.doc.budget) > num(e.doc.actual) ? `${yen(num(e.doc.budget) - num(e.doc.actual))} 浮いた` : "ぴったり"}</span>`
-    : `<span>${e.rec ? "毎月 ・ " : ""}${e.rec && e.rec.id === "card" && cardFixedTotal(evKey(e)) ? `うち固定費 ${yen(cardFixedTotal(evKey(e)))}（二重には数えません） ・ ` : ""}${l}${e.moved && e.moved.moved ? " ・ " + movedNote(e.moved).replace(/[（）]/g, "") : rj && c && !hasVal(e.doc.actual) ? ` ・ ${esc(rj.name.replace(/（.*）/, ""))} ${dur(c / num(rj.wage))}ぶん` : ""}</span>`;
+    : `<span>${e.rec ? "毎月 ・ " : ""}${e.rec && e.rec.id === "card" ? (u => `${u ? `${md(u.start)}〜${md(u.end)}利用分 ・ ` : ""}${cardKnown(e) ? `うち記録済み ${yen(cardKnown(e))}（二重には数えません） ・ ` : ""}`)(cardUseRange(e)) : ""}${l}${e.moved && e.moved.moved ? " ・ " + movedNote(e.moved).replace(/[（）]/g, "") : rj && c && !hasVal(e.doc.actual) ? ` ・ ${esc(rj.name.replace(/（.*）/, ""))} ${dur(c / num(rj.wage))}ぶん` : ""}</span>`;
   return `<button type="button" class="li evbtn" data-evedit="${esc(e.id)}" aria-label="${esc(e.title)}を編集">
     <span class="ld"><b>${e.d}</b><span>${DOW[e.dow]}</span></span><span class="lm"><b>${esc(e.title)}</b>${sub.replace(/(\s・\s)+(?=\s*・|<\/span>)/g, "").replace(/(\s・\s){2,}/g, " ・ ")}</span><span class="la ${c ? "" : "dim"}">${c ? yen(c) : "—"}</span><span class="chev" aria-hidden="true">›</span></button>`;
 }
@@ -2792,14 +2813,17 @@ function viewEventsSpend(){
   }).join("");
   const ahead = singles.filter(e => !settled(e)), done = singles.filter(settled);
   // calendar: which days have spending, and the selected day's list
-  const byDay = {}, fixDay = {};
-  for (const e of evs) (byDay[e.ymd] = byDay[e.ymd] || []).push(e);
-  for (const f of fixedOn(S.y, S.m)) (fixDay[f.ymd] = fixDay[f.ymd] || []).push(f);
-  if (!S.evSel || !inPeriod(S.evSel, S.y, S.m)) S.evSel = inPeriod(todayYmd, S.y, S.m) ? todayYmd : periodRange(S.y, S.m).start;
+  const byDay = {}, fixDay = {}, cr = calRange("events"), seen = new Set();
+  for (const off of [-1, 0, 1]){
+    const [py, pm] = addMonths(S.y, S.m, off);
+    for (const e of (off ? eventList(py, pm) : evs)) if (inRange(e.ymd, cr) && !seen.has(e.id)){ seen.add(e.id); (byDay[e.ymd] = byDay[e.ymd] || []).push(e); }
+    for (const f of fixedOn(py, pm)) if (inRange(f.ymd, cr)) (fixDay[f.ymd] = fixDay[f.ymd] || []).push(f);
+  }
+  if (!inRange(S.evSel, cr)) S.evSel = inRange(todayYmd, cr) ? todayYmd : cr.start;
   const cal = calGrid("data-evday", S.evSel, key => {
     const es = byDay[key] || [], fs = fixDay[key] || [], c = es.reduce((a, e) => a + evCost(e.doc), 0) + fs.reduce((a, f) => a + f.cost, 0) - cardOverlap(es);
     return {html: es.length || fs.length ? `<span class="evamt">${c ? shortYen(c) : "●"}</span>` : `<span class="evamt"></span>`, label: es.length || fs.length ? `、出費${es.length + fs.length}件 ${yen(c)}` : ""};
-  });
+  }, cr);
   const selEvs = byDay[S.evSel] || [], selFix = fixDay[S.evSel] || [];
   const calCard = `<section class="block evcal">${cal}${periodCtl("events")}
     <div class="evday"><div class="sec-h"><h2>${md(S.evSel)}（${DOW[new Date(S.evSel + "T00:00:00Z").getUTCDay()]}）${selEvs.length || selFix.length ? ` ${yen(selEvs.reduce((a, e) => a + evCost(e.doc), 0) + selFix.reduce((a, f) => a + f.cost, 0) - cardOverlap(selEvs))}` : ""}</h2><button type="button" class="primary small-btn" data-evadd="1" data-evymd="${S.evSel}">＋ この日に追加</button></div>
@@ -2974,6 +2998,8 @@ function viewSettings(){
           <label class="f">毎月の日付<input type="text" inputmode="decimal" class="w-s" id="rd-${i}" data-rec="${i}" data-field="day" value="${esc(r.day)}"></label>
           <label class="f">土日祝のとき<select id="rh-${i}" data-rec="${i}" data-field="holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(r.holidayShift || "next") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
           <label class="f">いつもの金額<input type="text" inputmode="decimal" id="rb-${i}" data-rec="${i}" data-field="budget" value="${esc(r.budget ?? "")}" placeholder="毎月入力"></label>
+          ${r.id === "card" ? `<label class="f">締め日<select id="rc-${i}" data-rec="${i}" data-field="close">${CUT_OPTS.map(([v, n]) => `<option value="${v}" ${num(r.close) === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
+          <label class="f">引き落とし<select id="ro-${i}" data-rec="${i}" data-field="payOffset">${[[1, "締めた翌月"], [2, "締めた翌々月"]].map(([v, n]) => `<option value="${v}" ${(hasVal(r.payOffset) ? num(r.payOffset) : 1) === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>` : ""}
           <button class="ghost" data-act="delRec" data-id="${esc(r.id)}">${S.confirmDel === "r:" + r.id ? "本当に削除する" : "削除"}</button>
         </div>`).join("") || `<div class="empty">まだありません。</div>`}</div>
     </section>
@@ -3443,7 +3469,7 @@ document.addEventListener("change", e => {
     putSettings(`「${esc(f.name || "固定費")}」を保存しました`);
   } else if (t.dataset.rec !== undefined){
     const r = (S.settings.recurring || [])[Number(t.dataset.rec)], f = t.dataset.field; if (!r) return;
-    if (!["title","holidayShift"].includes(f) && badNum(val)){ toast("数字で入力してください", "warn"); return; }
+    if (!["title","holidayShift","close","payOffset"].includes(f) && badNum(val)){ toast("数字で入力してください", "warn"); return; }
     r[f] = f === "title" ? String(val).trim() : f === "holidayShift" ? val : (val === "" ? "" : num(val));
     if (f === "day") r.day = Math.min(31, Math.max(1, num(val) || 1));
     putSettings(`「${esc(r.title || "毎月の行事")}」を保存しました`);
@@ -3547,10 +3573,23 @@ function cardDateIn(y, m){
   }
   return null;
 }
+/* カード: c.close = 締め日 (0 = 月末, 1..28), c.payOffset = 引き落としは締めた月の何か月後 (default 1). A bill rc_card_YYYYMM covers the use up to that close */
+function cardUseRange(e){
+  const c = cardRec(); if (!c) return null;
+  const mm = /_(\d{4})(\d{2})$/.exec(e.id || ""); if (!mm) return null;
+  const off = hasVal(c.payOffset) ? num(c.payOffset) : 1, close = num(c.close);
+  const [cy, cm] = addMonths(Number(mm[1]), Number(mm[2]), -off), [py, pm] = addMonths(cy, cm, -1);
+  const endD = close ? Math.min(close, new Date(Date.UTC(cy, cm, 0)).getUTCDate()) : new Date(Date.UTC(cy, cm, 0)).getUTCDate();
+  const startT = close ? Date.UTC(py, pm - 1, Math.min(close, new Date(Date.UTC(py, pm, 0)).getUTCDate())) + 864e5 : Date.UTC(cy, cm - 1, 1);
+  return {start: ymdOfT(startT), end: `${cy}-${pad(cm)}-${pad(endD)}`};
+}
+/* spending recorded with 「カードで払った」 in a bill's use period: already counted on the day it was spent */
+const cardSpentIn = r => !r ? 0 : Object.values(S.events).filter(d => d.spent && d.card && inRange(d.ymd, r)).reduce((a, d) => a + num(d.actual), 0);
 const cardFixedTotal = key => (S.settings.fixedItems || []).filter(f => f.card && fixActive(f, key || todayKey)).reduce((a, f) => a + num(f.amount), 0);
 const evKey = e => periodKeyOf(...e.ymd.split("-").map(Number));
 /* the card bill typed in includes the card-paid fixed costs, which are already counted as 固定費: count that part once */
-const cardOverlap = evs => evs.filter(e => e.rec && e.rec.id === "card").reduce((a, e) => a + Math.min(evCost(e.doc), cardFixedTotal(evKey(e))), 0);
+const cardKnown = e => cardFixedTotal(evKey(e)) + cardSpentIn(cardUseRange(e));
+const cardOverlap = evs => evs.filter(e => e.rec && e.rec.id === "card").reduce((a, e) => a + Math.min(evCost(e.doc), cardKnown(e)), 0);
 /* 固定費の支払日: f.day = "" (未指定) | 1..28 | 99 (末日). Returns the date inside period (y, m), or null */
 function fixDate(f, y, m){
   if (f.card && cardRec()) return cardDateIn(y, m);
@@ -3978,6 +4017,7 @@ function viewOnboarding(){
       <div class="opreview">固定費の合計 <b id="onbFix">${yen(fixTotal())}</b> / 月</div>
       <label class="choice ${card ? "sel" : ""}"><input type="checkbox" data-onb-card="1" ${card ? "checked" : ""}><span class="ct">クレジットカードの引き落としも管理する</span><span class="cd">毎月の引き落とし日に出費として入ります。金額は毎月入力します。</span></label>
       ${card ? `<div class="grid2"><label class="f">引き落とし日<select id="oc-d" data-o="card.day">${Array.from({length: 28}, (_, i) => i + 1).map(v => `<option value="${v}" ${num(card.day) === v ? "selected" : ""}>${v}日</option>`).join("")}</select></label>
+        <label class="f">締め日<select id="oc-c" data-o="card.close">${CUT_OPTS.map(([v, n]) => `<option value="${v}" ${num(card.close) === v ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         <label class="f">土日祝のとき<select id="oc-h" data-o="card.holidayShift">${SHIFT_OPTS.map(([v, n]) => `<option value="${v}" ${(card.holidayShift || "next") === v ? "selected" : ""}>${n}</option>`).join("")}</select></label></div>` : ""}
       ${cta("つぎへ")}`;
   }
@@ -4018,7 +4058,7 @@ document.addEventListener("change", e => {
 }, true);
 function setPath(path, val){
   const parts = path.split(".");
-  if (parts[0] === "card"){ const c = (S.settings.recurring || []).find(r => r.id === "card"); if (c) c[parts[1]] = parts[1] === "day" ? num(val) : val; return; }
+  if (parts[0] === "card"){ const c = (S.settings.recurring || []).find(r => r.id === "card"); if (c) c[parts[1]] = ["day", "close", "payOffset"].includes(parts[1]) ? num(val) : val; return; }
   let o = S.settings;
   for (let i = 0; i < parts.length - 1; i++) o = o[isNaN(parts[i]) ? parts[i] : Number(parts[i])];
   const k = parts[parts.length - 1];
