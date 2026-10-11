@@ -2622,7 +2622,7 @@ const wishHoursText = i => i.hours ? `あと約${Math.ceil(i.hours)}時間${i.sh
 /* last month's money left over, offered once to the first goal */
 function wishOffer(){
   const w = wishActive().find(v => num(v.price) > num(v.saved)); if (!w) return null;
-  const pk = keyAdd(todayKey, -1); if ((S.settings.wishOffered || {})[pk]) return null;
+  const pk = keyAdd(todayKey, -1); if ((S.settings.wishOffered || {})[pk] !== undefined) return null;   // 0 = "今回はいい" was chosen
   const x = summary(...pk.split("-").map(Number));
   return x.income > 0 && x.left >= 100 ? {w, k: pk, amount: Math.floor(x.left / 100) * 100} : null;
 }
