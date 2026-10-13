@@ -541,7 +541,7 @@ html,body{overflow-x:hidden}
 .evseg{margin-bottom:2px}
 #calcbar{position:fixed;left:0;right:0;bottom:0;z-index:300;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 14px rgba(0,0,0,.08)}
 #calcbar[hidden]{display:none}
-body.calc-on .evpanel{padding-bottom:calc(70px + env(safe-area-inset-bottom))}body.calc-on #view{padding-bottom:140px}
+body.calc-on .evpanel{padding-bottom:calc(70px + env(safe-area-inset-bottom))}
 #calcbar .cb-res{flex:1;min-width:0;font-weight:900;font-size:14px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #calcbar .cb-keys{display:flex;gap:4px}
 #calcbar button{min-width:38px;min-height:38px;padding:0 6px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font:inherit;font-size:17px;font-weight:900;color:var(--ink)}
@@ -551,7 +551,10 @@ body.calc-on .evpanel{padding-bottom:calc(70px + env(safe-area-inset-bottom))}bo
 .scanlist{display:flex;flex-direction:column;gap:6px}
 .scanpick{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font:inherit;color:inherit;text-align:left;cursor:pointer}
 .scanpick b{font-size:18px}.scanpick span{font-size:12px;color:var(--muted);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.scanpick.best{border:2px solid var(--accent)}
+.scanpick .sck{flex:none;width:22px;height:22px;border-radius:7px;border:2px solid var(--line);display:grid;place-items:center}
+.scanpick[aria-pressed="true"]{border:2px solid var(--accent);background:color-mix(in srgb,var(--accent) 8%,var(--surface))}
+.scanpick[aria-pressed="true"] .sck{background:var(--accent);border-color:var(--accent)}.scanpick[aria-pressed="true"] .sck::after{content:"✓";color:#fff;font-size:14px;font-weight:900}
+.scanpick b{margin-right:auto}
 .scanspin{width:36px;height:36px;border-radius:50%;border:4px solid var(--tint);border-top-color:var(--accent);animation:spin 1s linear infinite;align-self:center;margin:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .owgoal{align-self:flex-start;color:var(--accent);font-weight:900;text-align:left}
@@ -1912,7 +1915,10 @@ document.addEventListener("focusin", e => {
   if (touch && t && t.getAttribute && t.getAttribute("inputmode") === "decimal"){ calcEl = t; bar.hidden = false; document.body.classList.add("calc-on"); calcPreview(); calcPlace(); setTimeout(calcPlace, 350); }
 });
 document.addEventListener("focusout", e => {
-  setTimeout(() => { const a = document.activeElement; if (!(a && a.getAttribute && a.getAttribute("inputmode") === "decimal")){ const bar = document.getElementById("calcbar"); if (bar) bar.hidden = true; document.body.classList.remove("calc-on"); calcEl = null; } }, 60);
+  setTimeout(() => { const a = document.activeElement; if (!(a && a.getAttribute && a.getAttribute("inputmode") === "decimal")){ const bar = document.getElementById("calcbar"); if (bar) bar.hidden = true; document.body.classList.remove("calc-on"); calcEl = null;
+      // iOS sometimes leaves fixed bars (the tab bar) mid-screen after the keyboard closes; a tiny scroll puts them back
+      setTimeout(() => { try { window.scrollTo(window.scrollX, window.scrollY + 1); window.scrollTo(window.scrollX, window.scrollY - 1); } catch(_){} }, 120);
+    } }, 60);
 });
 document.addEventListener("input", e => { if (e.target === calcEl) calcPreview(); }, true);
 if (window.visualViewport){ visualViewport.addEventListener("resize", calcPlace); visualViewport.addEventListener("scroll", calcPlace); }
@@ -1987,9 +1993,19 @@ document.addEventListener("click", e => {
   if (b){ e.stopPropagation(); e.preventDefault(); scanTarget = b.dataset.scan; const f = document.getElementById("scanFile"); f.value = ""; f.click(); return; }
   const pick = e.target.closest && e.target.closest("[data-scanpick]");
   if (pick){
-    e.stopPropagation(); const el = document.getElementById(scanTarget);
-    if (el){ el.value = pick.dataset.scanpick; el.dispatchEvent(new Event("input", {bubbles: true})); el.dispatchEvent(new Event("change", {bubbles: true})); }
-    scanPanel(null); toast(`${yen(Number(pick.dataset.scanpick))} を入れました`); return;
+    // tap to select / unselect; several can be chosen and are added up
+    e.stopPropagation(); const on = pick.getAttribute("aria-pressed") !== "true"; pick.setAttribute("aria-pressed", String(on));
+    const sel = [...document.querySelectorAll("#scanPanel [data-scanpick][aria-pressed=true]")], sum = sel.reduce((a, b) => a + Number(b.dataset.scanpick), 0);
+    const go = document.querySelector("#scanPanel [data-scanuse]");
+    if (go){ go.disabled = !sel.length; go.textContent = sel.length > 1 ? `${sel.length}件の合計 ${yen(sum)} を入れる` : sel.length ? `${yen(sum)} を入れる` : "金額を選んでください"; }
+    return;
+  }
+  const use = e.target.closest && e.target.closest("[data-scanuse]");
+  if (use){
+    e.stopPropagation(); const sel = [...document.querySelectorAll("#scanPanel [data-scanpick][aria-pressed=true]")]; if (!sel.length) return;
+    const sum = sel.reduce((a, b) => a + Number(b.dataset.scanpick), 0), el = document.getElementById(scanTarget);
+    if (el){ el.value = String(sum); el.dispatchEvent(new Event("input", {bubbles: true})); el.dispatchEvent(new Event("change", {bubbles: true})); }
+    scanPanel(null); toast(sel.length > 1 ? `${sel.length}件を合計して ${yen(sum)} を入れました` : `${yen(sum)} を入れました`); return;
   }
   if (e.target.closest && e.target.closest("[data-scanclose]")){ e.stopPropagation(); scanPanel(null); }
 }, true);
@@ -2003,11 +2019,12 @@ document.addEventListener("change", async e => {
     if (isPdf) text = await pdfToText(file);
     else { const url = URL.createObjectURL(file); try { text = await ocrImage(url); } finally { URL.revokeObjectURL(url); } }
     const c = amountsFrom(text);
-    scanPanel(`<div class="evs-h"><h2>${c.length ? "どの金額を入れますか？" : "金額が見つかりませんでした"}</h2><button type="button" class="ghost" data-scanclose aria-label="閉じる">✕</button></div>
-      ${c.length ? `<div class="scanlist">${c.map((x, k) => `<button type="button" class="scanpick ${k === 0 ? "best" : ""}" data-scanpick="${x.v}"><b>${yen(x.v)}</b><span>${esc(x.label)}</span></button>`).join("")}</div>
-        <p class="small muted">いちばん上が「合計」などの言葉から選んだ候補です。読み間違えることがあるので、写真と見比べてください。いくつか足したいときは、入れたあとに「＋」で計算できます。</p>`
+    scanPanel(`<div class="evs-h"><h2>${c.length ? "入れる金額を選んでください" : "金額が見つかりませんでした"}</h2><button type="button" class="ghost" data-scanclose aria-label="閉じる">✕</button></div>
+      ${c.length ? `<p class="small muted" style="margin:0">いくつでも選べます。複数選ぶと合計を入れます。</p>
+        <div class="scanlist">${c.map((x, k) => `<button type="button" class="scanpick ${k === 0 ? "best" : ""}" data-scanpick="${x.v}" aria-pressed="${k === 0}"><span class="sck" aria-hidden="true"></span><b>${yen(x.v)}</b><span>${esc(x.label)}</span></button>`).join("")}</div>
+        <p class="small muted">はじめは「合計」などの言葉から選んだ候補にチェックを入れています。読み間違えることがあるので、写真と見比べてください。</p>`
         : `<p class="small muted">明るい場所で、金額の部分が大きく写るように撮り直してみてください。</p>`}
-      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button></div>`);
+      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button>${c.length ? `<button type="button" class="primary" data-scanuse>${yen(c[0].v)} を入れる</button>` : ""}</div>`);
   } catch(err){
     scanPanel(`<div class="evs-h"><h2>読み取れませんでした</h2></div><p class="small muted">通信できる場所で、もう一度試してください（読み取りの準備に通信が必要です）。</p><div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button></div>`);
   }
@@ -2041,8 +2058,16 @@ function render(){
     if (isSimple() && S.tab === "shifts") S.tab = "home"; }
   document.documentElement.dataset.font = ["l", "xl"].includes(S.settings.fontSize) ? S.settings.fontSize : "m";
   const ml = document.getElementById("monthLabel");
-  ml.textContent = (S.y === now.y ? "" : startDay() === 1 ? `${S.y}年` : `${S.y}/`) + periodLabel(S.y, S.m);
-  ml.classList.toggle("range", startDay() !== 1);
+  const ck = S.tab === "shifts" ? "shifts" : S.tab === "events" && S.evView !== "wish" ? "events" : "", cs = ck ? calStartOf(ck) : 0;
+  if (cs && cs !== startDay()){
+    // this screen's calendar has its own start day: show its range, not the household month
+    const r = calRange(ck), [ry, rm] = r.start.split("-").map(Number);
+    ml.textContent = cs === 1 ? `${ry !== now.y ? ry + "年" : ""}${rm}月` : `${ry !== now.y ? ry + "/" : ""}${md(r.start)}〜${md(r.end)}`;
+    ml.classList.toggle("range", cs !== 1);
+  } else {
+    ml.textContent = (S.y === now.y ? "" : startDay() === 1 ? `${S.y}年` : `${S.y}/`) + periodLabel(S.y, S.m);
+    ml.classList.toggle("range", startDay() !== 1);
+  }
   document.querySelectorAll("nav.tabs button[data-tab]").forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === S.tab)));
   const tt = document.getElementById("screenTitle");
   tt.textContent = {home: "シフポケ", shifts: "シフト", events: S.evView === "wish" ? "ほしいもの" : "行事・出費", ach: "実績", settings: "設定"}[S.tab] || "シフポケ";
