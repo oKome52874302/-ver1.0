@@ -539,6 +539,21 @@ html,body{overflow-x:hidden}
 .cel-tip{font-size:13px;line-height:1.6;opacity:.9;margin:4px 0 2px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--surface) 70%,transparent);text-align:left}
 .cel-reward{font-size:13.5px;font-weight:900;margin-top:6px}
 .evseg{margin-bottom:2px}
+#calcbar{position:fixed;left:0;right:0;bottom:0;z-index:300;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 14px rgba(0,0,0,.08)}
+#calcbar[hidden]{display:none}
+body.calc-on .evpanel{padding-bottom:calc(70px + env(safe-area-inset-bottom))}body.calc-on #view{padding-bottom:140px}
+#calcbar .cb-res{flex:1;min-width:0;font-weight:900;font-size:14px;color:var(--accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#calcbar .cb-keys{display:flex;gap:4px}
+#calcbar button{min-width:38px;min-height:38px;padding:0 6px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font:inherit;font-size:17px;font-weight:900;color:var(--ink)}
+#calcbar .cb-eq{background:var(--accent);border-color:var(--accent);color:var(--on-accent,#fff)}
+.scanbtn{align-self:flex-start;border:1px dashed var(--accent);background:none;color:var(--accent);font:inherit;font-size:13px;font-weight:900;border-radius:10px;padding:8px 12px;cursor:pointer}
+.scanpanel{z-index:250}
+.scanlist{display:flex;flex-direction:column;gap:6px}
+.scanpick{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font:inherit;color:inherit;text-align:left;cursor:pointer}
+.scanpick b{font-size:18px}.scanpick span{font-size:12px;color:var(--muted);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.scanpick.best{border:2px solid var(--accent)}
+.scanspin{width:36px;height:36px;border-radius:50%;border:4px solid var(--tint);border-top-color:var(--accent);animation:spin 1s linear infinite;align-self:center;margin:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
 .owgoal{align-self:flex-start;color:var(--accent);font-weight:900;text-align:left}
 .owgoals{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
 .spamount{font-size:24px!important;font-weight:900;min-height:56px}
@@ -635,6 +650,8 @@ div.f{display:flex;flex-direction:column;gap:6px;font-size:.76rem;color:var(--mu
   <div id="notices"></div>
   <main id="view"></main>
   <div id="celebrate" role="dialog" aria-modal="true" aria-label="実績解除" hidden><canvas id="confetti" aria-hidden="true"></canvas><div class="cel-card"></div></div>
+  <div id="calcbar" hidden><span class="cb-res" id="calcRes"></span><span class="cb-keys"><button type="button" data-ck="+">＋</button><button type="button" data-ck="-">−</button><button type="button" data-ck="*">×</button><button type="button" data-ck="/">÷</button><button type="button" data-ck="(">(</button><button type="button" data-ck=")">)</button><button type="button" data-ck="=" class="cb-eq">＝</button></span></div>
+  <input type="file" id="scanFile" accept="image/*,application/pdf" hidden>
   <div id="toast" role="status" aria-live="polite"><span class="mark">✓</span><span class="msg"></span></div>
 </div>
 
@@ -651,7 +668,22 @@ const hrs = n => (Math.round((n || 0) * 100) / 100).toString();
 const pad = n => String(n).padStart(2, "0");
 const toHalf = v => String(v ?? "").replace(/[０-９．－]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[,，、円¥￥\s]/g, "");
 const num = v => { const x = parseFloat(toHalf(v)); return isFinite(x) ? x : 0; };
-const badNum = v => toHalf(v) !== "" && !isFinite(parseFloat(toHalf(v)));
+/* 金額欄の計算: "1200+300"、"980×3"、"(5000-1200)/2" などを計算する。数字と + - * / ( ) . だけを許す */
+const calcSrc = v => toHalf(v).replace(/[×xX＊]/g, "*").replace(/[÷／]/g, "/").replace(/[＋]/g, "+").replace(/[−ー―‐]/g, "-").replace(/[（]/g, "(").replace(/[）]/g, ")");
+const isExpr = v => { const t = calcSrc(v); return /[+*/()]/.test(t) || /\d-\d/.test(t); };
+function calcEval(v){
+  const t = calcSrc(v);
+  if (!t || !/^[\d.+\-*/()]+$/.test(t) || /[+\-*/.]{2,}/.test(t.replace(/\*-|\/-|\(-/g, "x"))) return null;
+  try { const r = Function(`"use strict";return (${t});`)(); return isFinite(r) ? Math.round(r * 100) / 100 : null; } catch(_){ return null; }
+}
+const badNum = v => toHalf(v) !== "" && !isFinite(parseFloat(toHalf(v))) && calcEval(v) == null;
+/* when a money field holding a calculation is left, replace it with the result before anything else reads it */
+document.addEventListener("change", e => {
+  const t = e.target;
+  if (!t || t.getAttribute == null || t.getAttribute("inputmode") !== "decimal" || !isExpr(t.value)) return;
+  const r = calcEval(t.value); if (r == null) return;
+  t.value = String(r); t.dispatchEvent(new Event("input", {bubbles: true}));
+}, true);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const DOW = ["日","月","火","水","木","金","土"];
 
@@ -1214,7 +1246,8 @@ function spSheetHtml(){
   const v = ed.v;
   return `<div class="evsheet" data-sp="backdrop"><div class="evpanel" role="dialog" aria-modal="true" aria-label="使ったお金">
     <div class="evs-h"><h2>${ed.id ? "使ったお金を直す" : "使ったお金を記録"}</h2><button type="button" class="ghost" data-sp="close" aria-label="閉じる">✕</button></div>
-    <label class="f">いくら使った？<input id="sp-amount" data-spf="amount" type="text" inputmode="decimal" placeholder="円" value="${esc(v.amount)}" class="spamount"></label>
+    <label class="f">いくら使った？<input id="sp-amount" data-spf="amount" type="text" inputmode="decimal" placeholder="円（1200+300 のような計算もOK）" value="${esc(v.amount)}" class="spamount"></label>
+    ${scanBtn("sp-amount", "レシートの写真から読み取る")}
     <div class="spcats" role="group" aria-label="分類">${SPENT_CATS.map(([id, n, ic]) => `<button type="button" class="wchip" data-spcat="${id}" aria-pressed="${v.cat === id}">${ic} ${n}</button>`).join("")}</div>
     <div class="evs-grid">
       <label class="f">日付<input id="sp-ymd" data-spf="ymd" type="date" value="${esc(v.ymd)}"></label>
@@ -1859,6 +1892,126 @@ function applyImport(){
 }
 /* ホーム画面に追加: on iPhone, Safari may erase a site's saved data after days without a visit unless it is added to the home screen */
 const UA = navigator.userAgent || "";
+/* ---------- calculator bar ---------- */
+let calcEl = null;
+function calcPlace(){
+  const bar = document.getElementById("calcbar"); if (!bar || bar.hidden) return;
+  const vv = window.visualViewport;
+  bar.style.top = vv ? `${vv.offsetTop + vv.height - bar.offsetHeight}px` : "";
+  bar.style.bottom = vv ? "auto" : "0";
+}
+function calcPreview(){
+  const out = document.getElementById("calcRes"); if (!out || !calcEl) return;
+  const r = isExpr(calcEl.value) ? calcEval(calcEl.value) : null;
+  out.textContent = r != null ? `= ${yen(r)}` : "計算できます";
+}
+document.addEventListener("focusin", e => {
+  const t = e.target, bar = document.getElementById("calcbar"); if (!bar) return;
+  // phones only: a computer keyboard already has + - * /
+  const touch = (() => { try { return matchMedia("(pointer: coarse)").matches; } catch(_){ return false; } })();
+  if (touch && t && t.getAttribute && t.getAttribute("inputmode") === "decimal"){ calcEl = t; bar.hidden = false; document.body.classList.add("calc-on"); calcPreview(); calcPlace(); setTimeout(calcPlace, 350); }
+});
+document.addEventListener("focusout", e => {
+  setTimeout(() => { const a = document.activeElement; if (!(a && a.getAttribute && a.getAttribute("inputmode") === "decimal")){ const bar = document.getElementById("calcbar"); if (bar) bar.hidden = true; document.body.classList.remove("calc-on"); calcEl = null; } }, 60);
+});
+document.addEventListener("input", e => { if (e.target === calcEl) calcPreview(); }, true);
+if (window.visualViewport){ visualViewport.addEventListener("resize", calcPlace); visualViewport.addEventListener("scroll", calcPlace); }
+document.addEventListener("pointerdown", e => { if (e.target.closest && e.target.closest("#calcbar")) e.preventDefault(); }, true);   // keep the field focused
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("[data-ck]"); if (!b || !calcEl) return;
+  e.stopPropagation(); e.preventDefault();
+  const el = calcEl, k = b.dataset.ck;
+  if (k === "="){ const r = calcEval(el.value); if (r != null){ el.value = String(r); el.dispatchEvent(new Event("input", {bubbles: true})); el.dispatchEvent(new Event("change", {bubbles: true})); } else toast("計算できない式です", "warn"); }
+  else {
+    let a = el.selectionStart, z = el.selectionEnd; if (a == null){ a = z = el.value.length; }
+    el.value = el.value.slice(0, a) + k + el.value.slice(z); try { el.setSelectionRange(a + 1, a + 1); } catch(_){}
+    el.dispatchEvent(new Event("input", {bubbles: true}));
+  }
+  el.focus(); calcPreview();
+}, true);
+
+/* ---------- 写真・PDFから金額を読み取る（スマホの中で処理。ファイルはどこにも送らない） ---------- */
+const OCR_JS = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+const PDF_JS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", PDF_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const loadScript = src => new Promise((ok, ng) => { if (document.querySelector(`script[src="${src}"]`) && (src !== OCR_JS || window.Tesseract) && (src !== PDF_JS || window.pdfjsLib)) return ok(); const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = () => ng(new Error("load")); document.head.appendChild(sc); });
+const scanBtn = (target, label) => `<button type="button" class="scanbtn" data-scan="${target}">📷 ${label || "写真・PDFから金額を読み取る"}</button>`;
+let scanTarget = null;
+async function ocrImage(src){
+  await loadScript(OCR_JS);
+  const w = await Tesseract.createWorker("jpn");
+  try { const {data} = await w.recognize(src); return data.text || ""; } finally { await w.terminate(); }
+}
+async function pdfToText(file){
+  await loadScript(PDF_JS); pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER;
+  const doc = await pdfjsLib.getDocument({data: await file.arrayBuffer()}).promise;
+  let text = "";
+  for (let i = 1; i <= Math.min(doc.numPages, 3); i++){
+    const pg = await doc.getPage(i), tc = await pg.getTextContent(), rows = {};
+    for (const it of tc.items){ const y = Math.round(it.transform[5] / 3); (rows[y] = rows[y] || []).push(it); }
+    text += Object.keys(rows).sort((a, b) => b - a).map(y => rows[y].sort((a, b) => a.transform[4] - b.transform[4]).map(it => it.str).join(" ")).join("\n") + "\n";
+    if (text.replace(/\s/g, "").length < 10){   // a scanned PDF: read the picture instead
+      const vp = pg.getViewport({scale: 2}), cv = document.createElement("canvas"); cv.width = vp.width; cv.height = vp.height;
+      await pg.render({canvasContext: cv.getContext("2d"), viewport: vp}).promise; text += await ocrImage(cv);
+    }
+  }
+  return text;
+}
+/* money-looking numbers, best first: words like 合計・支給 and ¥・円・カンマ raise the score; dates and phone numbers are skipped */
+function amountsFrom(text){
+  const out = [], seen = new Set();
+  const lines = String(text).split(/\n+/);
+  lines.forEach((raw, li) => {
+    const line = raw.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[，]/g, ","), flat = line.replace(/\s+/g, "");
+    if (/\d{2,4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}:\d{2}|\d{2,4}-\d{2,4}-\d{3,4}|年\d|月\d+日|No\.|TEL|電話/i.test(flat) && !/[¥￥円\\]/.test(flat)) return;
+    const re = /([¥￥\\]\s*)?(\d{1,3}(?:,\d{3})+|\d{2,7})(\s*円)?/g; let m;   // OCR often reads ¥ as a backslash
+    while ((m = re.exec(line))){
+      const v = Number(m[2].replace(/,/g, "")); if (!(v >= 10 && v <= 9999999)) continue;
+      let sc = (m[1] ? 3 : 0) + (m[3] ? 3 : 0) + (m[2].includes(",") ? 2 : 0);
+      if (/合計|総計|総額|お支払|支払金額|ご請求|請求額|ご利用金額|差引支給|振込額|支給額|お会計|TOTAL/i.test(flat)) sc += 6;
+      if (/小計/.test(flat)) sc += 2;
+      if (/お預り|預り|お釣|釣銭|内税|消費税|税額|対象|ポイント|残高/.test(flat)) sc -= 4;
+      const key = v; if (seen.has(key)){ const o = out.find(x => x.v === v); if (o && sc > o.sc){ o.sc = sc; o.label = raw.trim(); } continue; }
+      seen.add(key); out.push({v, sc, label: raw.trim().replace(/\s+/g, " ").slice(0, 28), li});
+    }
+  });
+  return out.sort((a, b) => b.sc - a.sc || b.v - a.v).slice(0, 8);
+}
+function scanPanel(html){
+  let p = document.getElementById("scanPanel");
+  if (!html){ if (p) p.remove(); return; }
+  if (!p){ p = document.createElement("div"); p.id = "scanPanel"; p.className = "evsheet scanpanel"; document.body.appendChild(p); }
+  p.innerHTML = `<div class="evpanel" role="dialog" aria-modal="true" aria-label="金額の読み取り">${html}</div>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("[data-scan]");
+  if (b){ e.stopPropagation(); e.preventDefault(); scanTarget = b.dataset.scan; const f = document.getElementById("scanFile"); f.value = ""; f.click(); return; }
+  const pick = e.target.closest && e.target.closest("[data-scanpick]");
+  if (pick){
+    e.stopPropagation(); const el = document.getElementById(scanTarget);
+    if (el){ el.value = pick.dataset.scanpick; el.dispatchEvent(new Event("input", {bubbles: true})); el.dispatchEvent(new Event("change", {bubbles: true})); }
+    scanPanel(null); toast(`${yen(Number(pick.dataset.scanpick))} を入れました`); return;
+  }
+  if (e.target.closest && e.target.closest("[data-scanclose]")){ e.stopPropagation(); scanPanel(null); }
+}, true);
+document.addEventListener("change", async e => {
+  const t = e.target; if (!t || t.id !== "scanFile" || !t.files || !t.files[0]) return;
+  e.stopPropagation();
+  const file = t.files[0], isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  scanPanel(`<div class="evs-h"><h2>読み取り中…</h2></div><p class="small muted">スマホの中で読み取っています（ファイルはどこにも送りません）。はじめての時は準備に30秒ほどかかることがあります。</p><div class="scanspin" aria-hidden="true"></div>`);
+  try {
+    let text;
+    if (isPdf) text = await pdfToText(file);
+    else { const url = URL.createObjectURL(file); try { text = await ocrImage(url); } finally { URL.revokeObjectURL(url); } }
+    const c = amountsFrom(text);
+    scanPanel(`<div class="evs-h"><h2>${c.length ? "どの金額を入れますか？" : "金額が見つかりませんでした"}</h2><button type="button" class="ghost" data-scanclose aria-label="閉じる">✕</button></div>
+      ${c.length ? `<div class="scanlist">${c.map((x, k) => `<button type="button" class="scanpick ${k === 0 ? "best" : ""}" data-scanpick="${x.v}"><b>${yen(x.v)}</b><span>${esc(x.label)}</span></button>`).join("")}</div>
+        <p class="small muted">いちばん上が「合計」などの言葉から選んだ候補です。読み間違えることがあるので、写真と見比べてください。いくつか足したいときは、入れたあとに「＋」で計算できます。</p>`
+        : `<p class="small muted">明るい場所で、金額の部分が大きく写るように撮り直してみてください。</p>`}
+      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button></div>`);
+  } catch(err){
+    scanPanel(`<div class="evs-h"><h2>読み取れませんでした</h2></div><p class="small muted">通信できる場所で、もう一度試してください（読み取りの準備に通信が必要です）。</p><div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button></div>`);
+  }
+}, true);
 const isStandalone = () => { try { return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true; } catch(_){ return false; } };
 const isIOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
 const isAndroid = /Android/.test(UA);
@@ -2397,7 +2550,8 @@ function incSheetHtml(){
     body = `<div class="evs-h"><h2>${title}</h2><button type="button" class="ghost" data-incs="close" aria-label="閉じる">✕</button></div>
       <p class="small muted" style="margin:0">${isSimple() ? "シフトボードなどに出ている給料の見込み（交通費込み）を入れてください。振り込まれたら、実際の金額に直すと正確になります。" : "シフトを入れていない月も、給与明細や通帳で分かった金額（交通費込み）をここに入れればOKです。入れた金額はシフトからの見込みより優先されます。"}</p>
       <div class="inc-list">${ed.rows.map((r, i) => `<label class="inc-row"><span class="inc-n"><b>${esc(r.name)}</b><span class="small muted">${r.sub}${r.est ? ` ・ 見込み ${yen(r.est)}` : (isSimple() ? "" : " ・ シフト未入力")}</span></span>
-        <input type="text" inputmode="decimal" id="inc-${i}" data-incf="${i}" value="${esc(r.v)}" placeholder="${r.est ? esc(String(r.est)) : "円"}" aria-label="${esc(r.name)}の金額"></label>`).join("")}</div>
+        <input type="text" inputmode="decimal" id="inc-${i}" data-incf="${i}" value="${esc(r.v)}" placeholder="${r.est ? esc(String(r.est)) : "円"}" aria-label="${esc(r.name)}の金額"></label>
+        ${scanBtn(`inc-${i}`, "給与明細（写真・PDF）から読み取る")}`).join("")}</div>
       <div class="evs-foot"><span style="flex:1"></span><button type="button" data-incs="close">キャンセル</button><button type="button" class="primary" data-incs="review">確認へ</button></div>`;
   } else if (ed.step === "review"){
     const ch = incChanged(ed);
@@ -2477,6 +2631,7 @@ function evSheetHtml(){
         ${ed.kind === "rec" ? "" : fld("group", "まとめる名前（任意）", `type="text" list="groupList" placeholder="例：石川旅行" autocomplete="off"`)}
         ${fld("memo", "メモ", `type="text" placeholder="例：交通 3,000 / チケット 9,400" autocomplete="off"`, true)}
       </div>
+      ${scanBtn(isNew ? "evf-budget" : "evf-actual", isNew ? "写真・PDFから予算を読み取る" : "レシート・明細から使った額を読み取る")}
       <datalist id="groupList">${groupNames.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist>
       ${isNew ? `<p class="small muted">旅行のように項目が多いときは、同じ「まとめる名前」を付けると1枚のカードにまとまります。</p>` : ""}
       <div class="evs-foot">
