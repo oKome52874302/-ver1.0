@@ -654,7 +654,7 @@ div.f{display:flex;flex-direction:column;gap:6px;font-size:.76rem;color:var(--mu
   <main id="view"></main>
   <div id="celebrate" role="dialog" aria-modal="true" aria-label="実績解除" hidden><canvas id="confetti" aria-hidden="true"></canvas><div class="cel-card"></div></div>
   <div id="calcbar" hidden><span class="cb-res" id="calcRes"></span><span class="cb-keys"><button type="button" data-ck="+">＋</button><button type="button" data-ck="-">−</button><button type="button" data-ck="*">×</button><button type="button" data-ck="/">÷</button><button type="button" data-ck="(">(</button><button type="button" data-ck=")">)</button><button type="button" data-ck="=" class="cb-eq">＝</button></span></div>
-  <input type="file" id="scanFile" accept="image/*,application/pdf" hidden>
+  <input type="file" id="scanFile" accept="image/*,application/pdf,text/html,.html,.htm,text/plain,.txt" hidden>
   <div id="toast" role="status" aria-live="polite"><span class="mark">✓</span><span class="msg"></span></div>
 </div>
 
@@ -1250,7 +1250,7 @@ function spSheetHtml(){
   return `<div class="evsheet" data-sp="backdrop"><div class="evpanel" role="dialog" aria-modal="true" aria-label="使ったお金">
     <div class="evs-h"><h2>${ed.id ? "使ったお金を直す" : "使ったお金を記録"}</h2><button type="button" class="ghost" data-sp="close" aria-label="閉じる">✕</button></div>
     <label class="f">いくら使った？<input id="sp-amount" data-spf="amount" type="text" inputmode="decimal" placeholder="円（1200+300 のような計算もOK）" value="${esc(v.amount)}" class="spamount"></label>
-    ${scanBtn("sp-amount", "レシートの写真から読み取る")}
+    ${scanBtn("sp-amount", "レシート・明細から読み取る（写真・PDF・HTML）")}
     <div class="spcats" role="group" aria-label="分類">${SPENT_CATS.map(([id, n, ic]) => `<button type="button" class="wchip" data-spcat="${id}" aria-pressed="${v.cat === id}">${ic} ${n}</button>`).join("")}</div>
     <div class="evs-grid">
       <label class="f">日付<input id="sp-ymd" data-spf="ymd" type="date" value="${esc(v.ymd)}"></label>
@@ -1940,12 +1940,19 @@ document.addEventListener("click", e => {
 const OCR_JS = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 const PDF_JS = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js", PDF_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 const loadScript = src => new Promise((ok, ng) => { if (document.querySelector(`script[src="${src}"]`) && (src !== OCR_JS || window.Tesseract) && (src !== PDF_JS || window.pdfjsLib)) return ok(); const sc = document.createElement("script"); sc.src = src; sc.onload = ok; sc.onerror = () => ng(new Error("load")); document.head.appendChild(sc); });
-const scanBtn = (target, label) => `<button type="button" class="scanbtn" data-scan="${target}">📷 ${label || "写真・PDFから金額を読み取る"}</button>`;
+const scanBtn = (target, label) => `<button type="button" class="scanbtn" data-scan="${target}">📄 ${label || "写真・PDFから金額を読み取る"}</button>`;
 let scanTarget = null;
 async function ocrImage(src){
   await loadScript(OCR_JS);
   const w = await Tesseract.createWorker("jpn");
   try { const {data} = await w.recognize(src); return data.text || ""; } finally { await w.terminate(); }
+}
+/* a saved web page / mail (HTML): its text, one line per block or table row. Scripts are never run */
+function htmlToText(html){
+  const marked = String(html).replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, "").replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|tr|li|h[1-6]|table|section|dt|dd)>/gi, "\n").replace(/<\/t[dh]>/gi, " ");
+  const doc = new DOMParser().parseFromString(marked, "text/html");
+  return (doc.body ? doc.body.textContent : "").replace(/[ \t\u00a0]+/g, " ");
 }
 async function pdfToText(file){
   await loadScript(PDF_JS); pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER;
@@ -2013,16 +2020,19 @@ document.addEventListener("change", async e => {
   const t = e.target; if (!t || t.id !== "scanFile" || !t.files || !t.files[0]) return;
   e.stopPropagation();
   const file = t.files[0], isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
-  scanPanel(`<div class="evs-h"><h2>読み取り中…</h2></div><p class="small muted">スマホの中で読み取っています（ファイルはどこにも送りません）。はじめての時は準備に30秒ほどかかることがあります。</p><div class="scanspin" aria-hidden="true"></div>`);
+  const isHtml = /html/.test(file.type) || /\.html?$/i.test(file.name), isTxt = file.type === "text/plain" || /\.txt$/i.test(file.name);
+  scanPanel(`<div class="evs-h"><h2>読み取り中…</h2></div><p class="small muted">スマホの中で読み取っています（ファイルはどこにも送りません）。写真・PDF・HTML（保存したメールやWebページ）が使えます。はじめての時は準備に30秒ほどかかることがあります。</p><div class="scanspin" aria-hidden="true"></div>`);
   try {
     let text;
     if (isPdf) text = await pdfToText(file);
+    else if (isHtml) text = htmlToText(await file.text());
+    else if (isTxt) text = await file.text();
     else { const url = URL.createObjectURL(file); try { text = await ocrImage(url); } finally { URL.revokeObjectURL(url); } }
     const c = amountsFrom(text);
     scanPanel(`<div class="evs-h"><h2>${c.length ? "入れる金額を選んでください" : "金額が見つかりませんでした"}</h2><button type="button" class="ghost" data-scanclose aria-label="閉じる">✕</button></div>
       ${c.length ? `<p class="small muted" style="margin:0">いくつでも選べます。複数選ぶと合計を入れます。</p>
         <div class="scanlist">${c.map((x, k) => `<button type="button" class="scanpick ${k === 0 ? "best" : ""}" data-scanpick="${x.v}" aria-pressed="${k === 0}"><span class="sck" aria-hidden="true"></span><b>${yen(x.v)}</b><span>${esc(x.label)}</span></button>`).join("")}</div>
-        <p class="small muted">はじめは「合計」などの言葉から選んだ候補にチェックを入れています。読み間違えることがあるので、写真と見比べてください。</p>`
+        <p class="small muted">はじめは「合計」などの言葉から選んだ候補にチェックを入れています。写真は読み間違えることがあるので、元の画像と見比べてください。</p>`
         : `<p class="small muted">明るい場所で、金額の部分が大きく写るように撮り直してみてください。</p>`}
       <div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button>${c.length ? `<button type="button" class="primary" data-scanuse>${yen(c[0].v)} を入れる</button>` : ""}</div>`);
   } catch(err){
@@ -2576,7 +2586,7 @@ function incSheetHtml(){
       <p class="small muted" style="margin:0">${isSimple() ? "シフトボードなどに出ている給料の見込み（交通費込み）を入れてください。振り込まれたら、実際の金額に直すと正確になります。" : "シフトを入れていない月も、給与明細や通帳で分かった金額（交通費込み）をここに入れればOKです。入れた金額はシフトからの見込みより優先されます。"}</p>
       <div class="inc-list">${ed.rows.map((r, i) => `<label class="inc-row"><span class="inc-n"><b>${esc(r.name)}</b><span class="small muted">${r.sub}${r.est ? ` ・ 見込み ${yen(r.est)}` : (isSimple() ? "" : " ・ シフト未入力")}</span></span>
         <input type="text" inputmode="decimal" id="inc-${i}" data-incf="${i}" value="${esc(r.v)}" placeholder="${r.est ? esc(String(r.est)) : "円"}" aria-label="${esc(r.name)}の金額"></label>
-        ${scanBtn(`inc-${i}`, "給与明細（写真・PDF）から読み取る")}`).join("")}</div>
+        ${scanBtn(`inc-${i}`, "給与明細から読み取る（写真・PDF・HTML）")}`).join("")}</div>
       <div class="evs-foot"><span style="flex:1"></span><button type="button" data-incs="close">キャンセル</button><button type="button" class="primary" data-incs="review">確認へ</button></div>`;
   } else if (ed.step === "review"){
     const ch = incChanged(ed);
@@ -2656,7 +2666,7 @@ function evSheetHtml(){
         ${ed.kind === "rec" ? "" : fld("group", "まとめる名前（任意）", `type="text" list="groupList" placeholder="例：石川旅行" autocomplete="off"`)}
         ${fld("memo", "メモ", `type="text" placeholder="例：交通 3,000 / チケット 9,400" autocomplete="off"`, true)}
       </div>
-      ${scanBtn(isNew ? "evf-budget" : "evf-actual", isNew ? "写真・PDFから予算を読み取る" : "レシート・明細から使った額を読み取る")}
+      ${scanBtn(isNew ? "evf-budget" : "evf-actual", isNew ? "見積もり・予約メールから予算を読み取る（写真・PDF・HTML）" : "レシート・明細から使った額を読み取る（写真・PDF・HTML）")}
       <datalist id="groupList">${groupNames.map(n => `<option value="${esc(n)}"></option>`).join("")}</datalist>
       ${isNew ? `<p class="small muted">旅行のように項目が多いときは、同じ「まとめる名前」を付けると1枚のカードにまとまります。</p>` : ""}
       <div class="evs-foot">
