@@ -2554,12 +2554,7 @@ function viewShifts(){
   return `
   ${S.settings.intl ? (() => { const pr = periodRange(S.y, S.m), b = intlMaxWeek(pr.start, pr.end);
     return `<div class="notice ${b.h > 28 ? "warn" : ""}"><div><b>${b.h > 28 ? `${md(b.start)}〜${md(b.end)}が合計${dur(b.h)}で、28時間を超えています` : `この月の7日間の最大は${dur(b.h)}（28時間まで）`}</b><br><span class="small">${INTL_NOTE}</span></div></div>`; })() : ""}
-  <div class="pills"><span class="pill">${list.length}回 ・ ${dur(h)}</span>${(() => {
-    // pay for the days shown here arrives later: say when, and which month it can be spent in
-    const lbl = pr.start.slice(8) === "01" ? `${Number(pr.start.slice(5, 7))}月` : `${md(pr.start)}〜${md(pr.end)}`;
-    const pds = [...new Set(list.map(t => `${t.pd.m}/${t.pd.d}`))].join("・"), uses = [...new Set(list.map(t => { const [py, pm] = t.pd.key.split("-").map(Number); return mName(...addMonths(py, pm, lagOf(t.job))); }))].join("・");
-    return `<span class="pill">${lbl}に働いた分 ${yen(total)}</span>${list.length ? `<span class="pill pillsub">${pds}振込 → ${uses}に使える</span>` : ""}`;
-  })()}<button type="button" class="pill pillbtn" data-incopen="work">シフトなしで金額だけ入れる ›</button></div>
+  <div class="pills"><span class="pill">${list.length}回 ・ ${dur(h)}</span><button type="button" class="pill pillbtn" data-incopen="work">シフトなしで金額だけ入れる ›</button></div>
   <section class="block">
     ${(() => { const pend = list.filter(x => needsSync(x.rec) && !syncing.has(x.id)); return S.settings.calSync && pend.length && mcp ? `<div class="notice warn"><div>Google カレンダーに未反映のシフトが ${pend.length}件 あります。</div><button data-act="syncmonth">まとめて反映</button></div>` : ""; })()}
     ${list.length < 3 && jobs.length ? `<div class="calhint">① 働く日をタップ　② 下で時間を入れて「追加」</div>` : ""}
