@@ -546,6 +546,7 @@ html,body{overflow-x:hidden}
 .dp-r{display:flex;align-items:center;gap:8px}.dp-m{flex:1;min-width:0;display:flex;flex-direction:column}.dp-m span{font-size:12px;color:var(--muted)}
 .dp-a{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none}
 .dp-add{min-height:42px;font-weight:900}
+.la.plus{color:var(--good)}
 .pill.pillsub{background:none;border:1px dashed var(--line);font-weight:700;color:var(--muted)}
 .ld.anyday b{font-size:13px}.ld.anyday span{font-size:10px}
 .anyline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:13px}.anyline b{width:100%;color:var(--muted);font-size:12px}
@@ -1497,10 +1498,53 @@ let todayKey = `${now.y}-${pad(now.m)}`;   // the current period; recomputed onc
 function refreshToday(){ const [y, m] = periodOf(now.y, now.m, now.d); todayKey = `${y}-${pad(m)}`; return [y, m]; }
 const keyAdd = (k, n) => { const [y, m] = addMonths(Number(k.slice(0, 4)), Number(k.slice(5, 7)), n); return `${y}-${pad(m)}`; };
 const monthsBetween = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7));
+/* 口座残高: the amount typed on balanceDate (balanceAt = the moment it was typed, when it was today), then
+   + pay on its payday, − spending on its day, up to today. Card spending comes off on the card's withdrawal day.
+   Today's budgets / fixed costs / pay are left to the forecast; only 使った records of today count here. */
+let balMemo, balRendering = false;
+function balLedger(){
+  if (balMemo !== undefined) return balMemo;
+  const st = S.settings; let res = null;
+  if (st.balance !== "" && st.balance != null){
+    const from = st.balanceDate || todayYmd, at = num(st.balanceAt), start = num(st.balance), items = [];
+    const before = ymd => ymd > from && ymd < todayYmd;
+    const spentIn = e => e.ymd <= todayYmd && (e.ymd > from || (e.ymd === from && at && parseInt(String(e.id).slice(2), 36) > at));
+    const [fy, fm] = periodOf(...from.split("-").map(Number)), shifts = allShifts(), ymdOf = p => `${p.y}-${pad(p.m)}-${pad(p.d)}`;
+    if (from <= todayYmd) for (let k = keyAdd(`${fy}-${pad(fm)}`, -1); k <= keyAdd(todayKey, 1); k = keyAdd(k, 1)){
+      const y = Number(k.slice(0, 4)), m = Number(k.slice(5, 7)), mi = monthIncome(y, m, shifts), ps = periodRange(y, m).start;
+      for (const r of mi.rows){
+        if (r.freq === "monthly" || r.payouts <= 1){ const d = ymdOf(r.pd); if (r.used && d > from && d <= todayYmd) items.push({ymd: d, title: `${r.job.name}の給料${r.confirmed ? "" : "（見込み）"}`, amt: r.used}); continue; }
+        // several payouts: split this period's pay by payout day
+        const xs = mi.payIn.filter(t => t.job.id === r.job.id), raw = xs.reduce((a, t) => a + t.pay, 0) || 1;
+        for (const d of [...new Set(xs.map(t => ymdOf(t.pd)))]) if (d > from && d <= todayYmd){
+          const part = Math.round(r.used * xs.filter(t => ymdOf(t.pd) === d).reduce((a, t) => a + t.pay, 0) / raw); if (part) items.push({ymd: d, title: `${r.job.name}の給料（見込み）`, amt: part}); }
+      }
+      if (mi.othersTotal && before(ps)) items.push({ymd: ps, title: "その他の収入", amt: mi.othersTotal});
+      for (const e of eventList(y, m)){
+        if (e.rec && e.rec.id === "card"){ if (before(e.ymd)) items.push({ymd: e.ymd, title: e.title, amt: -Math.max(evCost(e.doc), cardKnown(e))}); continue; }
+        if (e.doc.card) continue;   // paid by card: comes off with the card bill
+        if (isSpent(e)){ if (spentIn(e)) items.push({ymd: e.ymd, title: e.title, amt: -evCost(e.doc)}); continue; }
+        if (e.anyDay ? hasVal(e.doc.actual) && before(e.ymd) : before(e.ymd)){ const c = evCost(e.doc); if (c) items.push({ymd: e.ymd, title: e.title, amt: -c}); }
+      }
+      for (const f of fixedOn(y, m)) if (!f.card && before(f.ymd)) items.push({ymd: f.ymd, title: f.title, amt: -f.cost});
+      for (const f of (S.settings.fixedItems || [])) if (num(f.amount) > 0 && fixActive(f, k) && !fixDate(f, y, m) && before(ps)) items.push({ymd: ps, title: f.name || "固定費", amt: -num(f.amount)});
+    }
+    items.sort((a, b) => a.ymd.localeCompare(b.ymd));
+    const inc = items.filter(i => i.amt > 0).reduce((a, i) => a + i.amt, 0), out = -items.filter(i => i.amt < 0).reduce((a, i) => a + i.amt, 0);
+    res = {start, from, inc, out, now: start + inc - out, items};
+  }
+  if (balRendering) balMemo = res;
+  return res;
+}
+const balNow = () => { const l = balLedger(); return l ? l.now : 0; };
+const balDisp = () => { const st = S.settings; return st.balance === "" || st.balance == null ? "" : String(balNow()); };
+function setBalance(v, ymd){
+  const st = S.settings; st.balance = v === "" ? "" : num(v); st.balanceDate = ymd || todayYmd; st.balanceAt = st.balanceDate === todayYmd ? Date.now() : 0; balMemo = undefined;
+}
 function savingPlan(src){
   const st = src || S.settings, goal = num(st.goalAmount), gm = String(st.goalMonth || "");
   if (!goal || !/^\d{4}-\d{2}$/.test(gm)) return null;
-  const bal = num(st.balance), need = Math.max(0, goal - bal);
+  const bal = src ? num(st.balance) : balNow(), need = Math.max(0, goal - bal);
   const left = Math.max(1, monthsBetween(todayKey, gm) + 1);   // this month through the goal month
   return {goal, gm, bal, need, left, perMonth: Math.ceil(need / left / 100) * 100, overdue: gm < todayKey};
 }
@@ -1515,14 +1559,14 @@ function projection(){
   let endKey = p && p.gm >= todayKey ? p.gm : keyAdd(todayKey, 5);
   if (monthsBetween(todayKey, endKey) > 23) endKey = keyAdd(todayKey, 23);
   const shifts = allShifts(), out = [];
-  let bal = num(S.settings.balance);
+  let bal = balNow();
   for (let k = todayKey; k <= endKey; k = keyAdd(k, 1)){
     const y = Number(k.slice(0, 4)), m = Number(k.slice(5, 7)), cur = k === todayKey;
     const mi = monthIncome(y, m, shifts);
     let inflow = mi.rows.reduce((a, r) => a + (!cur || `${r.pd.y}-${pad(r.pd.m)}-${pad(r.pd.d)}` > todayYmd ? r.used : 0), 0) + (cur ? 0 : mi.othersTotal);
     const assumed = !cur && !mi.rows.some(r => r.used) && num(S.settings.assumeIncome) > 0;
     if (assumed) inflow += num(S.settings.assumeIncome);
-    const evsP = eventList(y, m).filter(e => !cur || e.ymd >= todayYmd || (e.anyDay && !hasVal(e.doc.actual))), outEv = evsP.reduce((a, e) => a + evCost(e.doc), 0) - cardOverlap(evsP);
+    const evsP = eventList(y, m).filter(e => !cur || (isSpent(e) ? e.ymd > todayYmd : e.ymd >= todayYmd || (e.anyDay && !hasVal(e.doc.actual)))), outEv = evsP.reduce((a, e) => a + evCost(e.doc), 0) - cardOverlap(evsP);
     // this month: only fixed costs whose payday is still ahead (no payday set = already paid)
     const fixed = cur ? fixedOn(y, m).filter(f => f.ymd >= todayYmd).reduce((a, f) => a + f.cost, 0) : fixFor(k);
     bal += inflow - outEv - fixed;
@@ -1584,7 +1628,7 @@ function stats(){
     maxJobs: Math.max(0, ...Object.values(jobsByMonth).map(x => x.size)),
     evDone, saved, exact, black, bestStreak: best, perfect, onTrack, overCount, workStreak, wallFinish, entered: Object.keys(S.shifts).length, wishDone: wishes().filter(w => num(w.price) > 0 && wishSaved(w) >= num(w.price)).length,
     othersDone: others.filter(a => S.ach[a.id]).length, othersTotal: others.length, recMonths: Object.values(S.income).filter(d => d.jobs && Object.keys(d.jobs).length).length,
-    balance: num(S.settings.balance), goal: num(S.settings.goalAmount)
+    balance: balNow(), goal: num(S.settings.goalAmount)
   };
 }
 const ACH = [
@@ -2086,6 +2130,7 @@ function askPersist(){ try { if (navigator.storage && navigator.storage.persist 
 /* かんたんモード: shifts live in another app (シフトボード etc.); the viewer types the monthly pay estimate instead */
 const isSimple = () => S.settings.mode === "simple";
 function render(){
+  balRendering = true; balMemo = undefined; queueMicrotask(() => { balRendering = false; balMemo = undefined; });
   { const st = document.querySelector('nav [data-tab=shifts]'), qs = document.querySelector('#sheet [data-act=quickShift]');
     if (st) st.hidden = isSimple(); if (qs) qs.hidden = isSimple();
     if (isSimple() && S.tab === "shifts") S.tab = "home"; }
@@ -2315,7 +2360,7 @@ function taxReturnHtml(x, y){
 }
 function savingHtml(x){
   const st = S.settings, p = savingPlan();
-  const bd = st.balanceDate ? `${Number(st.balanceDate.slice(5, 7))}/${Number(st.balanceDate.slice(8))}時点` : "未入力";
+  const bd = st.balanceDate ? (st.balanceDate === todayYmd ? "今日入力" : `${md(st.balanceDate)}から記録で計算`) : "未入力";
   const gd = goalDraft(), dirty = goalDirty();
   const inputs = `<div class="goalform"><div class="dayform">
       <label class="f">今の口座残高（${bd}）<input type="text" inputmode="decimal" id="hGb" data-gd="balance" value="${esc(gd.balance)}" placeholder="例：50000"></label>
@@ -3142,7 +3187,7 @@ if (CF_ON){
   sc.setAttribute("data-cf-beacon", JSON.stringify({token: CF_BEACON_TOKEN})); document.head.appendChild(sc);
 }
 const FEEDBACK_URL = "https://docs.google.com/forms/d/e/1FAIpQLSe5mIi8zrs5X4LIvge0b-Ax5U83nzNiDhv_VhaN1Gpc671LDQ/viewform";   // Googleフォーム「シフポケ」ご意見・ご感想
-const SET_TABS = [["jobs", "JOB"], ["spend", "毎月の出費"], ["wall", "年収の壁"], ["other", "その他"]];
+const SET_TABS = [["jobs", "JOB"], ["spend", "残高・出費"], ["wall", "年収の壁"], ["other", "その他"]];
 function viewSettings(){
   const s = S.settings, tab = SET_TABS.some(t => t[0] === S.setTab) ? S.setTab : "jobs";
   const tabs = `<div class="stabs" role="tablist">${SET_TABS.map(([k, l]) => `<button type="button" role="tab" data-settab="${k}" aria-selected="${tab === k}">${l === "JOB" ? jobWord() : l}</button>`).join("")}</div>`;
@@ -3207,7 +3252,19 @@ function viewSettings(){
       <div class="small muted">タップすると時給や給料日を変えられます。変えたら「保存する」を押してください。</div>
     </section>${jobAskHtml()}`;
   } else if (tab === "spend"){
-    body = `<section class="block">
+    const L = balLedger(), bdr = S.balDraft || (S.balDraft = {amount: s.balance === "" || s.balance == null ? "" : String(L ? L.now : num(s.balance)), ymd: todayYmd});
+    body = `<section class="block" id="balbox">
+      <div class="blockhead"><h2>口座の残高</h2>${L ? `<span class="num">${yen(L.now)}</span>` : ""}</div>
+      ${L ? `<div class="small muted">${L.from === todayYmd ? "今日入れた残高" : `${md(L.from)}時点`} ${yen(L.start)}${L.inc ? ` ＋ 入った給料 ${yen(L.inc)}` : ""}${L.out ? ` − 出費 ${yen(L.out)}` : ""}${L.items.length ? "" : "（まだ記録はありません）"}</div>
+        ${L.items.length ? `<details class="moveguide"><summary>計算の内訳（${L.items.length}件）</summary><div class="list">${L.items.map(i => `<div class="li"><span class="ld"><b>${Number(i.ymd.slice(8))}</b><span>${Number(i.ymd.slice(5, 7))}月</span></span><span class="lm"><b>${esc(i.title)}</b></span><span class="la ${i.amt > 0 ? "plus" : ""}">${i.amt > 0 ? "＋" : "−"}${yen(Math.abs(i.amt))}</span></div>`).join("")}</div></details>` : ""}` : `<div class="small muted">銀行アプリなどで見た残高を入れると、その日から「使った」記録・予算・固定費を引き、給料を足して、今の残高を出します。</div>`}
+      <div class="dayform">
+        <label class="f">残高<input type="text" inputmode="decimal" id="sBal" data-bd="amount" value="${esc(bdr.amount)}" placeholder="例：50000"></label>
+        <label class="f">いつの時点<input type="date" id="sBalD" data-bd="ymd" value="${esc(bdr.ymd)}" max="${todayYmd}"></label>
+        <button type="button" class="primary" data-act="saveBal">${L ? "残高を合わせる" : "保存する"}</button>
+      </div>
+      <div class="small muted">ずれてきたら、銀行アプリの金額を入れ直せばそこから計算し直します。カード払いはカードの引き落とし日に、給料は振込日に（確定額がなければ見込みで）反映します。</div>
+    </section>
+    <section class="block">
       <div class="blockhead"><h2>固定費</h2><span class="num">${yen(fixFor(todayKey))} / 月${fixFor(keyAdd(todayKey, 1)) !== fixFor(todayKey) ? `<span class="small muted">（来月から ${yen(fixFor(keyAdd(todayKey, 1)))}）</span>` : ""}</span></div>
       <div class="small muted">スマホ代・サブスクなど、毎月決まって出ていくお金です。支払日を決めると、行事のカレンダーとホームの「もうすぐ出ていくお金」に出て、貯金の見込みも支払日に合わせて計算します。</div>
       <div class="fixlist">${(s.fixedItems || []).map((f, i) => `<div class="fixrow">
@@ -3502,7 +3559,7 @@ document.getElementById("prevM").onclick = () => setMonth(-1);
 document.getElementById("nextM").onclick = () => setMonth(1);
 document.querySelector("nav.tabs").addEventListener("click", e => {
   const b = e.target.closest("button[data-tab]"); if (!b || S.jobAsk) return;
-  S.tab = b.dataset.tab; S.multi = null; S.pop = null; try { history.replaceState(null, "", "#" + S.tab); } catch(_){}
+  S.tab = b.dataset.tab; S.multi = null; S.pop = null; S.balDraft = null; try { history.replaceState(null, "", "#" + S.tab); } catch(_){}
   render();
 });
 
@@ -3542,6 +3599,13 @@ document.addEventListener("click", e => {
     if (recItem){ putDoc("events", id, Object.assign({}, doc, {included:false, recurring:true, title, ymd: recItem.ymd}), `${mName()}の「${esc(title)}」を外しました`); }
     else if (doc.manual) putDoc("events", id, null, `「${esc(title)}」を削除しました`);
     else { const ev = S.cal.find(v => v.id === id); putDoc("events", id, Object.assign({}, doc, {included:false, title, ymd: ev ? ev.ymd : doc.ymd || ""}), `「${esc(title)}」を一覧から削除しました`); }
+  }
+  else if (act === "saveBal"){
+    const d = S.balDraft || {};
+    if (badNum(d.amount)){ toast("数字で入力してください", "warn"); return; }
+    if (d.ymd && d.ymd > todayYmd){ toast("今日より後の日付は選べません", "warn"); return; }
+    setBalance(d.amount === "" ? "" : num(d.amount), d.ymd || todayYmd); S.balDraft = null; S.goalDraft = null;
+    putSettings(d.amount === "" ? "残高を消しました" : `${d.ymd && d.ymd !== todayYmd ? md(d.ymd) + "時点の" : ""}残高 ${yen(num(d.amount))} を保存しました`);
   }
   else if (act === "popclose"){ S.pop = null; render(); }
   else if (act === "popedit"){ const r = S.shifts[id]; S.pop = null; if (r){ S.form = {editId: id, job: r.job, start: r.start || "", end: r.end || "", breakMin: r.breakMin ?? "", transport: r.transport ?? "", note: r.note || ""}; } render(); toForm(); }
@@ -3731,7 +3795,7 @@ document.addEventListener("change", e => {
     if (["balance","goalAmount","assumeIncome"].includes(f) && badNum(val)){ toast("数字で入力してください", "warn"); return; }
     S.settings[f] = t.type === "checkbox" ? val : ["eventColors","rateJob","ignoreTitles","goalMonth","persona","fontSize","fuyoOf"].includes(f) ? val : (["balance","goalAmount","assumeIncome","wallCustom"].includes(f) && val === "" ? "" : num(val));
     if (f === "persona"){ S.settings.walls = WALL_DEF[val].slice(); putSettings("年収の壁を" + PERSONAS.find(p => p[0] === val)[1] + "向けにしました"); return; }
-    if (f === "balance") S.settings.balanceDate = todayYmd;
+    if (f === "balance") setBalance(S.settings.balance);
     if (f === "monthStart"){
       // pay that arrives at the start of a period is usually spent in that same period
       S.settings.jobs.forEach(j => { if (freqOf(j) === "monthly") j.useLag = S.settings.monthStart > 1 ? 0 : 1; });
@@ -3874,12 +3938,12 @@ const fixActive = (f, key) => (!f.from || key >= f.from) && (!f.until || key <= 
 const fixFor = key => (S.settings.fixedItems || []).filter(f => fixActive(f, key)).reduce((a, f) => a + num(f.amount), 0);
 const fixTotal = () => (S.settings.fixedItems || []).reduce((a, f) => a + num(f.amount), 0);
 function persist(){ S.settings.fixedCost = fixTotal(); saveLocal(); }
-function goalDraft(){ const st = S.settings; return S.goalDraft || (S.goalDraft = {balance: st.balance ?? "", goalAmount: st.goalAmount ?? "", goalMonth: st.goalMonth || "", assumeIncome: st.assumeIncome ?? ""}); }
-function goalDirty(){ const d = S.goalDraft, st = S.settings; return !!d && ["balance", "goalAmount", "goalMonth", "assumeIncome"].some(k => String(d[k] ?? "") !== String(st[k] ?? "")); }
+function goalDraft(){ const st = S.settings; return S.goalDraft || (S.goalDraft = {balance: balDisp(), goalAmount: st.goalAmount ?? "", goalMonth: st.goalMonth || "", assumeIncome: st.assumeIncome ?? ""}); }
+function goalDirty(){ const d = S.goalDraft, st = S.settings; return !!d && (String(d.balance ?? "") !== balDisp() || ["goalAmount", "goalMonth", "assumeIncome"].some(k => String(d[k] ?? "") !== String(st[k] ?? ""))); }
 function commitGoal(msg){
   const d = S.goalDraft, st = S.settings; if (!d) return;
-  if (String(d.balance ?? "") !== String(st.balance ?? "")) st.balanceDate = todayYmd;
-  ["balance", "goalAmount", "assumeIncome"].forEach(k => { st[k] = d[k] === "" ? "" : num(d[k]); });
+  if (String(d.balance ?? "") !== balDisp()) setBalance(d.balance === "" ? "" : num(d.balance));
+  ["goalAmount", "assumeIncome"].forEach(k => { st[k] = d[k] === "" ? "" : num(d[k]); });
   st.goalMonth = d.goalMonth || "";
   S.goalDraft = null;
   if (msg === false) persist(); else putSettings(msg || "貯金の目標を保存しました");
@@ -3890,6 +3954,7 @@ function goalPreviewText(){
   if (!p.need) return "もう目標額に届いています！";
   return `あと ${yen(p.need)}。${Number(p.gm.slice(0, 4))}年${Number(p.gm.slice(5))}月まで${p.left}か月なので、毎月 ${yen(p.perMonth)} 貯めればOK`;
 }
+["input", "change"].forEach(ev => document.addEventListener(ev, e => { const t = e.target; if (t.dataset && t.dataset.bd){ e.stopPropagation(); (S.balDraft || (S.balDraft = {amount: "", ymd: todayYmd}))[t.dataset.bd] = t.value; } }, true));
 document.addEventListener("input", e => { const t = e.target; if (t.dataset && t.dataset.ow && S.onbWish){ e.stopPropagation(); S.onbWish[t.dataset.ow] = t.value; } }, true);
 document.addEventListener("change", e => { const t = e.target; if (t.dataset && t.dataset.ow && S.onbWish){ e.stopPropagation(); S.onbWish[t.dataset.ow] = t.value; } }, true);
 document.addEventListener("click", e => {
