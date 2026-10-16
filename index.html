@@ -539,6 +539,8 @@ html,body{overflow-x:hidden}
 .cel-tip{font-size:13px;line-height:1.6;opacity:.9;margin:4px 0 2px;padding:8px 12px;border-radius:12px;background:color-mix(in srgb,var(--surface) 70%,transparent);text-align:left}
 .cel-reward{font-size:13.5px;font-weight:900;margin-top:6px}
 .evseg{margin-bottom:2px}
+.hslink{border:none;background:none;padding:0;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.pill.pillsub{background:none;border:1px dashed var(--line);font-weight:700;color:var(--muted)}
 .ld.anyday b{font-size:13px}.ld.anyday span{font-size:10px}
 .anyline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:13px}.anyline b{width:100%;color:var(--muted);font-size:12px}
 .anychip{border:1px dashed var(--accent);background:var(--bg);color:var(--ink);border-radius:99px;padding:6px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
@@ -2152,7 +2154,7 @@ function viewHome(){
     <div class="row">
       <div class="date">${r.freq === "monthly" ? `${r.pd.m}/${r.pd.d}<br><span class="small">振込</span>` : `${r.freq === "daily" ? "日払い" : "週払い"}<br><span class="small">${r.payouts ? `${r.payouts}回` : "—"}</span>`}</div>
       <div class="main"><div class="title"><span class="jdot" style="--jc:${jColor(r.job.id)}"></span>${esc(r.job.name)}</div>${r.pd.moved ? `<div class="sub">振込日 ${r.pd.m}/${r.pd.d}${movedNote(r.pd)}</div>` : ""}
-        <div class="sub"><span class="chip">${r.lag ? `${r.srcM}月振込分` : "今月振込分"}</span> ${r.confirmed ? `<span class="chip good">確定</span>` : r.est ? `<span class="chip">見込み</span>` : `<span class="chip warn">未入力</span>`}
+        <div class="sub"><span class="chip">${r.lag ? `${r.srcM}月振込分` : "今月振込分"}</span>${(ws => ws.length ? ` <span class="chip">${md(ws[0])}〜${md(ws[ws.length - 1])}に働いた分</span>` : "")(x.payIn.filter(t => t.job.id === r.job.id).map(t => t.ev.ymd).sort())} ${r.confirmed ? `<span class="chip good">確定</span>` : r.est ? `<span class="chip">見込み</span>` : `<span class="chip warn">未入力</span>`}
           ${r.job.payType === "salary" ? (r.sal || r.ot || r.bonus ? [r.sal ? `月給 ${yen(r.sal)}` : "", r.ot ? `残業 ${yen(r.ot)}` : "", r.bonus ? `ボーナス ${yen(r.bonus)}` : "", r.tr ? `通勤手当 ${yen(r.tr)}` : ""].filter(Boolean).join("＋") + ` → 手取り目安 ${yen(r.est)}（額面の${netRateOf(r.job)}%）` : "この月の振込なし")
             : r.n ? `シフト${r.n}回・実働 ${dur(r.hours)} → 見込み ${yen(r.est)}${r.tr ? `（交通費 ${yen(r.tr)} 含む）` : ""}${r.fee ? `・手数料 −${yen(r.fee)}` : ""}${r.alw ? `・手当 +${yen(r.alw)}（${r.alwHitM.map(a => esc(a.name || "手当")).join("・")}）` : ""}${r.ins ? `・保険料 −${yen(r.ins)}` : ""}${r.wh ? `・所得税（乙欄）−${yen(r.wh)}` : ""}` : "シフト入力なし"}
           ${r.confirmed && r.n && r.conf !== r.est ? `・差 ${r.conf - r.est > 0 ? "+" : "−"}${yen(Math.abs(r.conf - r.est))}` : ""}</div></div>
@@ -2199,7 +2201,7 @@ function viewHome(){
       <div class="hk"><span>${partial ? `${mName()}に自由に使えるお金（仮）` : x.left < 0 ? `${mName()}は足りません` : `${mName()}に自由に使えるお金`}</span>${isCur && x.left > 0 && daysLeft ? `<span>1日あたり ${yen(Math.floor(x.left / daysLeft))}</span>` : ""}</div>
       <div class="hv">${x.left < 0 ? "−" : ""}${yen(Math.abs(x.left)).replace("−", "")}</div>
       <div class="hbar" aria-hidden="true">${seg(x.fixed, "color-mix(in srgb, var(--on-accent) 45%, transparent)")}${seg(x.save + x.wish, "color-mix(in srgb, var(--on-accent) 70%, transparent)")}${seg(x.evTotal, "var(--gold)")}</div>
-      <div class="hs">入る ${yen(x.income)} − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}${wishTxt}${evTxt}</div>
+      <div class="hs"><button type="button" class="hslink" data-act="openinc">${mName()}に入る給料 ${yen(x.income)} ›</button> − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}${wishTxt}${evTxt}</div>
       ${partial ? `<div class="hs">まだ入っていない給料があるので、仮の金額です。</div>` : x.left < 0 && rj && num(rj.wage) ? `<div class="hs">${esc(rj.name)}であと約${Math.ceil(-x.left / num(rj.wage))}時間働くか、行事の予算を見直すと足ります。</div>` : ""}
     </div>`;
 
@@ -2263,7 +2265,7 @@ function viewHome(){
     <div class="list">${upRows || `<div class="li"><span class="lm"><b>予定している出費はありません</b><span>旅行や飲み会の予算を入れておくと、使えるお金が正確になります</span></span></div>`}</div>
   </div>
 
-  <details class="more" ${S.openMore === "income" ? "open" : ""} data-more="income"><summary>${mName()}に使えるお金の内訳<span class="sv">${yen(x.income)}</span></summary><div class="inner">
+  <details class="more" ${S.openMore === "income" ? "open" : ""} data-more="income"><summary>${mName()}に入る給料の内訳<span class="sv">${yen(x.income)}</span></summary><div class="inner">
     <div class="small muted">${mName()}の出費は${startDay() > 1 ? "この期間（" + periodLabel(S.y, S.m) + "）に振り込まれた給料" : "前の月に振り込まれた給料"}でまかなう前提です（${jobWord()}ごとに設定で変更可）。振込額が分かったら「確定額」に入れると、見込みより優先します。</div>
     <div class="rows">${jobRows || `<div class="empty">バイト先がありません。<button data-goto="settings">バイト先を追加</button></div>`}${otherRows}</div>
     <div class="dayform"><button type="button" class="primary" data-incopen="budget">給料の金額をまとめて入力</button><button data-act="addOther">＋ その他の収入を追加</button></div>
@@ -2431,10 +2433,9 @@ const ymdOfT = t => new Date(t).toISOString().slice(0, 10);
 function calRange(kind){
   const sd = calStartOf(kind), pr = periodRange(S.y, S.m);
   if (!sd || sd === startDay()) return pr;
-  // the range starting on day sd that holds the middle of the viewed household month
-  const a = Date.parse(pr.start + "T00:00:00Z"), b = Date.parse(pr.end + "T00:00:00Z"), mid = new Date((a + b) / 2);
-  let y = mid.getUTCFullYear(), m = mid.getUTCMonth() + 1;
-  if (mid.getUTCDate() < sd) [y, m] = addMonths(y, m, -1);
+  // this month's range is the one holding today; each household month back or forward moves it one month
+  let y = now.y, m = now.m; if (now.d < sd) [y, m] = addMonths(y, m, -1);
+  [y, m] = addMonths(y, m, monthsFrom(todayKey, `${S.y}-${pad(S.m)}`) - 1);
   const [ny, nm] = addMonths(y, m, 1);
   return {start: `${y}-${pad(m)}-${pad(sd)}`, end: ymdOfT(Date.UTC(ny, nm - 1, sd) - 864e5)};
 }
@@ -2537,7 +2538,12 @@ function viewShifts(){
   return `
   ${S.settings.intl ? (() => { const pr = periodRange(S.y, S.m), b = intlMaxWeek(pr.start, pr.end);
     return `<div class="notice ${b.h > 28 ? "warn" : ""}"><div><b>${b.h > 28 ? `${md(b.start)}〜${md(b.end)}が合計${dur(b.h)}で、28時間を超えています` : `この月の7日間の最大は${dur(b.h)}（28時間まで）`}</b><br><span class="small">${INTL_NOTE}</span></div></div>`; })() : ""}
-  <div class="pills"><span class="pill">${list.length}回 ・ ${dur(h)}</span><span class="pill">見込み ${yen(total)}</span><button type="button" class="pill pillbtn" data-incopen="work">シフトなしで金額だけ入れる ›</button></div>
+  <div class="pills"><span class="pill">${list.length}回 ・ ${dur(h)}</span>${(() => {
+    // pay for the days shown here arrives later: say when, and which month it can be spent in
+    const lbl = pr.start.slice(8) === "01" ? `${Number(pr.start.slice(5, 7))}月` : `${md(pr.start)}〜${md(pr.end)}`;
+    const pds = [...new Set(list.map(t => `${t.pd.m}/${t.pd.d}`))].join("・"), uses = [...new Set(list.map(t => { const [py, pm] = t.pd.key.split("-").map(Number); return mName(...addMonths(py, pm, lagOf(t.job))); }))].join("・");
+    return `<span class="pill">${lbl}に働いた分 ${yen(total)}</span>${list.length ? `<span class="pill pillsub">${pds}振込 → ${uses}に使える</span>` : ""}`;
+  })()}<button type="button" class="pill pillbtn" data-incopen="work">シフトなしで金額だけ入れる ›</button></div>
   <section class="block">
     ${(() => { const pend = list.filter(x => needsSync(x.rec) && !syncing.has(x.id)); return S.settings.calSync && pend.length && mcp ? `<div class="notice warn"><div>Google カレンダーに未反映のシフトが ${pend.length}件 あります。</div><button data-act="syncmonth">まとめて反映</button></div>` : ""; })()}
     ${list.length < 3 && jobs.length ? `<div class="calhint">① 働く日をタップ　② 下で時間を入れて「追加」</div>` : ""}
@@ -3592,6 +3598,7 @@ document.addEventListener("click", e => {
     S.openMore = "saving"; render();
     toast(add ? `残高 ${yen(num(g.balance))} ＋ ${esc(w.title)} ${yen(left)} を目標にしました。「保存する」で確定します` : `残高 ${yen(num(w.price))} を目標にしました（今の残高も使います）。「保存する」で確定します`);
   }
+  else if (act === "openinc"){ S.openMore = "income"; render(); setTimeout(() => { const d = document.querySelector("[data-more=income]"); if (d) d.scrollIntoView({behavior: "smooth", block: "start"}); }, 30); }
   else if (act === "gofix"){ S.tab = "settings"; S.setTab = "spend"; render(); window.scrollTo(0, 0); }
   else if (act === "addFix"){ (S.settings.fixedItems = S.settings.fixedItems || []).push({name: "", amount: ""}); S.settings.fixedCost = fixTotal(); putSettings("固定費の欄を追加しました"); setTimeout(() => { const el = document.getElementById("sf-n-" + (S.settings.fixedItems.length - 1)); if (el) el.focus(); }, 30); }
   else if (act === "delFix"){ S.settings.fixedItems.splice(Number(a.dataset.i), 1); S.settings.fixedCost = fixTotal(); putSettings("固定費を削除しました"); }
