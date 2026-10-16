@@ -540,6 +540,12 @@ html,body{overflow-x:hidden}
 .cel-reward{font-size:13.5px;font-weight:900;margin-top:6px}
 .evseg{margin-bottom:2px}
 .hslink{border:none;background:none;padding:0;font:inherit;color:inherit;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.daypop{grid-column:1 / -1;position:relative;margin:4px 0 6px;padding:10px 12px;border:2px solid var(--accent);border-radius:14px;background:var(--surface);box-shadow:0 6px 18px rgba(0,0,0,.12);display:flex;flex-direction:column;gap:8px}
+.daypop::before{content:"";position:absolute;top:-8px;left:calc((var(--col) + .5) / 7 * 100% - 7px);width:12px;height:12px;background:var(--surface);border-left:2px solid var(--accent);border-top:2px solid var(--accent);transform:rotate(45deg)}
+.dp-h{display:flex;align-items:center;gap:8px}.dp-h b{flex:1}.dp-x{border:none;background:none;font:inherit;font-size:16px;color:var(--muted);cursor:pointer;padding:2px 6px}
+.dp-r{display:flex;align-items:center;gap:8px}.dp-m{flex:1;min-width:0;display:flex;flex-direction:column}.dp-m span{font-size:12px;color:var(--muted)}
+.dp-a{display:flex;flex-direction:column;align-items:flex-end;gap:2px;flex:none}
+.dp-add{min-height:42px;font-weight:900}
 .pill.pillsub{background:none;border:1px dashed var(--line);font-weight:700;color:var(--muted)}
 .ld.anyday b{font-size:13px}.ld.anyday span{font-size:10px}
 .anyline{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:13px}.anyline b{width:100%;color:var(--muted);font-size:12px}
@@ -2189,7 +2195,7 @@ function viewHome(){
       uses: [...new Set(worked.map(t => { const [py, pm] = t.pd.key.split("-").map(Number); return mName(...addMonths(py, pm, lagOf(t.job))); }))].join("・"),
       pds: [...new Set(worked.map(t => `${t.pd.m}/${t.pd.d}`))].join("・")};
   })();
-  const wkHero = noIncome && wk;   // the hero would be empty: show the worked pay there instead of a separate tile
+  const wkHero = false;   // the hero would be empty: show the worked pay there instead of a separate tile
   const hero = waiting ? `<div class="hero empty">
       <div class="hk"><span>${wkHero ? `${mName()}に働いた分（${wk.n}回）` : `${mName()}に自由に使えるお金`}</span></div>
       <div class="hv-msg">${wkHero ? `${wk.uses}に使える見込み ${yen(wk.total)}` : noIncome ? "給料を入れると計算します" : "あと少しで計算できます"}</div>
@@ -2210,8 +2216,6 @@ function viewHome(){
   const npHtml = np ? `<div class="mini ${np.rows.some(r => !r.used) ? "tap" : ""}" ${np.rows.some(r => !r.used) ? `data-incopen="pay" role="button" tabindex="0"` : ""}><span class="mk">次の給料日</span><span class="mv">${Number(np.ymd.slice(5, 7))}/${Number(np.ymd.slice(8))}<small>（${DOW[new Date(np.ymd + "T00:00:00Z").getUTCDay()]}）</small></span><span class="ms">${np.rows.map(r => `${esc(r.job.name)} ${r.used ? yen(r.used) : `<span class="warn">金額未入力</span>`}`).join("・")}</span>${np.rows.some(r => !r.used) ? `<span class="ms linkish">タップして金額を入れる ›</span>` : ""}</div>`
     : `<button type="button" class="mini" data-act="quickShift"><span class="mk">次の給料日</span><span class="mv">—</span><span class="ms">${isSimple() ? "給料日を設定すると表示されます" : "シフトを入れると表示されます"}</span></button>`;
   const p = savingPlan();
-  const svHtml = p ? `<div class="mini"><span class="mk">貯金 ${Number(p.gm.slice(5))}月までに${yen(p.goal)}</span><span class="mv">${Math.min(100, Math.floor(p.bal / p.goal * 100))}%</span><div class="meter"><span style="width:${Math.min(100, p.bal / p.goal * 100).toFixed(1)}%"></span></div></div>`
-    : `<button type="button" class="mini" data-act="openSaving"><span class="mk">貯金の目標</span><span class="mv">—</span><span class="ms">目標を決めると毎月の貯金額を計算します</span></button>`;
 
   // upcoming spending in the viewed month
   const evs = x.evs.filter(e => !isSpent(e) && (!isCur || e.ymd >= todayYmd || (e.anyDay && !hasVal(e.doc.actual))))
@@ -2253,8 +2257,12 @@ function viewHome(){
     const rows = incRowsFor("work"), filled = rows.filter(r => r.conf !== ""), total = filled.reduce((a, r) => a + num(r.conf), 0);
     return `<button type="button" class="workedline simplerow" data-incopen="work"><span>${mName()}に働いた分の見込み <b>${filled.length ? yen(total) : "未入力"}</b></span><span class="small muted">${filled.length ? `${rows[0].sub.split("・").pop()} → 直す ›` : "シフトボードなどの見込みを入れる ›"}</span></button>`;
   })() : ""}
-  ${wk && !wkHero ? `<div class="workedline"><span>${mName()}に働いた分 <b>${yen(wk.total)}</b></span><span class="small muted">${wk.pds}振込 → ${wk.uses}に使える</span></div>` : ""}
-  <div class="duo">${npHtml}${svHtml}</div>
+  <details class="more" ${S.openMore === "income" ? "open" : ""} data-more="income"><summary>${mName()}に入る給料の内訳<span class="sv">${yen(x.income)}</span></summary><div class="inner">
+    <div class="small muted">${mName()}の出費は${startDay() > 1 ? "この期間（" + periodLabel(S.y, S.m) + "）に振り込まれた給料" : "前の月に振り込まれた給料"}でまかなう前提です（${jobWord()}ごとに設定で変更可）。振込額が分かったら「確定額」に入れると、見込みより優先します。</div>
+    <div class="rows">${jobRows || `<div class="empty">バイト先がありません。<button data-goto="settings">バイト先を追加</button></div>`}${otherRows}</div>
+    <div class="dayform"><button type="button" class="primary" data-incopen="budget">給料の金額をまとめて入力</button><button data-act="addOther">＋ その他の収入を追加</button></div>
+  </div></details>
+  ${npHtml}
   ${(() => {
     const w = wishActive()[0]; if (!w) return "";
     const i = wishInfo(w), off = wishOffer();
@@ -2265,13 +2273,7 @@ function viewHome(){
     <div class="list">${upRows || `<div class="li"><span class="lm"><b>予定している出費はありません</b><span>旅行や飲み会の予算を入れておくと、使えるお金が正確になります</span></span></div>`}</div>
   </div>
 
-  <details class="more" ${S.openMore === "income" ? "open" : ""} data-more="income"><summary>${mName()}に入る給料の内訳<span class="sv">${yen(x.income)}</span></summary><div class="inner">
-    <div class="small muted">${mName()}の出費は${startDay() > 1 ? "この期間（" + periodLabel(S.y, S.m) + "）に振り込まれた給料" : "前の月に振り込まれた給料"}でまかなう前提です（${jobWord()}ごとに設定で変更可）。振込額が分かったら「確定額」に入れると、見込みより優先します。</div>
-    <div class="rows">${jobRows || `<div class="empty">バイト先がありません。<button data-goto="settings">バイト先を追加</button></div>`}${otherRows}</div>
-    <div class="dayform"><button type="button" class="primary" data-incopen="budget">給料の金額をまとめて入力</button><button data-act="addOther">＋ その他の収入を追加</button></div>
-  </div></details>
-
-  <details class="more" ${S.openMore === "saving" ? "open" : ""} data-more="saving"><summary>貯金の計画<span class="sv">${p ? `毎月 ${yen(p.perMonth)}` : "未設定"}</span></summary><div class="inner">${savingHtml(x)}</div></details>
+  <details class="more" ${S.openMore === "saving" ? "open" : ""} data-more="saving"><summary>貯金の計画<span class="sv">${p ? `${Math.min(100, Math.floor(p.bal / p.goal * 100))}% ・ 毎月 ${yen(p.perMonth)}` : "未設定"}</span></summary><div class="inner">${savingHtml(x)}</div></details>
 
 
   ${walls.length ? `<details class="more" ${S.openMore === "wall" ? "open" : ""} data-more="wall"><summary>${S.y}年の収入と「年収の壁」<span class="sv">${nextWall ? `次まで ${yen(nextWall.amount - wallVal(nextWall, x))}` : "すべて超過"}</span></summary><div class="inner">
@@ -2479,6 +2481,15 @@ function intlMaxWeek(from, to){
   return best;
 }
 const INTL_NOTE = "留学生は、どの曜日から数えても7日間で合計28時間まで（すべてのバイト先の合計）。学校の長期休業中だけは1日8時間・週40時間まで働けます。";
+function dayPopHtml(k, ds, col){
+  const [y, m, d] = k.split("-").map(Number), dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return `<div class="daypop" style="--col:${col}" role="dialog" aria-label="${m}月${d}日のシフト">
+    <div class="dp-h"><b>${m}月${d}日（${DOW[dow]}）</b><span class="num">${yen(ds.reduce((a, s) => a + s.pay, 0))}</span><button type="button" class="dp-x" data-act="popclose" aria-label="閉じる">✕</button></div>
+    ${ds.map(s => `<div class="dp-r"><span class="jdot" style="--jc:${jColor(s.job.id)}"></span><span class="dp-m"><b>${esc(s.job.name)}</b><span>${s.time ? `${s.time}・実働 ${dur(s.paid)}` : "時刻なし"}${s.rec.note ? "・" + esc(s.rec.note) : ""}</span></span><span class="dp-a"><span class="num">${yen(s.pay)}</span><button type="button" class="ghost small-btn" data-act="popedit" data-id="${esc(s.id)}">編集する</button></span></div>`).join("")}
+    <button type="button" class="primary dp-add" data-act="popadd">＋ この日にシフトを追加する</button>
+  </div>`;
+}
+const toForm = () => setTimeout(() => { const f = document.getElementById("shiftForm"); if (f) f.scrollIntoView({behavior: "smooth", block: "center"}); }, 30);
 function viewShifts(){
   const jobs = S.settings.jobs;
   const pr = calRange("shifts");
@@ -2492,6 +2503,8 @@ function viewShifts(){
   const t0 = Date.parse(pr.start + "T00:00:00Z"), first = new Date(t0).getUTCDay();
   let cells = DOW.map((w, i) => `<div class="wd ${i === 0 ? "sun" : i === 6 ? "sat" : ""}">${w}</div>`).join("");
   for (let i = 0; i < first; i++) cells += `<div class="day blank" aria-hidden="true"></div>`;
+  if (S.pop && (!(byDay[S.pop] || []).length || (Array.isArray(S.multi) && S.multi.length))) S.pop = null;
+  let popCol = -1;
   for (let t = t0, i = 0; i < 32; t += 864e5, i++){
     const x = new Date(t), cm = x.getUTCMonth() + 1, d = x.getUTCDate();
     const key = `${x.getUTCFullYear()}-${pad(cm)}-${pad(d)}`;
@@ -2499,7 +2512,10 @@ function viewShifts(){
     const ds = byDay[key] || [];
     const dots = ds.slice(0, 3).map(s => `<i style="--jc:${jColor(s.job.id)}"></i>`).join("");
     // when a period crosses into the next month, the 1st shows its month so the grid stays readable
-    cells += `<button class="day ${key === todayYmd ? "today" : ""}" data-day="${key}" aria-pressed="${Array.isArray(S.multi) && S.multi.length ? S.multi.includes(key) : key === S.sel}" aria-label="${cm}月${d}日${ds.length ? `、シフト${ds.length}件` : ""}"><span class="dn">${d === 1 && i > 0 ? `${cm}/1` : d}</span><span class="dots">${dots}</span></button>`;
+    cells += `<button class="day ${key === todayYmd ? "today" : ""}" data-day="${key}" ${ds.length ? `data-has="1"` : ""} aria-pressed="${Array.isArray(S.multi) && S.multi.length ? S.multi.includes(key) : key === S.sel}" aria-label="${cm}月${d}日${ds.length ? `、シフト${ds.length}件` : ""}"><span class="dn">${d === 1 && i > 0 ? `${cm}/1` : d}</span><span class="dots">${dots}</span></button>`;
+    // the bubble for the tapped day goes right under its week
+    const p = first + i; if (key === S.pop) popCol = p % 7;
+    if (popCol >= 0 && (p % 7 === 6 || new Date(t + 864e5).toISOString().slice(0, 10) > pr.end)){ cells += dayPopHtml(S.pop, byDay[S.pop] || [], popCol); popCol = -1; }
   }
   const multi = Array.isArray(S.multi) && S.multi.length ? S.multi.slice().sort() : null;
   const [sy, sm, sd] = S.sel.split("-").map(Number);
@@ -3491,7 +3507,7 @@ document.getElementById("prevM").onclick = () => setMonth(-1);
 document.getElementById("nextM").onclick = () => setMonth(1);
 document.querySelector("nav.tabs").addEventListener("click", e => {
   const b = e.target.closest("button[data-tab]"); if (!b || S.jobAsk) return;
-  S.tab = b.dataset.tab; S.multi = null; try { history.replaceState(null, "", "#" + S.tab); } catch(_){}
+  S.tab = b.dataset.tab; S.multi = null; S.pop = null; try { history.replaceState(null, "", "#" + S.tab); } catch(_){}
   render();
 });
 
@@ -3506,7 +3522,11 @@ document.addEventListener("click", e => {
       if (!S.multi.length) S.multi = [k];
       S.sel = S.multi[S.multi.length - 1]; render(); return;
     }
-    S.sel = k; if (S.form && S.form.editId) S.form = formFor(S.form.job); S.confirmDel = null; render();
+    S.sel = k; if (S.form && S.form.editId) S.form = formFor(S.form.job); S.confirmDel = null;
+    // a day that already has shifts: show them in a bubble first (edit / add from there)
+    if (day.dataset.has){ S.pop = S.pop === k ? null : k; render();
+      setTimeout(() => { const b = document.querySelector(".daypop"); if (b) b.scrollIntoView({behavior: "smooth", block: "nearest"}); }, 30); return; }
+    S.pop = null; render();
     // the entry form sits under the calendar: bring it up so the next step is visible
     setTimeout(() => { const p = document.getElementById("dayPanel"); if (p && p.getBoundingClientRect().top > window.innerHeight * 0.62) p.scrollIntoView({behavior: "smooth", block: "start"}); }, 30);
     return;
@@ -3528,6 +3548,9 @@ document.addEventListener("click", e => {
     else if (doc.manual) putDoc("events", id, null, `「${esc(title)}」を削除しました`);
     else { const ev = S.cal.find(v => v.id === id); putDoc("events", id, Object.assign({}, doc, {included:false, title, ymd: ev ? ev.ymd : doc.ymd || ""}), `「${esc(title)}」を一覧から削除しました`); }
   }
+  else if (act === "popclose"){ S.pop = null; render(); }
+  else if (act === "popedit"){ const r = S.shifts[id]; S.pop = null; if (r){ S.form = {editId: id, job: r.job, start: r.start || "", end: r.end || "", breakMin: r.breakMin ?? "", transport: r.transport ?? "", note: r.note || ""}; } render(); toForm(); }
+  else if (act === "popadd"){ S.pop = null; if (S.form && S.form.editId) S.form = formFor(S.form.job); render(); toForm(); }
   else if (act === "editshift"){ const r = S.shifts[id]; if (r){ S.form = {editId: id, job: r.job, start: r.start || "", end: r.end || "", breakMin: r.breakMin ?? "", transport: r.transport ?? "", note: r.note || ""}; render(); } }
   else if (act === "addOther"){ const k = `${S.y}-${pad(S.m)}`, d = clone(S.income[k] || {}); d.others = (d.others || []).concat([{label: "", amount: ""}]); putDoc("income", k, d, "その他の収入の欄を追加しました");
     setTimeout(() => { const el = document.getElementById("io-l-" + (d.others.length - 1)); if (el) el.focus(); }, 30); }
