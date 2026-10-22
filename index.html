@@ -2252,7 +2252,7 @@ function viewHome(){
       <div class="hk"><span>${partial ? `${mName()}に自由に使えるお金（仮）` : x.left < 0 ? `${mName()}は足りません` : `${mName()}に自由に使えるお金`}</span>${isCur && x.left > 0 && daysLeft ? `<span>1日あたり ${yen(Math.floor(x.left / daysLeft))}</span>` : ""}</div>
       <div class="hv">${x.left < 0 ? "−" : ""}${yen(Math.abs(x.left)).replace("−", "")}</div>
       <div class="hbar" aria-hidden="true">${seg(x.fixed, "color-mix(in srgb, var(--on-accent) 45%, transparent)")}${seg(x.save + x.wish, "color-mix(in srgb, var(--on-accent) 70%, transparent)")}${seg(x.evTotal, "var(--gold)")}</div>
-      <div class="hs"><button type="button" class="hslink" data-act="openinc">${mName()}に入る給料 ${yen(x.income)} ›</button> − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}${wishTxt}${evTxt}</div>
+      <div class="hs"><button type="button" class="hslink" data-act="openinc">${incLabel(x)} ${yen(x.income)} ›</button> − 固定費 ${yen(x.fixed)}・貯金 ${yen(x.save)}${wishTxt}${evTxt}</div>
       ${partial ? `<div class="hs">まだ入っていない給料があるので、仮の金額です。</div>` : x.left < 0 && rj && num(rj.wage) ? `<div class="hs">${esc(rj.name)}であと約${Math.ceil(-x.left / num(rj.wage))}時間働くか、行事の予算を見直すと足ります。</div>` : ""}
     </div>`;
 
@@ -2302,8 +2302,10 @@ function viewHome(){
     const rows = incRowsFor("work"), filled = rows.filter(r => r.conf !== ""), total = filled.reduce((a, r) => a + num(r.conf), 0);
     return `<button type="button" class="workedline simplerow" data-incopen="work"><span>${mName()}に働いた分の見込み <b>${filled.length ? yen(total) : "未入力"}</b></span><span class="small muted">${filled.length ? `${rows[0].sub.split("・").pop()} → 直す ›` : "シフトボードなどの見込みを入れる ›"}</span></button>`;
   })() : ""}
-  <details class="more" ${S.openMore === "income" ? "open" : ""} data-more="income"><summary>${mName()}に入る給料の内訳<span class="sv">${yen(x.income)}</span></summary><div class="inner">
-    <div class="small muted">${mName()}の出費は${startDay() > 1 ? "この期間（" + periodLabel(S.y, S.m) + "）に振り込まれた給料" : "前の月に振り込まれた給料"}でまかなう前提です（${jobWord()}ごとに設定で変更可）。振込額が分かったら「確定額」に入れると、見込みより優先します。</div>
+  <details class="more" ${S.openMore === "income" ? "open" : ""} data-more="income"><summary>${incLabel(x)}の内訳<span class="sv">${yen(x.income)}</span></summary><div class="inner">
+    <div class="small muted">${(() => { const mj = S.settings.jobs.filter(j => freqOf(j) === "monthly"), lag1 = mj.some(j => lagOf(j) > 0);
+      return mj.length ? (lag1 ? `${mName()}の出費は、<b>前の月に振り込まれた給料</b>でまかなう設定です（給料日のお金は翌月に使う）。` : `${mName()}の出費は、<b>${mName()}に振り込まれた給料</b>でまかなう設定です。`) : ""; })()}振込額が分かったら「確定額」に入れると、見込みより優先します。</div>
+    ${S.settings.jobs.some(j => freqOf(j) === "monthly") ? (lag1 => `<button type="button" class="ghost owgoal" data-act="lagset" data-v="${lag1 ? 0 : 1}">${lag1 ? "振り込まれた月のうちに使う設定に変える" : "振り込まれた翌月に使う設定に変える"}</button>`)(S.settings.jobs.some(j => freqOf(j) === "monthly" && lagOf(j) > 0)) : ""}
     <div class="rows">${jobRows || `<div class="empty">バイト先がありません。<button data-goto="settings">バイト先を追加</button></div>`}${otherRows}</div>
     <div class="dayform"><button type="button" class="primary" data-incopen="budget">給料の金額をまとめて入力</button><button data-act="addOther">＋ その他の収入を追加</button></div>
   </div></details>
@@ -2357,6 +2359,12 @@ function taxReturnHtml(x, y){
     <span class="small">${free ? `${y}年の年収が178万円以下なら所得税はかからないので、${y + 1}年1月以降に確定申告（還付申告）をすると、引かれた分がほぼ戻ります。5年以内なら後からでも申告できます。` : `年収が178万円を超えると所得税がかかるので、戻るのは一部か、追加で払うこともあります。`}
     ${must ? `年末調整をしないバイト先の給料が年20万円を超え、年収も150万円を超えるので、確定申告が必要になる見込みです（社会保険料などを払っている場合は変わります）。` : ""}
     必要なもの：各バイト先の源泉徴収票（年末〜1月ごろにもらえます）。金額は目安です。</span></div>`;
+}
+/* "10月に使う給料（9/25振込）": with 翌月に使う the money for this month arrived the month before, so say which payday it is */
+function incLabel(x){
+  const lag = S.settings.jobs.some(j => freqOf(j) === "monthly" && lagOf(j) > 0);
+  const pds = [...new Set(x.mi.rows.filter(r => r.pd && freqOf(r.job) === "monthly").map(r => `${r.pd.m}/${r.pd.d}`))].join("・");
+  return `${mName()}に${lag ? "使う" : "入る"}給料${pds ? `（${pds}振込）` : ""}`;
 }
 function savingHtml(x){
   const st = S.settings, p = savingPlan();
@@ -3599,6 +3607,10 @@ document.addEventListener("click", e => {
     if (recItem){ putDoc("events", id, Object.assign({}, doc, {included:false, recurring:true, title, ymd: recItem.ymd}), `${mName()}の「${esc(title)}」を外しました`); }
     else if (doc.manual) putDoc("events", id, null, `「${esc(title)}」を削除しました`);
     else { const ev = S.cal.find(v => v.id === id); putDoc("events", id, Object.assign({}, doc, {included:false, title, ymd: ev ? ev.ymd : doc.ymd || ""}), `「${esc(title)}」を一覧から削除しました`); }
+  }
+  else if (act === "lagset"){
+    const v = num(a.dataset.v); S.settings.jobs.forEach(j => { if (freqOf(j) === "monthly") j.useLag = v; });
+    putSettings(v ? "給料は振り込まれた翌月に使う設定にしました" : "給料は振り込まれた月のうちに使う設定にしました");
   }
   else if (act === "saveBal"){
     const d = S.balDraft || {};
