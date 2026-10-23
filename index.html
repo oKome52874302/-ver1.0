@@ -555,6 +555,7 @@ html,body{overflow-x:hidden}
 .calhint{font-size:13px;font-weight:900;color:var(--accent);text-align:center;margin-bottom:6px}
 .multihint{font-size:13px;line-height:1.6;color:var(--muted);margin:-4px 0 6px}.multihint b{color:var(--ink)}
 .addhead{margin:6px 0 2px}
+.addopen{width:100%;min-height:50px;font-weight:900;font-size:16px}
 #calcbar{position:fixed;left:0;right:0;bottom:0;z-index:300;display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 14px rgba(0,0,0,.08)}
 #calcbar[hidden]{display:none}
 body.calc-on .evpanel{padding-bottom:calc(70px + env(safe-area-inset-bottom))}
@@ -2594,7 +2595,7 @@ function viewShifts(){
       <label class="f">休憩（分）<input type="text" inputmode="decimal" id="fBreak" data-form="breakMin" min="0" step="5" class="w-s" value="${esc(f.breakMin)}" placeholder="${hasBrkRule(fj) ? "自動" : "0"}"></label>
       <label class="f">交通費（円）<input type="text" inputmode="decimal" id="fTr" data-form="transport" min="0" step="10" class="w-s" value="${esc(f.transport ?? "")}" placeholder="${esc(String(fj ? num(fj.transport) : 0))}"></label>
       <label class="f" style="flex:1 1 10em">メモ<input type="text" id="fNote" data-form="note" class="w-l" value="${esc(f.note)}" placeholder="任意"></label>
-      <div style="display:flex;gap:6px;flex:1 1 100%"><button class="primary" type="submit" style="flex:1;min-height:46px;font-weight:900">${f.editId ? "更新する" : (multi ? `＋ 選んだ${multi.length}日に追加` : "＋ この日にシフトを追加")}</button>${f.editId ? `<button type="button" data-act="cancelEdit">やめる</button>` : ""}</div>
+      <div style="display:flex;gap:6px;flex:1 1 100%"><button class="primary" type="submit" style="flex:1;min-height:46px;font-weight:900">${f.editId ? "更新する" : (multi ? `＋ 選んだ${multi.length}日に追加` : "追加する")}</button>${f.editId ? `<button type="button" data-act="cancelEdit">やめる</button>` : multi ? "" : `<button type="button" data-act="closeform">やめる</button>`}</div>
     </form>
     ${f.copied && !f.editId ? `<div class="small muted copied">時刻は前回と同じです。${hasBrkRule(fj) ? `休憩は空欄ならいつもの休憩（${brkRuleText(fj)}）。` : "休憩は毎回入れてください（設定で自動にもできます）。"}</div>` : ""}
 
@@ -2603,14 +2604,14 @@ function viewShifts(){
     ${fj && fj.payType === "salary" ? `<div class="small muted">月給の${jobWord()}は、残業した日だけ入れればOKです。月給そのものは毎月自動で入ります。</div>` : ""}` :
     `<div class="empty">${jobWord()}がありません。<button data-goto="settings">設定で${jobWord()}を追加</button></div>`;
   const perJob = jobs.map(j => { const xs = list.filter(s => s.job.id === j.id); return `<span><span class="jdot" style="--jc:${jColor(j.id)}"></span>${esc(j.name)}${xs.length ? ` ${xs.length}回・${yen(xs.reduce((a, s) => a + s.pay, 0))}` : ""}</span>`; }).join("");
-  const isToday = S.sel === todayYmd;
+  const isToday = S.sel === todayYmd, formOpen = !!(S.formOpen || f.editId || multi);
   return `
   ${S.settings.intl ? (() => { const pr = periodRange(S.y, S.m), b = intlMaxWeek(pr.start, pr.end);
     return `<div class="notice ${b.h > 28 ? "warn" : ""}"><div><b>${b.h > 28 ? `${md(b.start)}〜${md(b.end)}が合計${dur(b.h)}で、28時間を超えています` : `この月の7日間の最大は${dur(b.h)}（28時間まで）`}</b><br><span class="small">${INTL_NOTE}</span></div></div>`; })() : ""}
   <div class="pills"><span class="pill">${list.length}回 ・ ${dur(h)}</span><button type="button" class="pill pillbtn" data-incopen="work">シフトなしで金額だけ入れる ›</button></div>
   <section class="block">
     ${(() => { const pend = list.filter(x => needsSync(x.rec) && !syncing.has(x.id)); return S.settings.calSync && pend.length && mcp ? `<div class="notice warn"><div>Google カレンダーに未反映のシフトが ${pend.length}件 あります。</div><button data-act="syncmonth">まとめて反映</button></div>` : ""; })()}
-    ${list.length < 3 && jobs.length ? `<div class="calhint">① 働く日をタップ　② 下で時間を入れて「追加」</div>` : ""}
+    ${list.length < 3 && jobs.length ? `<div class="calhint">① 働く日をタップ　② 「＋ この日にシフトを追加」</div>` : ""}
     <div class="cal">${cells}</div>
     ${periodCtl("shifts")}
     ${jobs.length > 1 ? `<div class="legend" style="justify-content:center">${perJob}</div>` : ""}
@@ -2620,8 +2621,8 @@ function viewShifts(){
     ${multi ? `<div class="blockhead"><h2>${multi.length}日を選択中</h2><button type="button" class="ghost small-btn" data-act="multiday">1日ずつに戻す</button></div>
       <div class="multihint">カレンダーで日付をタップして選んでください。<b>${multi.map(d => md(d)).join("・")}</b> に同じ時間で入ります。</div>`
       : `<div class="blockhead"><h2>${sm}月${sd}日（${DOW[sdow]}）${isToday ? `<span class="small" style="color:var(--pop);font-weight:900;margin-left:6px">今日</span>` : ""}</h2>${jobs.length && !f.editId ? `<button type="button" class="ghost small-btn" data-act="multiday">複数の日にまとめて入れる</button>` : ""}</div>`}
-    ${multi ? "" : `<div class="rows">${dayList || ""}</div>${dayList ? `<div class="small muted addhead">この日にもう1つ追加する</div>` : ""}`}
-    ${form}
+    ${multi ? "" : `<div class="rows">${dayList || ""}</div>${dayList && formOpen && !f.editId ? `<div class="small muted addhead">この日にもう1つ追加する</div>` : ""}`}
+    ${jobs.length && !formOpen ? `<button type="button" class="primary addopen" data-act="openform">＋ この日にシフトを追加</button>` : form}
   </section>`;
 }
 
@@ -3567,7 +3568,7 @@ document.getElementById("prevM").onclick = () => setMonth(-1);
 document.getElementById("nextM").onclick = () => setMonth(1);
 document.querySelector("nav.tabs").addEventListener("click", e => {
   const b = e.target.closest("button[data-tab]"); if (!b || S.jobAsk) return;
-  S.tab = b.dataset.tab; S.multi = null; S.pop = null; S.balDraft = null; try { history.replaceState(null, "", "#" + S.tab); } catch(_){}
+  S.tab = b.dataset.tab; S.multi = null; S.pop = null; S.formOpen = false; S.balDraft = null; try { history.replaceState(null, "", "#" + S.tab); } catch(_){}
   render();
 });
 
@@ -3582,7 +3583,7 @@ document.addEventListener("click", e => {
       if (!S.multi.length) S.multi = [k];
       S.sel = S.multi[S.multi.length - 1]; render(); return;
     }
-    S.sel = k; if (S.form && S.form.editId) S.form = formFor(S.form.job); S.confirmDel = null;
+    S.sel = k; if (S.form && S.form.editId) S.form = formFor(S.form.job); S.confirmDel = null; S.formOpen = false;
     // a day that already has shifts: show them in a bubble first (edit / add from there)
     if (day.dataset.has){ S.pop = S.pop === k ? null : k; render();
       setTimeout(() => { const b = document.querySelector(".daypop"); if (b) b.scrollIntoView({behavior: "smooth", block: "nearest"}); }, 30); return; }
@@ -3619,9 +3620,11 @@ document.addEventListener("click", e => {
     setBalance(d.amount === "" ? "" : num(d.amount), d.ymd || todayYmd); S.balDraft = null; S.goalDraft = null;
     putSettings(d.amount === "" ? "残高を消しました" : `${d.ymd && d.ymd !== todayYmd ? md(d.ymd) + "時点の" : ""}残高 ${yen(num(d.amount))} を保存しました`);
   }
+  else if (act === "openform"){ S.formOpen = true; if (S.form && S.form.editId) S.form = formFor(S.form.job); render(); toForm(); }
+  else if (act === "closeform"){ S.formOpen = false; render(); }
   else if (act === "popclose"){ S.pop = null; render(); }
   else if (act === "popedit"){ const r = S.shifts[id]; S.pop = null; if (r){ S.form = {editId: id, job: r.job, start: r.start || "", end: r.end || "", breakMin: r.breakMin ?? "", transport: r.transport ?? "", note: r.note || ""}; } render(); toForm(); }
-  else if (act === "popadd"){ S.pop = null; if (S.form && S.form.editId) S.form = formFor(S.form.job); render(); toForm(); }
+  else if (act === "popadd"){ S.pop = null; S.formOpen = true; if (S.form && S.form.editId) S.form = formFor(S.form.job); render(); toForm(); }
   else if (act === "editshift"){ const r = S.shifts[id]; if (r){ S.form = {editId: id, job: r.job, start: r.start || "", end: r.end || "", breakMin: r.breakMin ?? "", transport: r.transport ?? "", note: r.note || ""}; render(); } }
   else if (act === "addOther"){ const k = `${S.y}-${pad(S.m)}`, d = clone(S.income[k] || {}); d.others = (d.others || []).concat([{label: "", amount: ""}]); putDoc("income", k, d, "その他の収入の欄を追加しました");
     setTimeout(() => { const el = document.getElementById("io-l-" + (d.others.length - 1)); if (el) el.focus(); }, 30); }
@@ -3646,7 +3649,7 @@ document.addEventListener("click", e => {
   else if (act === "quickShift" || act === "quickEvent"){
     document.getElementById("sheet").hidden = true;
     [S.y, S.m] = refreshToday();
-    if (act === "quickShift"){ S.tab = "shifts"; S.sel = todayYmd; if (S.form && S.form.editId) S.form = null; }
+    if (act === "quickShift"){ S.tab = "shifts"; S.sel = todayYmd; S.formOpen = true; if (S.form && S.form.editId) S.form = null; }
     else { S.tab = "events"; S.evView = ""; S.evDraft = {group: ""}; render(); openEvEditor(null); return; }
     render();
     const el = document.getElementById("fStart");
@@ -3698,7 +3701,7 @@ document.addEventListener("click", e => {
   else if (act === "delFix"){ S.settings.fixedItems.splice(Number(a.dataset.i), 1); S.settings.fixedCost = fixTotal(); putSettings("固定費を削除しました"); }
   else if (act === "syncshift") syncShift(id);
   else if (act === "syncmonth"){ const ids = allShifts().filter(x => inPeriod(x.ev.ymd, S.y, S.m) && needsSync(x.rec)).map(x => x.id); syncAll(ids); }
-  else if (act === "cancelEdit"){ S.form = formFor(S.form.job); render(); }
+  else if (act === "cancelEdit"){ S.form = formFor(S.form.job); S.formOpen = false; render(); }
   else if (act === "delshift"){
     if (S.confirmDel !== "s:" + id){ S.confirmDel = "s:" + id; render(); return; }
     S.confirmDel = null; if (S.form && S.form.editId === id) S.form = formFor(S.form.job);
@@ -3883,6 +3886,7 @@ document.addEventListener("submit", e => {
     putDoc("shifts", id, rec, msg);
     if (S.quickAdd){ S.quickAdd = false; toast(`${S.sel.slice(5).replace("-", "/")} に ${esc(job.name)}（${rec.start}–${rec.end}）を追加しました <button type="button" class="undo" data-act="undoShift" data-id="${id}">取り消す</button>`, "undo"); }
     S.form = formFor(f.job);   // after saving, so "前回" is the shift just entered
+    S.formOpen = false;
     if (S.settings.calSync && mcp) syncShift(id, false);
     return;
   }
