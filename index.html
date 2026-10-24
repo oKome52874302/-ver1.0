@@ -2104,6 +2104,8 @@ document.addEventListener("click", e => {
     const sel = [...document.querySelectorAll("#scanPanel [data-scanpick][aria-pressed=true]")], sum = sel.reduce((a, b) => a + Number(b.dataset.scanpick), 0);
     const go = document.querySelector("#scanPanel [data-scanuse]");
     if (go){ go.disabled = !sel.length; go.textContent = sel.length > 1 ? `${sel.length}件の合計 ${yen(sum)} を入れる` : sel.length ? `${yen(sum)} を入れる` : "金額を選んでください"; }
+    const sp = document.querySelector("#scanPanel [data-scansplit]");
+    if (sp){ const n = sel.length > 1 && sel.some(b => !b.dataset.scantotal) ? sel.filter(b => !b.dataset.scantotal).length : sel.length; sp.disabled = !n; sp.textContent = n ? `選んだ${n}項目を予算に入れる` : "項目を選んでください"; }
     return;
   }
   const use = e.target.closest && e.target.closest("[data-scanuse]");
@@ -2138,14 +2140,13 @@ document.addEventListener("change", async e => {
     else if (isHtml) text = htmlToText(await file.text());
     else if (isTxt) text = await file.text();
     else { const url = URL.createObjectURL(file); try { text = await ocrImage(url); } finally { URL.revokeObjectURL(url); } }
-    const c = amountsFrom(text);
-    scanPanel(`<div class="evs-h"><h2>${c.length ? "入れる金額を選んでください" : "金額が見つかりませんでした"}</h2><button type="button" class="ghost" data-scanclose aria-label="閉じる">✕</button></div>
-      ${c.length ? `<p class="small muted" style="margin:0">いくつでも選べます。複数選ぶと合計を入れます。</p>
-        <div class="scanlist">${c.map((x, k) => `<button type="button" class="scanpick ${k === 0 ? "best" : ""}" data-scanpick="${x.v}" data-scanlabel="${esc(x.name || x.label)}" data-scantotal="${/合計|総計|総額|お支払|支払金額|請求額|小計|total/i.test(x.label + " " + x.name) ? 1 : ""}" aria-pressed="${k === 0}"><span class="sck" aria-hidden="true"></span><b>${yen(x.v)}</b><span class="scn">${x.name ? `<em>${esc(x.name)}</em>` : ""}<span>${esc(x.label)}</span></span></button>`).join("")}</div>
-        <p class="small muted">${scanTarget === "evf-budget" && S.evEdit && !S.evEdit.id ? "宿・交通などを項目ごとに分けたいときは、その行を選んで「項目名と金額ごとに入れる」を押してください（合計の行は自動で外します）。" : ""}はじめは「合計」などの言葉から選んだ候補にチェックを入れています。写真は読み間違えることがあるので、元の画像と見比べてください。</p>`
+    const c = amountsFrom(text), split = scanTarget === "evf-budget" && S.evEdit && !S.evEdit.id;   // a new event's budget: each chosen line becomes its own item
+    scanPanel(`<div class="evs-h"><h2>${c.length ? (split ? "予算に入れる項目を選んでください" : "入れる金額を選んでください") : "金額が見つかりませんでした"}</h2><button type="button" class="ghost" data-scanclose aria-label="閉じる">✕</button></div>
+      ${c.length ? `<p class="small muted" style="margin:0">${split ? "いくつでも選べます。選んだ行が、それぞれ項目名と金額のまま1つずつの予算になります（合計はしません）。" : "いくつでも選べます。複数選ぶと合計を入れます。"}</p>
+        <div class="scanlist">${c.map((x, k) => `<button type="button" class="scanpick ${k === 0 && !split ? "best" : ""}" data-scanpick="${x.v}" data-scanlabel="${esc(x.name || x.label)}" data-scantotal="${/合計|総計|総額|お支払|支払金額|請求額|小計|total/i.test(x.label + " " + x.name) ? 1 : ""}" aria-pressed="${k === 0 && !split}"><span class="sck" aria-hidden="true"></span><b>${yen(x.v)}</b><span class="scn">${x.name ? `<em>${esc(x.name)}</em>` : ""}<span>${esc(x.label)}</span></span></button>`).join("")}</div>
+        <p class="small muted">${split ? "合計の行をほかの行と一緒に選んだときは、二重にならないよう合計の行は外します。項目名と金額は、このあと直せます。" : "はじめは「合計」などの言葉から選んだ候補にチェックを入れています。"}写真は読み間違えることがあるので、元の画像と見比べてください。</p>`
         : `<p class="small muted">明るい場所で、金額の部分が大きく写るように撮り直してみてください。</p>`}
-      ${c.length > 1 && scanTarget === "evf-budget" && S.evEdit && !S.evEdit.id ? `<button type="button" class="ghost scansplit" data-scansplit>選んだ行を、項目名と金額ごとに入れる</button>` : ""}
-      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button>${c.length ? `<button type="button" class="primary" data-scanuse>${yen(c[0].v)} を入れる</button>` : ""}</div>`);
+      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button>${!c.length ? "" : split ? `<button type="button" class="primary" data-scansplit disabled>項目を選んでください</button>` : `<button type="button" class="primary" data-scanuse>${yen(c[0].v)} を入れる</button>`}</div>`);
   } catch(err){
     scanPanel(`<div class="evs-h"><h2>読み取れませんでした</h2></div><p class="small muted">通信できる場所で、もう一度試してください（読み取りの準備に通信が必要です）。</p><div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button></div>`);
   }
