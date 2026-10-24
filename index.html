@@ -514,7 +514,9 @@ details.more section.block{padding:0;background:none}
 .evitems{display:flex;flex-direction:column;gap:8px}.evitem{display:grid;grid-template-columns:minmax(0,1fr) 7.5em auto;gap:6px;align-items:center}
 .evitem input{min-height:44px}.evitems-foot{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .evinone{align-self:flex-start;border:none;background:none;font:inherit;font-size:13px;cursor:pointer;padding:0}.evsplit{justify-content:flex-end}.evsplit button{min-height:46px;width:100%;border:1px dashed var(--accent);border-radius:12px;color:var(--accent);font-weight:900;font-size:13px;line-height:1.3}
-.scansplit{width:100%;margin-top:8px;color:var(--accent);font-weight:900}
+#scanPanel .scansplit{color:var(--accent)}
+.scansplit{width:100%;margin-top:4px;min-height:48px;border:1px dashed var(--accent);border-radius:12px;color:var(--accent);font-weight:900}
+.scanpick .scn{display:flex;flex-direction:column;align-items:flex-end;min-width:0;gap:2px;overflow:hidden}.scanpick .scn em{font-style:normal;font-weight:900;color:var(--ink);font-size:13px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .day .evspan{display:block;height:4px;border-radius:99px;background:color-mix(in srgb,var(--pop) 45%,transparent);margin-top:auto}
 .evs-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.evs-foot button{min-height:46px;padding:0 16px}
 .evs-review{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden}
@@ -2046,21 +2048,42 @@ async function pdfToText(file){
   return text;
 }
 /* money-looking numbers, best first: words like 合計・支給 and ¥・円・カンマ raise the score; dates and phone numbers are skipped */
+/* the item an amount belongs to: words on its own line, else the nearest line above that is only words
+   (plans and estimates often put "ホテル○○" on one line and "27,000円／人" on the next) */
+const NAME_CH = /[A-Za-z\u3040-\u30ff\u4e00-\u9fff]/g;
+function wordsOf(line){
+  const t = String(line || "").replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/[¥￥\\]?\s*\d[\d,，.]*\s*(円|万円)?/g, " ").replace(/\d{1,2}:\d{2}/g, " ")
+    .replace(/[／\/]\s*(人|名|泊|回|枚|個|本)/g, " ").replace(/[（(]?(税込み?|税抜き?|込み?|税別)[）)]?/g, " ").replace(/\b(CHECK-?)?(IN|OUT)\b/gi, " ")
+    .replace(/(約|〜|~|～|―|-|×|x|X|＊|\*|：|:|・|\||｜|\/|／|[（）()［］\[\]「」【】、。,.])/g, " ").replace(/\s+/g, " ").trim();
+  const u = t.length > 14 && t.includes(" ") ? t.slice(0, t.indexOf(" ")) : t;   // a sentence: keep its first phrase
+  return (u.match(NAME_CH) || []).length >= 2 && !/^(円|人|名|泊|合計|小計|計|税|内訳|金額|料金|単価|数量)$/.test(u) ? u.slice(0, 24) : "";
+}
+function itemNameAt(lines, li){
+  if (/合計|総計|総額|お支払|請求額/.test(lines[li] || "")) return "合計";
+  const own = wordsOf(lines[li]); if (own) return own;
+  for (let k = li - 1; k >= Math.max(0, li - 3); k--){
+    const raw = String(lines[k] || "").trim(); if (!raw) continue;
+    const w = wordsOf(raw); if (w && !/\d{2,}/.test(raw.replace(/\d{1,2}:\d{2}/g, ""))) return w;
+  }
+  return "";
+}
 function amountsFrom(text){
   const out = [], seen = new Set();
   const lines = String(text).split(/\n+/);
   lines.forEach((raw, li) => {
-    const line = raw.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[，]/g, ","), flat = line.replace(/\s+/g, "");
+    let line = raw.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/[，]/g, ","), flat = line.replace(/\s+/g, "");
     if (/\d{2,4}[-/.]\d{1,2}[-/.]\d{1,2}|\d{1,2}:\d{2}|\d{2,4}-\d{2,4}-\d{3,4}|年\d|月\d+日|No\.|TEL|電話/i.test(flat) && !/[¥￥円\\]/.test(flat)) return;
-    const re = /([¥￥\\]\s*)?(\d{1,3}(?:,\d{3})+|\d{2,7})(\s*円)?/g; let m;   // OCR often reads ¥ as a backslash
+    const re = /([¥￥\\]\s*)?(\d{1,3}(?:,\d{3})+|\d{2,7})(\s*円)?/g; let m;
+    line = line.replace(/[¥￥]?\s*\d[\d,]*\s*円?\s*[〜~～]\s*(?=[¥￥]?\s*\d)/g, "").replace(/\d{1,2}[:：]\d{2}/g, " ");   // 予算は幅の上の方で。時刻は金額ではない   // OCR often reads ¥ as a backslash
     while ((m = re.exec(line))){
-      const v = Number(m[2].replace(/,/g, "")); if (!(v >= 10 && v <= 9999999)) continue;
+      const v = Number(m[2].replace(/,/g, "")); if (!(v >= 10 && v <= 9999999) || (v < 100 && !m[1] && !m[3])) continue;
       let sc = (m[1] ? 3 : 0) + (m[3] ? 3 : 0) + (m[2].includes(",") ? 2 : 0);
       if (/合計|総計|総額|お支払|支払金額|ご請求|請求額|ご利用金額|差引支給|振込額|支給額|お会計|TOTAL/i.test(flat)) sc += 6;
       if (/小計/.test(flat)) sc += 2;
       if (/お預り|預り|お釣|釣銭|内税|消費税|税額|対象|ポイント|残高/.test(flat)) sc -= 4;
       const key = v; if (seen.has(key)){ const o = out.find(x => x.v === v); if (o && sc > o.sc){ o.sc = sc; o.label = raw.trim(); } continue; }
-      seen.add(key); out.push({v, sc, label: raw.trim().replace(/\s+/g, " ").slice(0, 28), li});
+      seen.add(key); out.push({v, sc, label: raw.trim().replace(/\s+/g, " ").slice(0, 28), li, name: itemNameAt(lines, li)});
     }
   });
   return out.sort((a, b) => b.sc - a.sc || b.v - a.v).slice(0, 8);
@@ -2094,7 +2117,7 @@ document.addEventListener("click", e => {
   if (split){
     e.stopPropagation(); let sel = [...document.querySelectorAll("#scanPanel [data-scanpick][aria-pressed=true]")];
     // a 合計 line chosen together with its items would count twice
-    if (sel.length > 1) sel = sel.filter(b => !/合計|総額|お支払|支払金額|請求額|小計|total/i.test(b.dataset.scanlabel || "")) .length ? sel.filter(b => !/合計|総額|お支払|支払金額|請求額|小計|total/i.test(b.dataset.scanlabel || "")) : sel;
+    if (sel.length > 1 && sel.some(b => !b.dataset.scantotal)) sel = sel.filter(b => !b.dataset.scantotal);
     if (!sel.length || !S.evEdit) return;
     const items = sel.map(b => ({title: scanItemName(b.dataset.scanlabel), budget: String(Number(b.dataset.scanpick))}));
     const v = S.evEdit.v; v.items = (Array.isArray(v.items) ? v.items.filter(it => String(it.title).trim() || String(it.budget).trim()) : []).concat(items);
@@ -2118,11 +2141,11 @@ document.addEventListener("change", async e => {
     const c = amountsFrom(text);
     scanPanel(`<div class="evs-h"><h2>${c.length ? "入れる金額を選んでください" : "金額が見つかりませんでした"}</h2><button type="button" class="ghost" data-scanclose aria-label="閉じる">✕</button></div>
       ${c.length ? `<p class="small muted" style="margin:0">いくつでも選べます。複数選ぶと合計を入れます。</p>
-        <div class="scanlist">${c.map((x, k) => `<button type="button" class="scanpick ${k === 0 ? "best" : ""}" data-scanpick="${x.v}" data-scanlabel="${esc(x.label)}" aria-pressed="${k === 0}"><span class="sck" aria-hidden="true"></span><b>${yen(x.v)}</b><span>${esc(x.label)}</span></button>`).join("")}</div>
-        <p class="small muted">${scanTarget === "evf-budget" && S.evEdit && !S.evEdit.id ? "宿・交通などを項目ごとに分けたいときは、その行を選んで下の「1つずつの項目として入れる」を押してください（合計の行は自動で外します）。" : ""}はじめは「合計」などの言葉から選んだ候補にチェックを入れています。写真は読み間違えることがあるので、元の画像と見比べてください。</p>`
+        <div class="scanlist">${c.map((x, k) => `<button type="button" class="scanpick ${k === 0 ? "best" : ""}" data-scanpick="${x.v}" data-scanlabel="${esc(x.name || x.label)}" data-scantotal="${/合計|総計|総額|お支払|支払金額|請求額|小計|total/i.test(x.label + " " + x.name) ? 1 : ""}" aria-pressed="${k === 0}"><span class="sck" aria-hidden="true"></span><b>${yen(x.v)}</b><span class="scn">${x.name ? `<em>${esc(x.name)}</em>` : ""}<span>${esc(x.label)}</span></span></button>`).join("")}</div>
+        <p class="small muted">${scanTarget === "evf-budget" && S.evEdit && !S.evEdit.id ? "宿・交通などを項目ごとに分けたいときは、その行を選んで「項目名と金額ごとに入れる」を押してください（合計の行は自動で外します）。" : ""}はじめは「合計」などの言葉から選んだ候補にチェックを入れています。写真は読み間違えることがあるので、元の画像と見比べてください。</p>`
         : `<p class="small muted">明るい場所で、金額の部分が大きく写るように撮り直してみてください。</p>`}
-      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button>${c.length ? `<button type="button" class="primary" data-scanuse>${yen(c[0].v)} を入れる</button>` : ""}</div>
-      ${c.length > 1 && scanTarget === "evf-budget" && S.evEdit && !S.evEdit.id ? `<button type="button" class="ghost scansplit" data-scansplit>選んだ行を1つずつの項目として入れる（予算を項目ごとに）</button>` : ""}`);
+      ${c.length > 1 && scanTarget === "evf-budget" && S.evEdit && !S.evEdit.id ? `<button type="button" class="ghost scansplit" data-scansplit>選んだ行を、項目名と金額ごとに入れる</button>` : ""}
+      <div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button>${c.length ? `<button type="button" class="primary" data-scanuse>${yen(c[0].v)} を入れる</button>` : ""}</div>`);
   } catch(err){
     scanPanel(`<div class="evs-h"><h2>読み取れませんでした</h2></div><p class="small muted">通信できる場所で、もう一度試してください（読み取りの準備に通信が必要です）。</p><div class="evs-foot"><span style="flex:1"></span><button type="button" data-scanclose>閉じる</button></div>`);
   }
